@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#1a1815" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7f4ee" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SendTemps" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="description" content="Weekend climbing forecast for Melbourne crags — Camel's Hump, Falcons, Cathedral, You Yangs, Arapiles, Grampians." />
+
+    <title>SendTemps — Melbourne Weekend Forecast</title>
+
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icon-180.png" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+
+    <!-- Fontshare: General Sans (display) + Switzer (body) — both clean, high-legibility sans-serifs -->
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&f[]=switzer@400,500,600,700&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="style.css?v=23" />
+  </head>
+
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" width="28" height="28" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 26 L11 12 L17 19 L22 9 L29 26 Z" />
+          <circle cx="22" cy="6" r="1.6" fill="currentColor" stroke="none" />
+        </svg>
+        <h1>SendTemps</h1>
+      </div>
+      <button class="theme-toggle" data-theme-toggle aria-label="Toggle dark mode"></button>
+    </header>
+
+    <main id="app">
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Reading the wind…</p>
+      </div>
+
+      <div id="content" hidden>
+        <section class="weekend-tabs" id="day-tabs" role="tablist" aria-label="Forecast day"></section>
+
+        <section class="day-summary" id="day-summary" aria-live="polite"></section>
+
+        <section class="ranked-list" id="ranked-list"></section>
+
+        <footer class="footnote">
+          <p>Forecast: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>. Conditions are predictions — always check on arrival. Aspect, dry-time and ideal-temp ratings are author's notes, not gospel.</p>
+          <p class="updated" id="updated"></p>
+        </footer>
+      </div>
+
+      <div class="error" id="error" hidden>
+        <h2>Couldn't fetch forecast</h2>
+        <p id="error-message"></p>
+        <button id="retry">Retry</button>
+      </div>
+    </main>
+
+    <script type="module" src="app.js?v=42"></script>
+  </body>
+</html>

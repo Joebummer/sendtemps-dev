@@ -1,0 +1,12 @@
+{
+  "name": "sendtemps",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.cjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0"
+  }
+}

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1a1815" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7f4ee" media="(prefers-color-scheme: light)" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>SendTemps · Stats</title>
+    <link rel="apple-touch-icon" href="icon-180.png" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://api.fontshare.com" />
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&f[]=switzer@400,500,600,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css?v=23" />
+    <style>
+      .stats-wrap {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: var(--space-8) var(--space-5) var(--space-12);
+      }
+      .stats-eyebrow {
+        font-size: var(--text-xs);
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-text-faint);
+        margin-bottom: var(--space-2);
+      }
+      .stats-title {
+        font-family: var(--font-display);
+        font-size: var(--text-xl);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--color-text);
+        margin: 0 0 var(--space-8);
+      }
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--space-3);
+        margin-bottom: var(--space-8);
+      }
+      @media (max-width: 520px) {
+        .stat-grid { grid-template-columns: 1fr; }
+      }
+      .stat-card {
+        background: var(--color-surface);
+        border: 1px solid var(--color-divider);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+      }
+      .stat-card .label {
+        font-size: var(--text-xs);
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        margin-bottom: var(--space-2);
+      }
+      .stat-card .value {
+        font-family: var(--font-display);
+        font-size: var(--text-xl);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--color-text);
+        line-height: 1;
+      }
+      .section-h {
+        font-family: var(--font-display);
+        font-size: var(--text-lg);
+        font-weight: 600;
+        color: var(--color-text);
+        margin: 0 0 var(--space-4);
+      }
+      .chart {
+        background: var(--color-surface);
+        border: 1px solid var(--color-divider);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        height: 180px;
+      }
+      .chart .bar-wrap {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: stretch;
+        gap: 4px;
+        position: relative;
+      }
+      .chart .bar {
+        background: var(--color-primary);
+        border-radius: 3px 3px 0 0;
+        min-height: 2px;
+        transition: opacity 150ms;
+      }
+      .chart .bar.zero { background: var(--color-divider); }
+      .chart .bar-wrap:hover .bar { opacity: 0.85; }
+      .chart .bar-wrap[data-tip]:hover::after {
+        content: attr(data-tip);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--color-text);
+        color: var(--color-bg);
+        font-size: var(--text-xs);
+        padding: 4px 8px;
+        border-radius: var(--radius-sm);
+        white-space: nowrap;
+        pointer-events: none;
+      }
+      .axis {
+        display: flex;
+        justify-content: space-between;
+        margin-top: var(--space-2);
+        font-size: var(--text-xs);
+        color: var(--color-text-faint);
+      }
+      .footnote {
+        margin-top: var(--space-6);
+        font-size: var(--text-xs);
+        color: var(--color-text-faint);
+        line-height: 1.5;
+      }
+      .footnote a {
+        color: var(--color-text-muted);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .skel {
+        background: linear-gradient(90deg, var(--color-surface-offset) 0%, var(--color-divider) 50%, var(--color-surface-offset) 100%);
+        background-size: 200% 100%;
+        animation: skel 1.4s ease-in-out infinite;
+        border-radius: var(--radius-sm);
+      }
+      @keyframes skel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    </style>
+  </head>
+
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" width="28" height="28" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 26 L11 12 L17 19 L22 9 L29 26 Z" />
+          <circle cx="22" cy="6" r="1.6" fill="currentColor" stroke="none" />
+        </svg>
+        <h1>SendTemps</h1>
+      </div>
+      <a href="./" style="color: var(--color-text-muted); font-size: var(--text-sm); text-decoration: none;">← Back</a>
+    </header>
+
+    <main class="stats-wrap">
+      <p class="stats-eyebrow">Private dashboard</p>
+      <h2 class="stats-title">Visit stats</h2>
+
+      <div class="stat-grid" id="stats">
+        <div class="stat-card"><div class="label">Total views</div><div class="value skel" style="height: 1.5rem; width: 60%;">&nbsp;</div></div>
+        <div class="stat-card"><div class="label">Unique visitors</div><div class="value skel" style="height: 1.5rem; width: 60%;">&nbsp;</div></div>
+        <div class="stat-card"><div class="label">Today</div><div class="value skel" style="height: 1.5rem; width: 60%;">&nbsp;</div></div>
+      </div>
+
+      <h3 class="section-h">Last 30 days</h3>
+      <div class="chart" id="chart" aria-label="Daily pageviews chart"></div>
+      <div class="axis" id="axis"><span>—</span><span>—</span></div>
+
+      <p class="footnote">
+        Visitors are counted with a daily-rotating anonymous hash — no cookies, no IPs stored.
+        A visitor returning the next day counts as new. Times shown in Australia/Melbourne.
+      </p>
+    </main>
+
+    <script>
+      (async function () {
+        try {
+          const r = await fetch('/__PORT_5000__/api/stats', { cache: 'no-store' });
+          if (!r.ok) throw new Error('stats fetch failed');
+          const s = await r.json();
+
+          const fmt = (n) => new Intl.NumberFormat('en-AU').format(n);
+          const cards = document.querySelectorAll('#stats .stat-card .value');
+          cards[0].textContent = fmt(s.total);
+          cards[0].classList.remove('skel');
+          cards[1].textContent = fmt(s.uniques);
+          cards[1].classList.remove('skel');
+          cards[2].textContent = fmt(s.today);
+          cards[2].classList.remove('skel');
+
+          // Build last 30 days, filling in zeroes for missing days.
+          const tzDate = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(d);
+          const days = [];
+          for (let i = 29; i >= 0; i--) {
+            const d = new Date();
+            d.setUTCDate(d.getUTCDate() - i);
+            days.push(tzDate(d));
+          }
+          const map = new Map(s.daily.map((row) => [row.day, row]));
+          const max = Math.max(1, ...days.map((d) => map.get(d)?.views || 0));
+
+          const chart = document.getElementById('chart');
+          chart.innerHTML = days.map((day) => {
+            const row = map.get(day) || { views: 0, uniques: 0 };
+            const h = (row.views / max) * 100;
+            const cls = row.views === 0 ? 'bar zero' : 'bar';
+            const tip = `${day} · ${row.views} view${row.views === 1 ? '' : 's'} · ${row.uniques} unique`;
+            return `<div class="bar-wrap" data-tip="${tip}"><div class="${cls}" style="height: ${Math.max(h, 1.5)}%;"></div></div>`;
+          }).join('');
+
+          const axis = document.getElementById('axis');
+          const fmtShort = (s) => {
+            const [, m, d] = s.split('-');
+            return `${parseInt(d, 10)}/${parseInt(m, 10)}`;
+          };
+          axis.innerHTML = `<span>${fmtShort(days[0])}</span><span>${fmtShort(days[days.length - 1])}</span>`;
+        } catch (e) {
+          document.querySelector('.stats-wrap').insertAdjacentHTML(
+            'beforeend',
+            `<p style="color: var(--color-text-muted); margin-top: var(--space-6);">Couldn't load stats. The backend may be waking up — try refreshing in a moment.</p>`
+          );
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -201,16 +201,23 @@ function groupByDestination(weekendRows) {
   const out = [];
   for (const group of map.values()) {
     // Best (highest) trip score across sub-crags = destination headline.
-    group.tripScore = Math.max(...group.subCrags.map(s => s.tripScore));
-    // Best sub-crag for the currently-displayed day (active tab).
+    // Use only named sub-crags (those with a parentId) for tripScore and bestForToday
+    // — the parent placeholder entry (e.g. 'gramps-main') should never win as a candidate.
+    const namedForBest = group.subCrags.filter(s => s.crag.parentId);
+    const bestPool = namedForBest.length ? namedForBest : group.subCrags;
+    group.tripScore = Math.max(...bestPool.map(s => s.tripScore));
+    // Sort full list by tripScore for any downstream consumers; parent still excluded from picks below.
     group.subCrags.sort((a, b) => b.tripScore - a.tripScore);
-    group.bestForToday = group.subCrags.reduce((a, b) => (a.score >= b.score ? a : b));
+    group.bestForToday = bestPool.reduce((a, b) => (a.score >= b.score ? a : b));
     // For each Fri–Sun trip date, find the highest-scoring sub-crag at this destination.
+    // Exclude parent placeholder entries (no parentId) so the pick is always a named sub-crag.
     const tripDates = state.tripDates;
+    const namedSubs = group.subCrags.filter(s => s.crag.parentId);
+    const candidates = namedSubs.length ? namedSubs : group.subCrags;
     group.bestPerDay = {};
     for (const date of tripDates) {
       let best = null;
-      for (const sub of group.subCrags) {
+      for (const sub of candidates) {
         const ds = sub.dailyScores?.find(d => d.date === date);
         if (!ds) continue;
         if (!best || ds.score > best.score) {
@@ -420,6 +427,8 @@ function renderDestinationCard(dest, isTop) {
   ).map(r => `<span class="reason-tag">${escapeHtml(r)}</span>`).join('');
 
   const safeDest = destination.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  // Exclude parent placeholder entries (e.g. 'gramps-main', 'arap-main') from the sub-crag list and count.
+  const namedSubCrags = subCrags.filter(s => s.crag.parentId);
 
   return `
     <article class="crag-card destination-card ${isTop ? 'top' : ''}" data-open="false" data-id="dest-${safeDest}">
@@ -431,7 +440,7 @@ function renderDestinationCard(dest, isTop) {
         </div>
         <div class="crag-info">
           <h3>${escapeHtml(destination)}</h3>
-          <div class="area">${drive} from Melbourne · ${subCrags.length} crag${subCrags.length === 1 ? '' : 's'}</div>
+          <div class="area">${drive} from Melbourne · ${namedSubCrags.length} crag${namedSubCrags.length === 1 ? '' : 's'}</div>
           <div class="day-score-note">Today's best: <strong>${escapeHtml(bestForToday.crag.name)}</strong> · ${bestForToday.score}/100</div>
           <div class="reasons">${reasonsHtml}</div>
         </div>
@@ -445,7 +454,7 @@ function renderDestinationCard(dest, isTop) {
         <div class="detail-section">
           <div class="section-label">Sub-crags at this destination</div>
           <div class="subcrag-list">
-            ${subCrags.map(s => renderSubCragRow(s)).join('')}
+            ${namedSubCrags.map(s => renderSubCragRow(s)).join('')}
           </div>
         </div>
       </div>

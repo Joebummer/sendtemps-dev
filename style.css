@@ -763,6 +763,24 @@ html[data-theme="dark"] .reason-tag-closed {
 }
 .attribute strong { color: var(--color-text); font-weight: 600; }
 
+.sun-on-wall {
+  margin-top: var(--space-3);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.sun-on-wall-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-faint);
+}
+.sun-on-wall-value {
+  color: var(--color-text);
+}
+
 /* ---- Footer ---- */
 .footnote {
   margin-top: var(--space-10);

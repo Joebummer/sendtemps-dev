@@ -2,3 +2,8 @@ node_modules/
 *.log
 .DS_Store
 data.db
+
+# wide_browse work artifacts
+aspect_schema.json
+crag_entities.txt
+targeted_entities.txt

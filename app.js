@@ -8,7 +8,7 @@ import {
   shortDayName,
   weatherIcon,
   scoreBand,
-} from './forecast.js?v=23';
+} from './forecast.js?v=24';
 
 // ---- Theme toggle ----
 (function () {
@@ -604,6 +604,7 @@ function renderCard(row, isTop, isWeekend) {
             <span class="attribute">Dries <strong>${dryLabel(crag.dryRating)}</strong></span>
             <span class="attribute"><strong>${escapeHtml(crag.rockType)}</strong></span>
           </div>
+          ${crag.sunOnWall ? `<div class="sun-on-wall"><span class="sun-on-wall-label">Sun on wall</span> <span class="sun-on-wall-value">${escapeHtml(crag.sunOnWall)}</span></div>` : ''}
         </div>
         ${renderDaySubCrags(daySubCrags)}
       </div>

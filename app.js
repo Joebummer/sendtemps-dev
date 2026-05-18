@@ -9,7 +9,7 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=27';
+} from './forecast.js?v=28';
 
 // ---- Theme toggle ----
 (function () {
@@ -145,6 +145,7 @@ function renderDay() {
         ...r,
         score: best.score,
         reasons: best.reasons,
+        contributions: best.contributions,
         bestSubCragName: isSub ? best.crag.name : null,
         daySubCrags: subs,
       };
@@ -570,6 +571,10 @@ function renderCard(row, isTop, isWeekend) {
   // Sub-area badge: show parent area if it differs from name
   const showArea = crag.area !== crag.name;
 
+  // For weekend cards, the detailed score breakdown comes from the day-of-tab
+  // contributions if present — otherwise fall back to today's daily contributions.
+  const dayContribs = row.contributions || [];
+
   return `
     <article class="crag-card ${isTop ? 'top' : ''}" data-open="false" data-id="${crag.id}">
       ${renderHideButton(crag.id, crag.name)}
@@ -603,6 +608,7 @@ function renderCard(row, isTop, isWeekend) {
           <p>${w.icon} ${w.label}. Feels like ${Math.round(day.tFeel || day.tMax)}°C. ${sunHours}h sun expected. ${day.precipSum > 0.2 ? `${day.precipSum.toFixed(1)}mm rain forecast.` : 'No measurable rain.'}${prevDay && prevDay.precipSum > 1 ? ` Yesterday saw ${prevDay.precipSum.toFixed(1)}mm.` : ''}</p>
         </div>
         ${renderRainTiming(day)}
+        ${renderScoreBreakdown(dayContribs, score)}
         <div class="detail-section">
           <div class="section-label">Crag notes</div>
           <p>${escapeHtml(crag.notes)}</p>
@@ -645,6 +651,51 @@ function renderDaySubCrags(daySubCrags) {
       <div class="section-label">Sub-crags</div>
       <div class="subcrag-list">${rows}</div>
     </div>
+  `;
+}
+
+function renderScoreBreakdown(contributions, finalScore) {
+  if (!Array.isArray(contributions) || contributions.length === 0) return '';
+  // Group bonuses and penalties; show category icon next to each.
+  const iconFor = (cat) => ({
+    temp: '🌡️',
+    aspect: '🧭',
+    bestIn: '🎯',
+    precip: '🌧️',
+    dryness: '🪨',
+    wind: '💨',
+    sun: '☀️',
+    closure: '🚫',
+  }[cat] || '•');
+  const rows = contributions.map(c => {
+    const deltaCls = c.delta > 0 ? 'pos' : 'neg';
+    const sign = c.delta > 0 ? '+' : '';
+    return `
+      <li class="breakdown-item">
+        <span class="breakdown-icon" aria-hidden="true">${iconFor(c.category)}</span>
+        <span class="breakdown-label">
+          <span class="breakdown-name">${escapeHtml(c.label)}</span>
+          <span class="breakdown-detail">${escapeHtml(c.detail)}</span>
+        </span>
+        <span class="breakdown-delta ${deltaCls}">${sign}${c.delta}</span>
+      </li>
+    `;
+  }).join('');
+  // Sum check for honesty: starting from 100, sum deltas, clamped 0–100.
+  const sum = contributions.reduce((s, c) => s + c.delta, 0);
+  const checkScore = Math.max(0, Math.min(100, 100 + sum));
+  const checkNote = checkScore === finalScore
+    ? `Starts at 100, ends at ${finalScore}.`
+    : `Starts at 100, ends at ${finalScore} (clamped).`;
+  return `
+    <details class="score-breakdown detail-section">
+      <summary>
+        <span class="section-label">Why this score?</span>
+        <svg class="breakdown-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </summary>
+      <ul class="breakdown-list">${rows}</ul>
+      <p class="breakdown-note">${checkNote}</p>
+    </details>
   `;
 }
 

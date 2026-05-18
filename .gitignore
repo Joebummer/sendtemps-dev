@@ -7,3 +7,5 @@ data.db
 aspect_schema.json
 crag_entities.txt
 targeted_entities.txt
+arap_entities.txt
+arap_remaining.txt

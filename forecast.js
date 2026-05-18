@@ -29,6 +29,8 @@ export async function fetchAllForecasts() {
       'temperature_2m',
       'relative_humidity_2m',
       'windspeed_10m',
+      'winddirection_10m',
+      'windgusts_10m',
       'cloudcover',
       'shortwave_radiation',
       'weathercode',
@@ -81,6 +83,9 @@ export async function fetchAllForecasts() {
         precipProb: f.daily.precipitation_probability_max[di],
         precipHours: f.daily.precipitation_hours[di],
         wind: f.daily.windspeed_10m_max[di],
+        // Dominant daytime wind direction + exposure for this crag (8am–6pm).
+        // Used to label "drying wind" vs "sheltered" in the score breakdown.
+        ...daytimeWindExposure(crag, f.hourly, date),
         sunshine: f.daily.sunshine_duration[di], // seconds
         weatherCode: f.daily.weathercode[di],
         rainWindows: extractRainWindows(f.hourly, date),
@@ -125,6 +130,86 @@ const SATURATION_MM = {
   sandstone: 10,
 };
 
+// Average wind direction + speed during climbing hours (8am–6pm) for a given
+// local date. Returns { windDir, windAvg, windExposure } where windDir is a
+// vector-mean bearing (°) so opposing winds don't cancel into a meaningless
+// mean, and windExposure ∈ {'onshore','parallel','lee'} relative to the crag.
+function daytimeWindExposure(crag, hourly, dateStr) {
+  if (!hourly || !hourly.time) return { windDir: null, windAvg: null, windExposure: null };
+  let sx = 0, sy = 0, speedSum = 0, gustSum = 0, count = 0;
+  for (let i = 0; i < hourly.time.length; i++) {
+    const t = hourly.time[i];
+    if (!t.startsWith(dateStr)) continue;
+    const hour = parseInt(t.slice(11, 13), 10);
+    if (hour < 8 || hour > 18) continue;
+    const dir = hourly.winddirection_10m?.[i];
+    const spd = hourly.windspeed_10m?.[i];
+    const gust = hourly.windgusts_10m?.[i] ?? spd;
+    if (dir == null || spd == null) continue;
+    const rad = (dir * Math.PI) / 180;
+    // Weight each hour's direction by its speed so calm hours don't drag the
+    // vector mean toward arbitrary directions.
+    sx += Math.sin(rad) * spd;
+    sy += Math.cos(rad) * spd;
+    speedSum += spd;
+    gustSum += gust;
+    count++;
+  }
+  if (count === 0) return { windDir: null, windAvg: null, windExposure: null };
+  const meanDir = (Math.atan2(sx, sy) * 180) / Math.PI;
+  const windDir = (meanDir + 360) % 360;
+  const windAvg = speedSum / count;
+  const gustAvg = gustSum / count;
+  const effective = Math.max(windAvg, gustAvg * 0.7);
+  const { exposure } = aspectWindFactor(crag.aspect, windDir, effective);
+  return { windDir, windAvg, windExposure: exposure };
+}
+
+// Smallest angle (0–180°) between two compass bearings.
+function angularDistance(a, b) {
+  const d = Math.abs(((a - b) % 360 + 540) % 360 - 180);
+  return d;
+}
+
+// How much the wind helps dry *this* wall, given:
+//   crag.aspect    — direction the wall faces (e.g. 'N' = climber facing N)
+//   windDir        — direction the wind is coming FROM (° from N, Open-Meteo)
+//   effectiveWind  — km/h, gust-weighted speed
+// Returns { factor, exposure } where factor multiplies the base drying rate
+// and exposure ∈ {'onshore','parallel','lee'} for the UI/breakdown.
+//
+// Climbing intuition:
+//   • Wind blowing toward the wall scours the boundary layer → fastest drying.
+//   • Wind parallel to the wall still moves a lot of air past it.
+//   • Wind from behind the cliff puts the wall in a wind shadow → drying stalls.
+export function aspectWindFactor(aspect, windDir, effectiveWind) {
+  // Base curve — scales with speed, capped well above the old 2.5 ceiling
+  // because gust-weighted winds can be genuinely high.
+  const base = 1 + Math.min(2.0, effectiveWind / 22); // up to ~3.0 at ~44 km/h+
+
+  const wallFaces = ASPECT_AZIMUTH[aspect];
+  if (wallFaces == null || windDir == null) {
+    return { factor: base, exposure: 'parallel' };
+  }
+  // Both `aspect` (wall faces from) and `windDir` (wind comes from) use the
+  // same "FROM" convention, so a small angular distance = wind blowing
+  // straight at the wall.
+  const offset = angularDistance(windDir, wallFaces);
+  if (offset <= 45) {
+    // Onshore — wind into the wall. Boost the drying factor above base.
+    return { factor: base * 1.15, exposure: 'onshore' };
+  }
+  if (offset <= 90) {
+    // Parallel / quartering — full base effect.
+    return { factor: base, exposure: 'parallel' };
+  }
+  // Lee — wall sheltered. Most of the wind energy is on the other side of the
+  // cliff. Drying slows substantially, but not to zero (eddies, leakage).
+  // Stronger winds in the lee still help a little more than dead calm.
+  const leeBase = 1 + Math.min(0.6, effectiveWind / 60);
+  return { factor: leeBase, exposure: 'lee' };
+}
+
 function computeDrynessSeries(crag, hourly) {
   if (!hourly || !hourly.time) return [];
   const n = hourly.time.length;
@@ -143,8 +228,14 @@ function computeDrynessSeries(crag, hourly) {
     const t = hourly.temperature_2m?.[i] ?? 15;
     const rh = hourly.relative_humidity_2m?.[i] ?? 70;
     const wind = hourly.windspeed_10m?.[i] ?? 10;
+    const gust = hourly.windgusts_10m?.[i] ?? wind;
+    const windDir = hourly.winddirection_10m?.[i] ?? null;
     const cloud = hourly.cloudcover?.[i] ?? 50;
     const swRad = hourly.shortwave_radiation?.[i] ?? 0;
+
+    // Gust-weighted effective wind. Gusts dry rock faster than the average,
+    // so we blend them in rather than relying purely on the mean speed.
+    const effectiveWind = Math.max(wind, gust * 0.7);
 
     // 1) Add rain wetness. Each mm normalised by saturation point.
     if (mm > 0) {
@@ -170,8 +261,9 @@ function computeDrynessSeries(crag, hourly) {
     // Heavy cloud cancels the sun bonus regardless of SW reading.
     if (cloud > 80) sunFactor = Math.min(sunFactor, 1.0);
 
-    // Wind factor — strong wind doubles drying.
-    const windFactor = 1 + Math.min(1.5, wind / 25);
+    // Wind factor — speed *and* direction relative to the wall.
+    // Onshore wind scours the wall; lee wind leaves it in shelter.
+    const { factor: windFactor } = aspectWindFactor(crag.aspect, windDir, effectiveWind);
 
     // Humidity — high humidity slows evaporation.
     let humFactor = 1;
@@ -334,6 +426,13 @@ function buildTomorrowHourly(crag, hourly, drynessSeries, tomorrowDate) {
       isoHour: t,
       temp: hourly.temperature_2m?.[i] ?? null,
       wind: hourly.windspeed_10m?.[i] ?? null,
+      windDir: hourly.winddirection_10m?.[i] ?? null,
+      windGust: hourly.windgusts_10m?.[i] ?? null,
+      windExposure: aspectWindFactor(
+        crag.aspect,
+        hourly.winddirection_10m?.[i] ?? null,
+        Math.max(hourly.windspeed_10m?.[i] ?? 0, (hourly.windgusts_10m?.[i] ?? 0) * 0.7),
+      ).exposure,
       humidity: hourly.relative_humidity_2m?.[i] ?? null,
       precip: hourly.precipitation?.[i] ?? 0,
       precipProb: hourly.precipitation_probability?.[i] ?? 0,
@@ -852,17 +951,39 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   }
 
   // — Wind —
+  // Wind direction labels (cardinal) for the user-facing detail line.
+  const compass = (deg) => {
+    if (deg == null) return '';
+    const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    return dirs[Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+  };
+  const dirLabel = day.windDir != null ? `${compass(day.windDir)} wind` : 'wind';
+  const exposureNote = day.windExposure === 'onshore'
+    ? ' — blowing into the wall'
+    : day.windExposure === 'lee'
+      ? ' — wall sits in the lee'
+      : '';
+
   if (day.wind > 50) {
     score -= 15;
     reasons.push('very windy');
-    add('wind', 'Wind', -15, `${Math.round(day.wind)} km/h gusts — very windy`);
+    add('wind', 'Wind', -15, `${Math.round(day.wind)} km/h ${dirLabel} — very windy${exposureNote}`);
   } else if (day.wind > 35) {
     score -= 5;
-    add('wind', 'Wind', -5, `${Math.round(day.wind)} km/h — gusty`);
+    add('wind', 'Wind', -5, `${Math.round(day.wind)} km/h ${dirLabel} — gusty${exposureNote}`);
   } else if (day.wind > 15 && day.wind < 30 && prevWasWetDuringDay) {
-    score += 4;
-    reasons.push('drying wind');
-    add('wind', 'Drying wind', +4, `${Math.round(day.wind)} km/h after wet day — helps the rock dry`);
+    // Only credit a drying wind if the wall is actually exposed to it.
+    // A wall in the lee doesn't benefit, even if the regional wind is brisk.
+    if (day.windExposure === 'lee') {
+      add('wind', 'Sheltered from wind', -2, `${Math.round(day.wind)} km/h ${dirLabel} — wall sits in the lee, rock dries slower`);
+      score -= 2;
+      reasons.push('sheltered from wind');
+    } else {
+      const bonus = day.windExposure === 'onshore' ? 6 : 4;
+      score += bonus;
+      reasons.push('drying wind');
+      add('wind', 'Drying wind', +bonus, `${Math.round(day.wind)} km/h ${dirLabel}${exposureNote} — helps the rock dry`);
+    }
   }
 
   // — Sunshine bonus on cool days, weighted by aspect —

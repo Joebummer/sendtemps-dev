@@ -8,6 +8,7 @@ import {
   shortDayName,
   weatherIcon,
   scoreBand,
+  drynessBand,
 } from './forecast.js?v=27';
 
 // ---- Theme toggle ----
@@ -442,6 +443,7 @@ function renderDestinationCard(dest, isTop) {
           <h3>${escapeHtml(destination)}</h3>
           <div class="area">${drive} from Melbourne · ${namedSubCrags.length} crag${namedSubCrags.length === 1 ? '' : 's'}</div>
           <div class="day-score-note">Today's best: <strong>${escapeHtml(bestForToday.crag.name)}</strong> · ${bestForToday.score}/100</div>
+          ${renderDrynessLine(bestForToday.nowDryness, bestForToday.lastRain)}
           <div class="reasons">${reasonsHtml}</div>
         </div>
         <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -550,7 +552,7 @@ function renderSubCragDailyBreakdown(dailyScores) {
 }
 
 function renderCard(row, isTop, isWeekend) {
-  const { crag, day, score, reasons, prevDay, tripScore, dailyScores, daySubCrags, bestSubCragName } = row;
+  const { crag, day, score, reasons, prevDay, tripScore, dailyScores, daySubCrags, bestSubCragName, nowDryness, lastRain } = row;
   // For weekend cards, the headline number is the trip score (Fri–Sun).
   const headlineScore = isWeekend && tripScore != null ? tripScore : score;
   const band = scoreBand(headlineScore);
@@ -581,6 +583,7 @@ function renderCard(row, isTop, isWeekend) {
           ${showArea ? `<div class="area">${escapeHtml(crag.area)} · ${crag.driveTime} from Melbourne</div>` : `<div class="area">${crag.driveTime} from Melbourne</div>`}
           ${isWeekend && tripScore != null ? `<div class="day-score-note">Today scores <strong>${score}</strong> on its own</div>` : ''}
           ${bestSubCragName ? `<div class="day-score-note">Best: <strong>${escapeHtml(bestSubCragName)}</strong></div>` : ''}
+          ${renderDrynessLine(nowDryness, lastRain)}
           <div class="reasons">${reasonsHtml}</div>
         </div>
         <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -641,6 +644,26 @@ function renderDaySubCrags(daySubCrags) {
     <div class="detail-section">
       <div class="section-label">Sub-crags</div>
       <div class="subcrag-list">${rows}</div>
+    </div>
+  `;
+}
+
+function renderDrynessLine(nowDryness, lastRain) {
+  if (nowDryness == null) return '';
+  const band = drynessBand(nowDryness);
+  let rainText = '';
+  if (lastRain && lastRain.hoursAgo != null && lastRain.hoursAgo < 72 && lastRain.totalMm >= 0.3) {
+    const h = lastRain.hoursAgo;
+    const ago = h < 1 ? 'now' : h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
+    const mm = lastRain.totalMm >= 1 ? `${lastRain.totalMm.toFixed(1)}mm` : `${lastRain.totalMm.toFixed(1)}mm`;
+    rainText = `<span class="dryness-rain">Last rain ${ago} · ${mm}</span>`;
+  }
+  return `
+    <div class="dryness-line">
+      <span class="dryness-pill ${band.color}" title="Rock dryness ${nowDryness}/100">
+        <span class="dryness-dot"></span>${escapeHtml(band.label)} · ${nowDryness}
+      </span>
+      ${rainText}
     </div>
   `;
 }

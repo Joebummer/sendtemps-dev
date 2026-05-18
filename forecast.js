@@ -26,9 +26,16 @@ export async function fetchAllForecasts() {
     hourly: [
       'precipitation',
       'precipitation_probability',
+      'temperature_2m',
+      'relative_humidity_2m',
+      'windspeed_10m',
+      'cloudcover',
+      'shortwave_radiation',
+      'weathercode',
     ].join(','),
     timezone: 'Australia/Melbourne',
     forecast_days: '8',
+    past_days: '4',
   });
 
   const url = `${API}?${params}`;
@@ -44,8 +51,17 @@ export async function fetchAllForecasts() {
   CRAGS.forEach((crag, i) => {
     const f = list[i];
     if (!f) return;
+    // Compute hourly rock-dryness series for the whole hourly window.
+    // This consumes past_days=4 of recent rain history plus 8 forecast days.
+    const drynessSeries = computeDrynessSeries(crag, f.hourly);
+    // Current dryness = the value at the hour closest to "now".
+    const nowDryness = currentDryness(f.hourly, drynessSeries);
     byId[crag.id] = {
       crag,
+      hourly: f.hourly,
+      drynessSeries,
+      nowDryness,
+      lastRain: findLastSignificantRain(f.hourly),
       days: f.daily.time.map((date, di) => ({
         date,
         tMax: f.daily.temperature_2m_max[di],
@@ -58,10 +74,216 @@ export async function fetchAllForecasts() {
         sunshine: f.daily.sunshine_duration[di], // seconds
         weatherCode: f.daily.weathercode[di],
         rainWindows: extractRainWindows(f.hourly, date),
+        // Morning dryness (8am) and afternoon dryness (2pm) for this day,
+        // pulled from the hourly dryness series. UI uses these to colour cards.
+        morningDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 8),
+        afternoonDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 14),
+        dayDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 11), // mid-day single value
       })),
     };
   });
   return byId;
+}
+
+// ---- Rock dryness model ----
+//
+// Tracks an "accumulated wetness" value (0 = bone dry, ~10+ = saturated)
+// hour-by-hour over the whole hourly window. Rain adds wetness; sun + wind +
+// low humidity remove it. Rock type controls both how fast rain saturates and
+// how fast it dries.
+//
+// Returned series matches `hourly.time` length; each entry is { wetness, dryness }
+// where `dryness` is the user-facing 0–100 score.
+
+// Drying half-life in hours when conditions are average (no sun, light wind,
+// 60% humidity, mild temp). Sandstone is much slower than granite.
+const DRY_HALFLIFE_HRS = {
+  granite: 6,
+  quartzite: 10,
+  trachyte: 12,
+  conglomerate: 14,
+  sandstone: 24,
+};
+
+// How much rain (mm) it takes to push the rock fully saturated.
+// Sandstone soaks a lot; granite very little.
+const SATURATION_MM = {
+  granite: 3,
+  quartzite: 5,
+  trachyte: 6,
+  conglomerate: 7,
+  sandstone: 10,
+};
+
+function computeDrynessSeries(crag, hourly) {
+  if (!hourly || !hourly.time) return [];
+  const n = hourly.time.length;
+  const halfLife = DRY_HALFLIFE_HRS[crag.rockType] ?? 12;
+  const satMm = SATURATION_MM[crag.rockType] ?? 6;
+
+  // Start assuming a dry-ish rock if past_days=4 covered the recent history.
+  // We'll let the simulation walk forward from t=0 with wetness=0; if recent
+  // rain falls inside the window it'll be captured. (The 4-day lookback is
+  // adequate even for sandstone given the 24h half-life ⇒ ~4 half-lives.)
+  let wetness = 0;
+  const series = new Array(n);
+
+  for (let i = 0; i < n; i++) {
+    const mm = hourly.precipitation?.[i] ?? 0;
+    const t = hourly.temperature_2m?.[i] ?? 15;
+    const rh = hourly.relative_humidity_2m?.[i] ?? 70;
+    const wind = hourly.windspeed_10m?.[i] ?? 10;
+    const cloud = hourly.cloudcover?.[i] ?? 50;
+    const swRad = hourly.shortwave_radiation?.[i] ?? 0;
+
+    // 1) Add rain wetness. Each mm normalised by saturation point.
+    if (mm > 0) {
+      wetness += mm / satMm;
+      // Cap accumulated wetness so a deluge doesn't make recovery impossibly slow.
+      if (wetness > 3) wetness = 3;
+    }
+
+    // 2) Apply drying. Effective drying rate per hour =
+    //    base_rate * sun_factor * wind_factor * humidity_factor * temp_factor
+    // where base_rate corresponds to the half-life:  rate = ln(2)/halfLife
+    const baseRate = Math.LN2 / halfLife;
+
+    // Sun factor — direct sun on the wall dries it ~2.5x faster.
+    // We approximate "sun on wall" with: solar radiation > 200 W/m^2 AND
+    // the crag's aspect being roughly oriented toward the sun in the southern
+    // hemisphere. Aspect-aware solar math comes in v49; for now use shortwave
+    // radiation as a proxy: high SW = wall likely getting some sun.
+    let sunFactor = 1;
+    if (swRad > 500) sunFactor = 2.2; // strong direct sun likely
+    else if (swRad > 250) sunFactor = 1.6; // moderate sun
+    else if (swRad > 80) sunFactor = 1.2; // weak sun / scattered cloud
+    // Heavy cloud cancels the sun bonus regardless of SW reading.
+    if (cloud > 80) sunFactor = Math.min(sunFactor, 1.0);
+
+    // Wind factor — strong wind doubles drying.
+    const windFactor = 1 + Math.min(1.5, wind / 25);
+
+    // Humidity — high humidity slows evaporation.
+    let humFactor = 1;
+    if (rh < 50) humFactor = 1.4;
+    else if (rh < 65) humFactor = 1.2;
+    else if (rh > 85) humFactor = 0.55;
+    else if (rh > 75) humFactor = 0.8;
+
+    // Temperature — cold rock dries much slower.
+    let tempFactor = 1;
+    if (t < 2) tempFactor = 0.5;
+    else if (t < 8) tempFactor = 0.7;
+    else if (t > 25) tempFactor = 1.25;
+
+    const dryRate = baseRate * sunFactor * windFactor * humFactor * tempFactor;
+    // Exponential decay toward zero across one hour.
+    wetness = wetness * Math.exp(-dryRate);
+    if (wetness < 0.001) wetness = 0;
+
+    // Convert wetness → 0–100 dryness score.
+    // wetness=0 → 100, wetness=1 (just saturated) → ~37, wetness=2 → ~14,
+    // wetness=3 (deluge cap) → ~5. Using exp curve keeps the top tier informative.
+    const dryness = Math.round(100 * Math.exp(-wetness));
+    series[i] = { wetness: Math.round(wetness * 100) / 100, dryness };
+  }
+  return series;
+}
+
+// Map a 0–100 dryness number to a category + label + colour band.
+export function drynessBand(score) {
+  if (score >= 90) return { label: 'Dry', short: 'Dry', color: 'success' };
+  if (score >= 70) return { label: 'Mostly dry', short: 'Mostly dry', color: 'success' };
+  if (score >= 50) return { label: 'Damp', short: 'Damp', color: 'warning' };
+  if (score >= 30) return { label: 'Wet', short: 'Wet', color: 'warning' };
+  return { label: 'Soaked', short: 'Soaked', color: 'error' };
+}
+
+function currentDryness(hourly, series) {
+  if (!hourly || !hourly.time || !series.length) return null;
+  const idx = nearestHourIndex(hourly.time, new Date());
+  if (idx == null) return null;
+  return series[idx]?.dryness ?? null;
+}
+
+// Find the index in hourly.time closest to a given Date (in Australia/Melbourne).
+function nearestHourIndex(timeArr, when) {
+  // hourly.time is in local Melbourne time as 'YYYY-MM-DDTHH:00' (because we set timezone)
+  // Build the target local hour string for comparison.
+  const targetIso = melbourneIsoHour(when);
+  // Exact match preferred.
+  const exact = timeArr.indexOf(targetIso);
+  if (exact !== -1) return exact;
+  // Otherwise find the closest hour by string comparison (lexicographic works because ISO).
+  let bestIdx = -1;
+  let bestDiff = Infinity;
+  for (let i = 0; i < timeArr.length; i++) {
+    const diff = Math.abs(stringToHourDiff(timeArr[i], targetIso));
+    if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+  }
+  return bestIdx === -1 ? null : bestIdx;
+}
+
+function stringToHourDiff(a, b) {
+  // a, b like '2026-05-18T10:00'. Convert to Date and diff in hours.
+  const da = new Date(a);
+  const db = new Date(b);
+  return (da - db) / 3600000;
+}
+
+function melbourneIsoHour(when) {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Australia/Melbourne',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+  const parts = fmt.formatToParts(when);
+  const get = (t) => parts.find(p => p.type === t)?.value;
+  let hour = get('hour');
+  if (hour === '24') hour = '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${hour}:00`;
+}
+
+function drynessAtLocalHour(hourly, series, dateStr, hour) {
+  if (!hourly || !hourly.time || !series.length) return null;
+  const hh = String(hour).padStart(2, '0');
+  const target = `${dateStr}T${hh}:00`;
+  const idx = hourly.time.indexOf(target);
+  if (idx === -1) return null;
+  return series[idx]?.dryness ?? null;
+}
+
+// Find the most recent significant rain event (≥0.5mm hour) before or at "now".
+// Returns { hoursAgo, totalMm, peakHour } or null.
+function findLastSignificantRain(hourly) {
+  if (!hourly || !hourly.time) return null;
+  const nowIdx = nearestHourIndex(hourly.time, new Date());
+  if (nowIdx == null) return null;
+  // Walk backward to find the end of the most recent wet cluster.
+  let endIdx = -1;
+  for (let i = nowIdx; i >= 0; i--) {
+    const mm = hourly.precipitation?.[i] ?? 0;
+    if (mm >= 0.3) { endIdx = i; break; }
+  }
+  if (endIdx === -1) return null;
+  // Find start of this cluster (walking back while still wet, allowing 1h gaps).
+  let startIdx = endIdx;
+  let gap = 0;
+  for (let i = endIdx - 1; i >= 0; i--) {
+    const mm = hourly.precipitation?.[i] ?? 0;
+    if (mm >= 0.2) { startIdx = i; gap = 0; }
+    else { gap += 1; if (gap >= 2) break; }
+  }
+  let totalMm = 0;
+  for (let i = startIdx; i <= endIdx; i++) {
+    totalMm += hourly.precipitation?.[i] ?? 0;
+  }
+  const hoursAgo = nowIdx - endIdx;
+  return {
+    hoursAgo,
+    totalMm: Math.round(totalMm * 10) / 10,
+    endTime: hourly.time[endIdx],
+  };
 }
 
 // Identify the most likely rain windows on a given day. Scans hourly precip + probability,
@@ -318,20 +540,30 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     reasons.push('rain after dark only');
   }
 
-  // — Previous-day rain × dry rating —
-  // If yesterday was wet during climbable hours and the rock is slow-drying, still grim.
-  // But if yesterday's rain was all after dark AND today is itself dry by morning,
-  // we treat the rock as dry (per user rule: skip the drying penalty).
+  // — Rock dryness (hourly model) —
+  // Replaces the old previous-day-rain × dryRating approximation. The dryness
+  // model already integrates rock type, rain history, sun, wind, humidity, and
+  // temperature on an hourly basis, so we just translate the day's mid-day
+  // dryness score (0–100) into a penalty.
+  //
+  // dryness 100 → 0 penalty; dryness 0 → 45 penalty. Linear in between.
+  const dryness = (day.morningDryness != null && day.afternoonDryness != null)
+    ? Math.min(day.morningDryness, day.afternoonDryness)
+    : (day.dayDryness ?? day.morningDryness ?? day.afternoonDryness ?? 100);
+  if (dryness < 100) {
+    const penalty = Math.round(((100 - dryness) / 100) * 45);
+    score -= penalty;
+    if (dryness < 30) reasons.push('rock soaked');
+    else if (dryness < 50) reasons.push('rock wet');
+    else if (dryness < 70) reasons.push('still drying');
+  }
+  // Keep an "overnight rain only" reason hint if prev-day's daytime was dry
+  // but the calendar-day total was wet — useful colour for the card.
   const prevCutoff = prevDay ? climbCutoffHour(crag) : 0;
   const prevClimb = prevDay ? climbableRain(prevDay, prevCutoff) : null;
   const prevWasWetDuringDay = prevClimb ? prevClimb.sum > 3 : false;
   const prevWasWetOverall = prevDay ? (prevDay.precipSum || 0) > 3 : false;
-  if (prevWasWetDuringDay) {
-    const dryPenalty = (6 - crag.dryRating) * 6; // 1→30, 5→6
-    score -= dryPenalty;
-    if (crag.dryRating <= 3) reasons.push('still drying');
-  } else if (prevWasWetOverall && nextMorningDry(day)) {
-    // Yesterday's rain was after-dark only and today's morning is dry → no penalty.
+  if (prevWasWetOverall && !prevWasWetDuringDay && dryness >= 80) {
     reasons.push('overnight rain only');
   }
 
@@ -373,7 +605,15 @@ export function rankByDay(forecasts, dayDates) {
       const prevDay = dayIdx > 0 ? fc.days[dayIdx - 1] : null;
       const nextDay = dayIdx + 1 < fc.days.length ? fc.days[dayIdx + 1] : null;
       const { score, reasons } = scoreDay(fc.crag, day, prevDay, nextDay);
-      rows.push({ crag: fc.crag, day, prevDay, score, reasons });
+      rows.push({
+        crag: fc.crag,
+        day,
+        prevDay,
+        score,
+        reasons,
+        nowDryness: fc.nowDryness,
+        lastRain: fc.lastRain,
+      });
     }
     rows.sort((a, b) => b.score - a.score);
     ranked[date] = rows;
@@ -415,6 +655,8 @@ export function rankWeekendTrip(forecasts, tripDates) {
       dailyScores,
       worstDate: worst.date,
       worstScore: worst.score,
+      nowDryness: fc.nowDryness,
+      lastRain: fc.lastRain,
     };
   }
   // Return as ranked array

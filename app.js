@@ -8,7 +8,7 @@ import {
   shortDayName,
   weatherIcon,
   scoreBand,
-} from './forecast.js?v=25';
+} from './forecast.js?v=26';
 
 // ---- Theme toggle ----
 (function () {

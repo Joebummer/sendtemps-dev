@@ -194,6 +194,9 @@ function daytimeWindExposure(crag, hourly, dateStr) {
 function computeSunWindow(crag, hourly, dateStr) {
   if (!hourly || !hourly.time || crag.lat == null || crag.lon == null) return null;
   if (crag.shade === 'all-day') return null;
+  // Parent crags with mixed-aspect children have no single sun window. Let the
+  // UI fall back to the author-written sunOnWall hint.
+  if (!hasConcreteAspect(crag.aspect)) return null;
   let firstHour = null, lastHour = null;
   for (let i = 0; i < hourly.time.length; i++) {
     const t = hourly.time[i];
@@ -232,6 +235,9 @@ function computeSolarExposure(crag, hourly, dateStr) {
   // the geometric model can't see (deep gorge, overhang, boulder shelter).
   // Honour the explicit override.
   if (crag.shade === 'all-day') return empty;
+  // Mixed-aspect parents have no single wall to compute against — zero out
+  // solar exposure so scoring doesn't credit phantom sun hours.
+  if (!hasConcreteAspect(crag.aspect)) return empty;
   let onWall = 0, warm = 0, cool = 0, total = 0;
   for (let i = 0; i < hourly.time.length; i++) {
     const t = hourly.time[i];
@@ -446,14 +452,24 @@ const ASPECT_AZIMUTH = {
   N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315,
 };
 
+// True when an aspect string maps to a concrete compass bearing we can do
+// geometry against. Parent crags with multi-aspect children (Cathedral Ranges,
+// You Yangs etc.) use 'mixed' — they don't have a single wall direction, so
+// sun-on-wall geometry is meaningless at the parent level.
+export function hasConcreteAspect(aspect) {
+  return aspect != null && Object.prototype.hasOwnProperty.call(ASPECT_AZIMUTH, aspect);
+}
+
 // Returns true if the sun (at given azimuth/altitude) is illuminating a wall
 // of the given aspect. We treat a wall as lit when the sun's azimuth is within
 // 75° of the wall's outward normal AND the sun is above ~3° (avoiding pre-dawn
-// and twilight scatter).
+// and twilight scatter). Mixed/unknown aspects return false — callers should
+// check `hasConcreteAspect` and fall back to author-provided text instead of
+// pretending they have a precise sun window.
 export function sunOnAspect(aspect, sunAz, sunAlt) {
   if (sunAlt <= 3) return false;
   const wallAz = ASPECT_AZIMUTH[aspect];
-  if (wallAz == null) return sunAlt > 3; // unknown aspect — assume lit if sun up
+  if (wallAz == null) return false;
   let diff = Math.abs(sunAz - wallAz);
   if (diff > 180) diff = 360 - diff;
   return diff <= 75;
@@ -514,7 +530,11 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
     if (hour < fromHour || hour > toHour) continue;
     const when = melbourneHourToDate(t);
     const sun = sunPosition(when, crag.lat, crag.lon);
-    const lit = sunOnAspect(crag.aspect, sun.azimuth, sun.altitude);
+    // Mixed/unknown aspect → we don't know if the wall is lit. Surface that as
+    // null so the UI can show a neutral marker rather than "in shade".
+    const lit = hasConcreteAspect(crag.aspect)
+      ? sunOnAspect(crag.aspect, sun.azimuth, sun.altitude)
+      : null;
     out.push({
       hour,
       isoHour: t,
@@ -597,12 +617,13 @@ function scoreHour(crag, h) {
   if (h.wind > 50) s -= 15;
   else if (h.wind > 35) s -= 5;
 
-  // Sun-on-wall interactions
-  if (h.sunOnWall) {
+  // Sun-on-wall interactions. h.sunOnWall is null for mixed-aspect parents —
+  // skip these tweaks rather than guess (children carry the real aspect).
+  if (h.sunOnWall === true) {
     if (h.temp > 24) s -= 8; // sun-baked
     else if (h.temp < 12) s += 5; // sun-trap
     else if (h.temp < 18) s += 3;
-  } else {
+  } else if (h.sunOnWall === false) {
     // In shade
     if (h.temp > 24) s += 4; // shade is welcome
     else if (h.temp < 8) s -= 4; // cold and shaded

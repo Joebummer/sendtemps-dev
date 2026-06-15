@@ -9,7 +9,7 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=40';
+} from './forecast.js?v=41';
 
 // ---- Theme toggle ----
 (function () {
@@ -718,7 +718,7 @@ function renderSubCragRow(sub) {
     <div class="subcrag-row-wrap" data-open="false">
       <button type="button" class="subcrag-row${hasDaily ? ' is-expandable' : ''}" aria-expanded="false" ${hasDaily ? `aria-controls="subdetail-${safeId}"` : ''}>
         <span class="subcrag-name">${escapeHtml(sub.crag.name)}</span>
-        <span class="subcrag-aspect">${sub.crag.aspect}-facing</span>
+        <span class="subcrag-aspect">${sub.crag.aspect === 'mixed' ? 'mixed aspects' : `${sub.crag.aspect}-facing`}</span>
         <span class="subcrag-trip ${band.color}">${sub.tripScore} trip</span>
         ${hasDaily ? `<svg class="subcrag-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>` : ''}
       </button>
@@ -881,7 +881,7 @@ function renderDaySubCrags(daySubCrags) {
       <div class="subcrag-row-wrap" data-open="false">
         <button type="button" class="subcrag-row is-static" tabindex="-1">
           <span class="subcrag-name">${escapeHtml(sub.crag.name)}</span>
-          <span class="subcrag-aspect">${sub.crag.aspect}-facing</span>
+          <span class="subcrag-aspect">${sub.crag.aspect === 'mixed' ? 'mixed aspects' : `${sub.crag.aspect}-facing`}</span>
           <span class="subcrag-trip ${band.color}">${sub.score}</span>
         </button>
       </div>
@@ -1078,9 +1078,11 @@ function renderHourlyStrip(fc, mode = 'tomorrow') {
       : h.dryness >= 70 ? 'dry-good'
       : h.dryness >= 50 ? 'dry-damp'
       : 'dry-wet';
-    const sunCell = h.sunOnWall
+    const sunCell = h.sunOnWall === true
       ? `<span class="hour-sun lit" title="Sun on the wall (alt ${h.sunAlt}°)">☀️</span>`
-      : `<span class="hour-sun shade" title="Wall in shade">○</span>`;
+      : h.sunOnWall === false
+        ? `<span class="hour-sun shade" title="Wall in shade">○</span>`
+        : `<span class="hour-sun unknown" title="Multi-aspect area — check sub-crags">–</span>`;
     const windArrow = h.windDir != null
       ? `<span class="hour-wind wind-${h.windExposure || 'parallel'}" title="${Math.round(h.wind)} km/h ${compassFromDeg(h.windDir)} · ${h.windExposure || 'parallel'}" style="transform: rotate(${(h.windDir + 180) % 360}deg)">↑</span>`
       : '<span class="hour-wind"></span>';

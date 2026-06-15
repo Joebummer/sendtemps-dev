@@ -65,5 +65,40 @@
     </main>
 
     <script type="module" src="app.js?v=55"></script>
+
+    <!--
+      GoatCounter analytics — cookie-free, no banner needed.
+      Tracks pageviews + screen size + referrer; no personal data.
+      Dashboard: https://sendtemps.goatcounter.com
+    -->
+    <script
+      data-goatcounter="https://sendtemps.goatcounter.com/count"
+      async
+      src="//gc.zgo.at/count.js"
+    ></script>
+    <script>
+      // Fire a custom event the first time the page loads so we can split
+      // "installed PWA" usage from regular browser visits in GoatCounter.
+      // display-mode: standalone is set when launched from the iOS home
+      // screen or Android "Add to home screen". navigator.standalone is
+      // the older iOS Safari flag. Either one means installed PWA.
+      window.addEventListener('load', function () {
+        var isStandalone = window.matchMedia('(display-mode: standalone)').matches
+          || window.navigator.standalone === true;
+        if (!isStandalone) return;
+        // Wait a tick for count.js to finish loading, then log the event.
+        var ping = function () {
+          if (typeof window.goatcounter === 'undefined' || !window.goatcounter.count) {
+            return setTimeout(ping, 200);
+          }
+          window.goatcounter.count({
+            path: 'pwa-launch',
+            title: 'PWA launch',
+            event: true,
+          });
+        };
+        ping();
+      });
+    </script>
   </body>
 </html>

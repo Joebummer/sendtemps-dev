@@ -9,7 +9,7 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=33';
+} from './forecast.js?v=34';
 
 // ---- Theme toggle ----
 (function () {
@@ -463,30 +463,6 @@ function renderFavouriteButton(id, label) {
   `;
 }
 
-// Past-rain sparkline: 4 thin vertical bars (oldest → today) showing daily mm.
-// Bars are normalised to whichever is higher of the local 4-day max or 10mm
-// so a calm week reads as visibly dry, not a row of full-height bars. Hides
-// itself if no data — cheap to call on every card.
-function renderPastRainSparkline(pastPrecip) {
-  if (!Array.isArray(pastPrecip) || pastPrecip.length === 0) return '';
-  const maxMm = Math.max(10, ...pastPrecip.map(p => p.mm || 0));
-  const bars = pastPrecip.map(p => {
-    const mm = p.mm || 0;
-    const h = Math.max(2, Math.round((mm / maxMm) * 18));
-    const cls = mm >= 5 ? 'wet' : mm >= 1 ? 'damp' : 'dry';
-    const label = `${shortDayName(p.date)} · ${mm.toFixed(1)}mm`;
-    return `<span class="spark-bar ${cls}" style="height:${h}px" title="${escapeHtml(label)}"></span>`;
-  }).join('');
-  const totalMm = pastPrecip.reduce((s, p) => s + (p.mm || 0), 0);
-  return `
-    <div class="past-rain-sparkline" title="Rain over the last ${pastPrecip.length} days — total ${totalMm.toFixed(1)}mm">
-      <span class="spark-label">${pastPrecip.length}d</span>
-      <span class="spark-bars" aria-hidden="true">${bars}</span>
-      <span class="spark-total">${totalMm.toFixed(1)}mm</span>
-    </div>
-  `;
-}
-
 function renderHiddenFooter(items) {
   if (!items.length) return '';
   const rows = items.map(it => `
@@ -537,7 +513,6 @@ function renderDestinationCard(dest, isTop) {
           <div class="area">${drive} from Melbourne · ${namedSubCrags.length} crag${namedSubCrags.length === 1 ? '' : 's'}</div>
           <div class="day-score-note">Today's best: <strong>${escapeHtml(bestForToday.crag.name)}</strong> · ${bestForToday.score}/100</div>
           ${renderDrynessLine(bestForToday.nowDryness, bestForToday.lastRain, daysAheadOfActive())}
-          ${renderPastRainSparkline(state.forecasts?.[bestForToday.crag.id]?.pastPrecip)}
           <div class="reasons">${reasonsHtml}</div>
         </div>
         <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -682,7 +657,6 @@ function renderCard(row, isTop, isWeekend) {
   const isToday    = !!(fc && fc.todayDate    && state.activeDate === fc.todayDate);
   const tomorrowStrip = isTomorrow ? renderHourlyStrip(fc, 'tomorrow') : '';
   const todayStrip    = isToday    ? renderHourlyStrip(fc, 'today')    : '';
-  const sparkline = renderPastRainSparkline(fc?.pastPrecip);
 
   return `
     <article class="crag-card ${isTop ? 'top' : ''}" data-open="false" data-id="${crag.id}">
@@ -699,7 +673,6 @@ function renderCard(row, isTop, isWeekend) {
           ${isWeekend && tripScore != null ? `<div class="day-score-note">Today scores <strong>${score}</strong> on its own</div>` : ''}
           ${bestSubCragName ? `<div class="day-score-note">Best: <strong>${escapeHtml(bestSubCragName)}</strong></div>` : ''}
           ${renderDrynessLine(nowDryness, lastRain, daysAheadOfActive())}
-          ${sparkline}
           <div class="reasons">${reasonsHtml}</div>
         </div>
         <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -735,7 +708,7 @@ function renderCard(row, isTop, isWeekend) {
             <span class="attribute">Dries <strong>${dryLabel(crag.dryRating)}</strong></span>
             <span class="attribute"><strong>${escapeHtml(crag.rockType)}</strong></span>
           </div>
-          ${crag.sunOnWall ? `<div class="sun-on-wall"><span class="sun-on-wall-label">Sun on wall</span> <span class="sun-on-wall-value">${escapeHtml(crag.sunOnWall)}</span></div>` : ''}
+          ${renderSunWindow(day.sunWindow, crag.sunOnWall)}
         </div>
         ${renderDaySubCrags(daySubCrags)}
       </div>
@@ -767,6 +740,44 @@ function renderDaySubCrags(daySubCrags) {
   `;
 }
 
+// Per-category methodology blurbs. Kept short — one paragraph each, plain
+// English. Used by the inline (?) toggles in the score breakdown and the
+// "How scoring works" footer summary. Categories match scoreDay contributions.
+const CATEGORY_METHODOLOGY = {
+  temp: {
+    label: 'Temperature',
+    blurb: 'Each crag has an ideal temperature band (cool granite climbs better at 8–18°C, warm sandstone wants 12–22°C, and so on). The forecast "feels-like" temp is compared to that band; inside it earns a small bonus, outside it loses points proportional to how far off it is.',
+  },
+  aspect: {
+    label: 'Aspect & sun',
+    blurb: 'Match between the crag\'s aspect (which way the wall faces) and the day. On hot days a shaded wall (south-facing in the southern hemisphere) earns points; on cold days a sunny wall (north-facing) wins. Computed against the day\'s temperature, not a static rule.',
+  },
+  bestIn: {
+    label: 'Best season',
+    blurb: 'A small editorial bonus or penalty based on each crag\'s notes — e.g. Mt Buffalo "best in summer," Mt Alexander "closed Nov–Mar nesting." Tied to the season, not the day.',
+  },
+  precip: {
+    label: 'Rain',
+    blurb: 'Heaviest weight in the model. Penalties stack for rain probability, accumulated mm during climbable hours (9am–6pm), and direct precipitation. A wet day can drop 40+ points on its own.',
+  },
+  dryness: {
+    label: 'Rock dryness',
+    blurb: 'Rolling estimate of how dry the rock surface is, based on the last 4 days of rain and an exponential decay tuned per rock type — granite dries in ~6h, sandstone takes ~24h. Damp rock loses points; bone-dry adds a small bonus.',
+  },
+  wind: {
+    label: 'Wind',
+    blurb: 'Penalty for high wind, scaled by exposure: an onshore wall takes the full hit, a lee wall is barely affected. Uses the higher of mean wind and 70% of gusts so a gusty 25 km/h day doesn\'t look calm.',
+  },
+  sun: {
+    label: 'Sun hours on wall',
+    blurb: 'True solar geometry: for each climbable hour we compute the sun\'s position and ask "does it actually hit this wall given its aspect?" Hours of sun add to a warm-day penalty or a cold-day bonus.',
+  },
+  closure: {
+    label: 'Closure',
+    blurb: 'Hard penalty when a crag is closed (raptor nesting, fire restrictions, indigenous heritage). Surfaces as a red "closed" pill so it can\'t be missed.',
+  },
+};
+
 function renderScoreBreakdown(contributions, finalScore) {
   if (!Array.isArray(contributions) || contributions.length === 0) return '';
   // Group bonuses and penalties; show category icon next to each.
@@ -780,9 +791,15 @@ function renderScoreBreakdown(contributions, finalScore) {
     sun: '☀️',
     closure: '🚫',
   }[cat] || '•');
-  const rows = contributions.map(c => {
+  const rows = contributions.map((c, idx) => {
     const deltaCls = c.delta > 0 ? 'pos' : 'neg';
     const sign = c.delta > 0 ? '+' : '';
+    const meth = CATEGORY_METHODOLOGY[c.category];
+    // Each row gets a small (?) that toggles a one-paragraph explanation
+    // below it. Native <details>, no JS handler needed.
+    const helpToggle = meth
+      ? `<details class="breakdown-help"><summary aria-label="How ${escapeHtml(meth.label)} is scored" title="How ${escapeHtml(meth.label)} is scored"><span aria-hidden="true">?</span></summary><p class="breakdown-help-blurb">${escapeHtml(meth.blurb)}</p></details>`
+      : '';
     return `
       <li class="breakdown-item">
         <span class="breakdown-icon" aria-hidden="true">${iconFor(c.category)}</span>
@@ -790,6 +807,7 @@ function renderScoreBreakdown(contributions, finalScore) {
           <span class="breakdown-name">${escapeHtml(c.label)}</span>
           <span class="breakdown-detail">${escapeHtml(c.detail)}</span>
         </span>
+        ${helpToggle}
         <span class="breakdown-delta ${deltaCls}">${sign}${c.delta}</span>
       </li>
     `;
@@ -808,6 +826,13 @@ function renderScoreBreakdown(contributions, finalScore) {
       </summary>
       <ul class="breakdown-list">${rows}</ul>
       <p class="breakdown-note">${checkNote}</p>
+      <details class="breakdown-methodology">
+        <summary>How scoring works</summary>
+        <p>Every crag starts at 100. Each factor below adds or removes points based on that crag\'s aspect, rock type, and ideal conditions — the score is fully transparent, no machine learning. Tap any <strong>?</strong> above to see how a single factor is computed.</p>
+        <ul class="methodology-list">
+          ${Object.entries(CATEGORY_METHODOLOGY).map(([cat, m]) => `<li><span class="methodology-icon" aria-hidden="true">${iconFor(cat)}</span><span><strong>${escapeHtml(m.label)}.</strong> ${escapeHtml(m.blurb)}</span></li>`).join('')}
+        </ul>
+      </details>
     </details>
   `;
 }
@@ -939,6 +964,42 @@ function formatHour12(h) {
   if (hh === 12) return '12pm';
   if (hh < 12) return `${hh}am`;
   return `${hh - 12}pm`;
+}
+
+// Render the per-day sun-on-wall window for a crag.
+//
+// `sunWindow` is the computed value from forecast.js: {firstHour, lastHour, hours}
+// or null when the wall never receives direct sun on this date (e.g. all-day
+// shade, deep winter low aspect, etc).
+//
+// `staticText` is the author-written hint from crags.js (e.g. "All-day shade"
+// or "NE: morning sun only"). We use it as a fallback when no computed window
+// is available, and as a supplementary hint when one is.
+function renderSunWindow(sunWindow, staticText) {
+  // No computed window: either crag is all-day shaded, or geometry says the
+  // wall never gets hit on this date. Prefer the author hint if provided,
+  // otherwise show a generic shade line.
+  if (!sunWindow) {
+    if (staticText) {
+      return `<div class="sun-on-wall">
+        <span class="sun-on-wall-label">Sun on wall</span>
+        <span class="sun-on-wall-value">${escapeHtml(staticText)}</span>
+      </div>`;
+    }
+    return `<div class="sun-on-wall">
+      <span class="sun-on-wall-label">Sun on wall</span>
+      <span class="sun-on-wall-value">Wall stays in shade today</span>
+    </div>`;
+  }
+
+  const { firstHour, lastHour, hours } = sunWindow;
+  const range = `${formatHour12(firstHour)}\u2013${formatHour12(lastHour)}`;
+  const hoursLabel = hours === 1 ? '1h' : `${hours}h`;
+  const hint = staticText ? ` \u00b7 <span class="sun-on-wall-hint">${escapeHtml(staticText)}</span>` : '';
+  return `<div class="sun-on-wall">
+    <span class="sun-on-wall-label">Sun on wall</span>
+    <span class="sun-on-wall-value">${range} \u00b7 ${hoursLabel}</span>${hint}
+  </div>`;
 }
 
 function compassFromDeg(deg) {
@@ -1092,6 +1153,56 @@ async function fetchAndRank() {
   return { forecasts, dates, tripDates, ranked, weekendTrip };
 }
 
+// iOS install hint — show a small, dismissible banner to users on iOS Safari
+// who haven't yet added the app to their home screen. Apple doesn't expose a
+// beforeinstallprompt event on iOS, so this is the only way to discover the
+// install path. One-time dismissal stored in localStorage.
+const IOS_HINT_KEY = 'sendtemps:ios-hint-dismissed';
+
+function maybeShowIosInstallHint() {
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (!isIOS) return;
+
+  // Detect standalone (already installed). iOS uses non-standard
+  // `navigator.standalone`; we also check the standard `display-mode` query
+  // for completeness (and for future-proofing if Apple ever ships support).
+  const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+    || navigator.standalone === true;
+  if (isStandalone) return;
+
+  if (_storage && _storage.getItem(IOS_HINT_KEY)) return;
+
+  // Don't double-render if init() runs twice.
+  if (document.getElementById('ios-install-hint')) return;
+
+  const banner = document.createElement('aside');
+  banner.id = 'ios-install-hint';
+  banner.className = 'ios-install-hint';
+  banner.setAttribute('role', 'note');
+  banner.innerHTML = `
+    <svg class="ios-share-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 3v13" />
+      <path d="M7 8l5-5 5 5" />
+      <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+    </svg>
+    <div class="ios-install-hint-text">
+      <strong>Install SendTemps</strong>
+      <span>Tap Share <span aria-hidden="true">↑</span> then <em>Add to Home Screen</em>.</span>
+    </div>
+    <button class="ios-install-hint-dismiss" type="button" aria-label="Dismiss install hint">×</button>
+  `;
+
+  banner.querySelector('.ios-install-hint-dismiss').addEventListener('click', () => {
+    try { _storage && _storage.setItem(IOS_HINT_KEY, '1'); } catch (_) { /* private mode */ }
+    banner.remove();
+  });
+
+  const content = document.getElementById('content');
+  if (content && content.parentNode) {
+    content.parentNode.insertBefore(banner, content);
+  }
+}
+
 async function init() {
   const loading = document.getElementById('loading');
   const content = document.getElementById('content');
@@ -1114,6 +1225,7 @@ async function init() {
 
     loading.hidden = true;
     content.hidden = false;
+    maybeShowIosInstallHint();
   } catch (err) {
     console.error(err);
     loading.hidden = true;

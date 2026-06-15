@@ -100,6 +100,7 @@ export async function fetchAllForecasts() {
         // Real solar exposure for this crag's wall on this day (geometry, not
         // aspect labels). scoreDay uses these for the heat/cold/sunshine maths.
         ...computeSolarExposure(crag, f.hourly, date),
+        sunWindow: computeSunWindow(crag, f.hourly, date),
         sunshine: f.daily.sunshine_duration[di], // seconds
         weatherCode: f.daily.weathercode[di],
         rainWindows: extractRainWindows(f.hourly, date),
@@ -177,6 +178,38 @@ function daytimeWindExposure(crag, hourly, dateStr) {
   const effective = Math.max(windAvg, gustAvg * 0.7);
   const { exposure } = aspectWindFactor(crag.aspect, windDir, effective);
   return { windDir, windAvg, windExposure: exposure };
+}
+
+// Compute the contiguous sun-on-wall window for a crag on a given date.
+// Returns `{firstHour, lastHour, hours}` where firstHour/lastHour are the
+// integer hours-of-day (Melbourne local) bounding the lit run, and `hours`
+// is the count. Returns null if the wall never sees the sun on this date or
+// is explicitly all-day shaded.
+//
+// We use a generous altitude cutoff (≥ 3°) matching computeSolarExposure so
+// the labels stay consistent across the app. The window collapses repeated
+// lit hours into a single span — if the geometry shows sun lighting the wall
+// 8–10 and again 13–15 we return 8–15 with a small caveat. That’s rare; most
+// natural cliff aspects light up in one block.
+function computeSunWindow(crag, hourly, dateStr) {
+  if (!hourly || !hourly.time || crag.lat == null || crag.lon == null) return null;
+  if (crag.shade === 'all-day') return null;
+  let firstHour = null, lastHour = null;
+  for (let i = 0; i < hourly.time.length; i++) {
+    const t = hourly.time[i];
+    if (!t.startsWith(dateStr)) continue;
+    const hour = parseInt(t.slice(11, 13), 10);
+    const when = melbourneHourToDate(t);
+    const sun = sunPosition(when, crag.lat, crag.lon);
+    if (sun.altitude <= 3) continue;
+    if (!sunOnAspect(crag.aspect, sun.azimuth, sun.altitude)) continue;
+    if (firstHour == null || hour < firstHour) firstHour = hour;
+    if (lastHour == null || hour > lastHour) lastHour = hour;
+  }
+  if (firstHour == null) return null;
+  // `lastHour` is the last *lit* hour; the wall stays lit until the end of
+  // that hour, so we report `firstHour–(lastHour+1)` for human reading.
+  return { firstHour, lastHour: lastHour + 1, hours: (lastHour + 1) - firstHour };
 }
 
 // Per-day solar exposure for a crag wall. Walks each hourly cell of the local

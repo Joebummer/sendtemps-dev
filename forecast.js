@@ -1079,13 +1079,21 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // no shade, conglomerate that gets uncomfortable over 22°C with clear sky.
   if (typeof crag.heatCap === 'number' && t > crag.heatCap) {
     // sunHours is daily clear-sky proxy in hours (sunshine_duration / 3600).
-    // Use it to gauge whether it's a clear day. >6h of sun in winter days = clear.
-    if (sunHours >= 5) {
-      const over = t - crag.heatCap;
-      const pen = Math.min(12, Math.round(4 + over * 1.5));
+    // Scale ramps quickly: at the cap the wall is already warm; every degree
+    // over compounds because there's no shade refuge on these aspects.
+    //   1° over: -8   |  3° over: -16  |  6° over (e.g. 28°C at Falcon's): -28
+    //   10° over: hits the -40 cap (matches the temperature-mismatch ceiling).
+    // Even on a partly cloudy day there's still meaningful sun on a N aspect,
+    // so we apply a softer multiplier rather than a hard sunHours gate.
+    const over = t - crag.heatCap;
+    const clearness = Math.min(1, Math.max(0.4, sunHours / 7));
+    const raw = (5 + over * 3) * clearness;
+    const pen = Math.min(40, Math.round(raw));
+    if (pen > 0) {
       score -= pen;
       reasons.push('sun-baked aspect');
-      add('aspect', 'Sun-trap × clear hot day', -pen, `${t.toFixed(0)}°C with ${sunHours.toFixed(1)}h of clear sun — this wall bakes above ${crag.heatCap}°C`);
+      const climate = sunHours >= 5 ? `${sunHours.toFixed(1)}h of clear sun` : `${sunHours.toFixed(1)}h of sun forecast`;
+      add('aspect', 'Sun-trap × heat', -pen, `${t.toFixed(0)}°C with ${climate} — this aspect bakes above ${crag.heatCap}°C`);
     }
   }
 

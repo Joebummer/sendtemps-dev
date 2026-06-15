@@ -9,7 +9,7 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=34';
+} from './forecast.js?v=35';
 
 // ---- Theme toggle ----
 (function () {
@@ -34,10 +34,100 @@ import {
 // Caches the static shell + last good forecast so SendTemps loads at the crag
 // even with no signal. The SW handles its own update lifecycle — we just kick
 // it off here and let it stream in updates.
+// Service worker registration + update detection.
+//
+// Registering the SW gives us offline shell + faster boot. We also wire up
+// the update lifecycle so when a new build is deployed:
+//   1. registration.update() is polled on visibility change to detect new
+//      versions sitting on the server.
+//   2. updatefound → we listen to the new worker's statechange; when it
+//      reaches 'installed' AND there's already a controller (i.e. this isn't
+//      the first install), we surface the in-app banner.
+//   3. The banner has a Reload button that messages the waiting worker to
+//      skipWaiting() — actually our SW already calls skipWaiting() on install,
+//      so once activated, controllerchange fires and we just reload.
+//
+// This is what unsticks the "stale shell" PWA cache: even before the user
+// reloads, the next launch will pull the new index.html (network-first in sw.js)
+// and the banner gives them an obvious way to refresh without quitting the app.
+let _swReloading = false;
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => { /* offline fine */ });
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('./sw.js');
+
+      // If a waiting worker was already present when we loaded (e.g. previous
+      // tab installed it but never reloaded), show the banner immediately.
+      if (reg.waiting && navigator.serviceWorker.controller) {
+        showUpdateBanner();
+      }
+
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          // 'installed' with an existing controller means there was a prior
+          // version — i.e. this is an *update*, not a first-time install.
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner();
+          }
+        });
+      });
+
+      // When the active SW changes (skipWaiting + clients.claim took effect),
+      // reload once so the page is running with the new shell's assets.
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (_swReloading) return;
+        _swReloading = true;
+        window.location.reload();
+      });
+
+      // Poll for updates when the user returns to the tab. iOS PWAs only check
+      // for SW updates at launch by default; this nudges it on each focus.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          reg.update().catch(() => { /* offline fine */ });
+        }
+      });
+    } catch (_) {
+      /* offline / unsupported — SW just won't be active, app still works */
+    }
   });
+}
+
+// In-app update banner.
+//
+// Shown when a new SW build has been installed and is ready to take over.
+// Clicking Reload simply reloads the page — since the SW already called
+// skipWaiting() on install and clients.claim() on activate, the new version
+// is in control by the time the reload completes.
+function showUpdateBanner() {
+  if (document.getElementById('update-banner')) return; // already shown
+  const banner = document.createElement('aside');
+  banner.id = 'update-banner';
+  banner.className = 'update-banner';
+  banner.setAttribute('role', 'status');
+  banner.innerHTML = `
+    <svg class="update-banner-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-3-6.7" />
+      <path d="M21 4v5h-5" />
+    </svg>
+    <div class="update-banner-text">
+      <strong>New version available</strong>
+      <span>Refresh to get the latest forecast features.</span>
+    </div>
+    <button class="update-banner-reload" type="button">Reload</button>
+    <button class="update-banner-dismiss" type="button" aria-label="Dismiss">×</button>
+  `;
+  banner.querySelector('.update-banner-reload').addEventListener('click', () => {
+    window.location.reload();
+  });
+  banner.querySelector('.update-banner-dismiss').addEventListener('click', () => {
+    banner.remove();
+  });
+  // Place at top so it's unmissable. The iOS install hint sits in the same
+  // visual slot — we render *above* it (insertBefore on body's first child).
+  document.body.insertBefore(banner, document.body.firstChild);
 }
 
 // ---- App state ----
@@ -399,6 +489,17 @@ function renderSplitRanked(dayRows, destinations) {
   list.querySelectorAll('.subcrag-row.is-static').forEach(btn => {
     btn.addEventListener('click', (e) => e.stopPropagation());
   });
+
+  // Share buttons — both the icon on the header and the labelled button in
+  // the expander. stopPropagation so the header icon doesn't also toggle the
+  // card open/closed.
+  list.querySelectorAll('.share-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      shareForecast(btn.dataset.shareId);
+    });
+  });
 }
 
 function renderDaySection(title, subtitle, rows, hiddenItems = []) {
@@ -629,6 +730,10 @@ function renderSubCragDailyBreakdown(dailyScores) {
 
 function renderCard(row, isTop, isWeekend) {
   const { crag, day, score, reasons, prevDay, tripScore, dailyScores, daySubCrags, bestSubCragName, nowDryness, lastRain } = row;
+  // We stash the row id on the share button via data-share-id so the
+  // click handler (bound after render) can look up the row by crag.id
+  // without re-deriving headlines or carrying closures through innerHTML.
+  const shareId = crag.id;
   // For weekend cards, the headline number is the trip score (Fri–Sun).
   const headlineScore = isWeekend && tripScore != null ? tripScore : score;
   const band = scoreBand(headlineScore);
@@ -662,6 +767,7 @@ function renderCard(row, isTop, isWeekend) {
     <article class="crag-card ${isTop ? 'top' : ''}" data-open="false" data-id="${crag.id}">
       ${renderFavouriteButton(crag.id, crag.name)}
       ${renderHideButton(crag.id, crag.name)}
+      ${renderShareIconButton(shareId, crag.name)}
       <button class="crag-header" aria-expanded="false" aria-controls="detail-${crag.id}">
         <div class="score-pill ${band.color}" aria-label="Score ${headlineScore} out of 100">
           ${headlineScore}
@@ -711,9 +817,41 @@ function renderCard(row, isTop, isWeekend) {
           ${renderSunWindow(day.sunWindow, crag.sunOnWall)}
         </div>
         ${renderDaySubCrags(daySubCrags)}
+        ${renderShareExpanderButton(shareId, crag.name)}
       </div>
     </article>
   `;
+}
+
+// ---- Share button helpers ----
+//
+// The icon variant sits on the card header next to favourite/hide. It's an
+// icon-only button so it doesn't crowd the row on narrow screens. The labelled
+// variant lives inside the detail expander for users who didn't notice the icon.
+// Both bind to the same click handler via the .share-btn class + data-share-id.
+function renderShareIconButton(cragId, cragName) {
+  return `<button class="share-btn share-btn-icon" data-share-id="${escapeHtml(cragId)}"
+    aria-label="Share ${escapeHtml(cragName)} forecast" title="Share forecast">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 3v13" />
+      <path d="M7 8l5-5 5 5" />
+      <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+    </svg>
+  </button>`;
+}
+
+function renderShareExpanderButton(cragId, cragName) {
+  return `<div class="share-expander-row">
+    <button class="share-btn share-btn-full" data-share-id="${escapeHtml(cragId)}"
+      aria-label="Share ${escapeHtml(cragName)} forecast">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 3v13" />
+        <path d="M7 8l5-5 5 5" />
+        <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+      </svg>
+      <span>Share this forecast</span>
+    </button>
+  </div>`;
 }
 
 function renderDaySubCrags(daySubCrags) {
@@ -1153,6 +1291,160 @@ async function fetchAndRank() {
   return { forecasts, dates, tripDates, ranked, weekendTrip };
 }
 
+// ---- Share a forecast ----
+//
+// `shareForecast(cragId)` is the entry point. It looks up the active day's row
+// for that crag, builds a one-line text summary + a deep link, and fires the
+// native share sheet via navigator.share when available. Browsers without
+// Web Share (desktop Chrome, some Firefox) fall back to writing the text +
+// link to the clipboard with a small toast confirmation.
+//
+// The deep link includes ?crag=ID&date=YYYY-MM-DD so the recipient lands on
+// exactly the right tab and card — see applyDeepLinkFromUrl() for the reader.
+function buildShareUrl(cragId, dateStr) {
+  const base = `${location.origin}${location.pathname}`;
+  const params = new URLSearchParams();
+  params.set('crag', cragId);
+  if (dateStr) params.set('date', dateStr);
+  return `${base}?${params.toString()}`;
+}
+
+function buildShareText(row, dateStr) {
+  const { crag, day, score } = row;
+  const dateLabel = (() => {
+    try {
+      const d = new Date(dateStr + 'T00:00:00');
+      return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+    } catch { return dateStr; }
+  })();
+  return `${crag.name} · ${dateLabel}\nSendTemps score ${Math.round(score)}/100`;
+}
+
+function shareForecast(cragId) {
+  if (!cragId) return;
+  const dateStr = state.activeDate;
+  const rows = state.ranked?.[dateStr] || [];
+  const row = rows.find(r => r.crag.id === cragId);
+  if (!row) {
+    // Sub-crag or unranked entry on this date — nothing to share.
+    showToast('Nothing to share for this crag on this date.');
+    return;
+  }
+
+  const url = buildShareUrl(cragId, dateStr);
+  const text = buildShareText(row, dateStr);
+  const title = `${row.crag.name} forecast — SendTemps`;
+
+  // navigator.share is the right path on iOS Safari + Android Chrome.
+  // It throws if the user cancels (NotAllowedError / AbortError) — we swallow
+  // those silently and don't fall back, since the user explicitly dismissed.
+  if (typeof navigator.share === 'function') {
+    navigator.share({ title, text, url })
+      .catch(err => {
+        if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
+        // Genuine failure — try clipboard as a fallback.
+        copyToClipboardWithToast(`${text}\n${url}`);
+      });
+    return;
+  }
+
+  copyToClipboardWithToast(`${text}\n${url}`);
+}
+
+function copyToClipboardWithToast(text) {
+  // navigator.clipboard requires a secure context (https), which GH Pages is.
+  const fallbackCopy = () => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand && document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast(ok ? 'Forecast copied to clipboard' : 'Couldn\u2019t copy — select and copy manually');
+    } catch {
+      showToast('Couldn\u2019t copy — select and copy manually');
+    }
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => showToast('Forecast copied to clipboard'))
+      .catch(fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
+}
+
+// ---- Toast ----
+//
+// Lightweight transient message anchored bottom-center. We keep at most one
+// toast in the DOM at a time — a second call replaces the first.
+let _toastTimer = null;
+function showToast(message) {
+  let el = document.getElementById('toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.className = 'toast';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    document.body.appendChild(el);
+  }
+  el.textContent = message;
+  el.classList.add('toast-visible');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => {
+    el.classList.remove('toast-visible');
+  }, 2400);
+}
+
+// ---- Deep link reader ----
+//
+// Reads ?crag=ID&date=YYYY-MM-DD from the URL after the initial render and:
+//   1. switches the active tab to the requested date if it's in range
+//   2. scrolls the matching card into view
+//   3. opens its detail expander
+// Then strips the params from the address bar so subsequent reloads don't
+// keep re-opening the same card.
+function applyDeepLinkFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const cragId = params.get('crag');
+  const dateStr = params.get('date');
+  if (!cragId && !dateStr) return;
+
+  // Switch tab if the requested date is in the current rolling window.
+  if (dateStr && state.dates && state.dates.includes(dateStr) && state.activeDate !== dateStr) {
+    state.activeDate = dateStr;
+    renderTabs();
+    renderDay();
+  }
+
+  // Strip the params — user shouldn't see them lingering, and refreshes
+  // shouldn't re-trigger this. history.replaceState avoids a navigation.
+  try {
+    const clean = `${location.origin}${location.pathname}`;
+    history.replaceState(null, '', clean);
+  } catch { /* ignore — cosmetic only */ }
+
+  if (!cragId) return;
+
+  // The matching card may not yet exist if cragId is unranked on this date.
+  // Defer to next frame so renderDay() has settled the DOM.
+  requestAnimationFrame(() => {
+    const card = document.querySelector(`article.crag-card[data-id="${CSS.escape(cragId)}"]`);
+    if (!card) return;
+    if (card.dataset.open !== 'true') {
+      card.querySelector('.crag-header')?.click();
+    }
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    card.classList.add('crag-card-deeplink-flash');
+    setTimeout(() => card.classList.remove('crag-card-deeplink-flash'), 1800);
+  });
+}
+
 // iOS install hint — show a small, dismissible banner to users on iOS Safari
 // who haven't yet added the app to their home screen. Apple doesn't expose a
 // beforeinstallprompt event on iOS, so this is the only way to discover the
@@ -1226,6 +1518,7 @@ async function init() {
     loading.hidden = true;
     content.hidden = false;
     maybeShowIosInstallHint();
+    applyDeepLinkFromUrl();
   } catch (err) {
     console.error(err);
     loading.hidden = true;

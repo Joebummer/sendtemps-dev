@@ -981,8 +981,10 @@ html[data-theme="dark"] .reason-tag-closed {
   transform: scale(0.9);
   background: color-mix(in oklab, var(--color-text) 22%, transparent);
 }
-/* Leave room so the × doesn't visually collide with the chevron. */
-.crag-header { padding-right: calc(24px + var(--space-4)); }
+/* Leave room for the row of header buttons (share + fav + hide) so they
+ * don't visually collide with the chevron or wrap onto the title. With three
+ * 24px circles plus gaps, we need ~100px of clear space on the right. */
+.crag-header { padding-right: calc(24px * 3 + var(--space-5)); }
 
 .hidden-footer {
   margin-top: var(--space-3);
@@ -1417,5 +1419,175 @@ html[data-theme="dark"] .reason-tag-closed {
 .ios-install-hint-dismiss:focus-visible {
   background: var(--color-surface-2);
   color: var(--color-text);
+  outline: none;
+}
+
+/* ---- v58: share button (icon on header + full in expander) ----
+ * Two flavours of the same affordance. The icon variant lives on the card
+ * header alongside favourite/hide and is icon-only so it doesn't crowd the
+ * row on narrow phones. The full variant lives at the bottom of the detail
+ * expander with a label, for users who didn't notice the icon. */
+.share-btn {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.share-btn:hover,
+.share-btn:focus-visible {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+  outline: none;
+}
+.share-btn-icon {
+  position: absolute;
+  top: 10px;
+  right: 74px; /* sits left of fav-btn (right:42px, w:24) and hide-btn (right:10px, w:24) */
+  width: 24px;
+  height: 24px;
+  z-index: 2;
+  border-radius: var(--radius-full);
+  border: none;
+  background: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+.share-btn-icon svg { width: 12px; height: 12px; stroke-width: 2.25; }
+.share-btn-icon:hover {
+  background: color-mix(in oklab, var(--color-text) 16%, transparent);
+  color: var(--color-text);
+  border-color: transparent;
+}
+.share-btn-icon:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.share-expander-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+.share-btn-full {
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+/* ---- v58: toast (transient bottom-center status) ---- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-6);
+  transform: translateX(-50%) translateY(10px);
+  background: var(--color-text);
+  color: var(--color-surface);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 9999;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  max-width: 90vw;
+  text-align: center;
+}
+.toast.toast-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ---- v58: deep-link flash highlight ----
+ * Briefly pulses the border of a card scrolled into view from a ?crag= URL
+ * so the recipient's eye lands on the right card. */
+.crag-card-deeplink-flash {
+  animation: deeplinkFlash 1.8s ease-out;
+}
+@keyframes deeplinkFlash {
+  0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 60%, transparent); }
+  20%  { box-shadow: 0 0 0 6px color-mix(in oklab, var(--color-accent) 35%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 0%, transparent); }
+}
+
+/* ---- v58: in-app "new version available" banner ----
+ * Appears at the top of the viewport when the SW reports a new build has
+ * installed. Distinguishes itself from the iOS install hint with the accent
+ * colour bar and a primary "Reload" action button. */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast, #fff);
+  font-size: var(--text-sm);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+.update-banner-icon {
+  flex: 0 0 auto;
+  color: currentColor;
+}
+.update-banner-text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.3;
+  min-width: 0;
+}
+.update-banner-text strong {
+  font-weight: 600;
+}
+.update-banner-text span {
+  font-size: var(--text-xs);
+  opacity: 0.85;
+}
+.update-banner-reload {
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.18);
+  color: currentColor;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.update-banner-reload:hover,
+.update-banner-reload:focus-visible {
+  background: rgba(255, 255, 255, 0.28);
+  outline: none;
+}
+.update-banner-dismiss {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  color: currentColor;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  opacity: 0.8;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.update-banner-dismiss:hover,
+.update-banner-dismiss:focus-visible {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.18);
   outline: none;
 }

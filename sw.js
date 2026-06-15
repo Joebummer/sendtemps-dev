@@ -1,4 +1,4 @@
-// SendTemps service worker — v57
+// SendTemps service worker — v58
 //
 // Goal: SendTemps should still open at the crag with no signal. We precache
 // the static shell on install and use a cache-first strategy for it. Forecast
@@ -7,18 +7,18 @@
 //
 // Cache name is bumped per release so old shells get evicted on activate.
 
-const CACHE = 'sendtemps-v57';
-const RUNTIME_CACHE = 'sendtemps-runtime-v57';
+const CACHE = 'sendtemps-v58';
+const RUNTIME_CACHE = 'sendtemps-runtime-v58';
 
 // Static shell — paths are app-relative so this works under the
 // /sendtemps/ GitHub Pages prefix as well as a custom-domain root.
 const SHELL = [
   './',
   './index.html',
-  './app.js?v=57',
-  './forecast.js?v=34',
+  './app.js?v=58',
+  './forecast.js?v=35',
   './crags.js?v=22',
-  './style.css?v=29',
+  './style.css?v=30',
   './manifest.webmanifest',
   './icon-180.png',
   './icon-192.png',
@@ -69,9 +69,42 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Same-origin static shell — cache-first with background refresh so the
-  // app boots instantly and a new build streams in for next visit.
+  // Same-origin static shell.
+  //
+  // index.html (and the bare directory request) is treated NETWORK-FIRST so
+  // a new build's HTML — which references the new versioned JS/CSS — is seen
+  // immediately when online. We only fall back to cache when offline. This is
+  // what unsticks the "stale shell" trap: a returning user always pulls the
+  // freshest HTML, which then pulls the freshest assets via the bumped
+  // ?v=NN query strings.
+  //
+  // Versioned assets (app.js?v=N, style.css?v=N, etc.) are cache-first with
+  // background refresh — the query string changes per release so old entries
+  // never collide with new ones, and the next visit gets the new file.
   if (url.origin === self.location.origin) {
+    const isShellHtml = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
+
+    if (isShellHtml) {
+      event.respondWith((async () => {
+        try {
+          const fresh = await fetch(req, { cache: 'no-store' });
+          if (fresh && fresh.ok) {
+            const cache = await caches.open(CACHE);
+            cache.put(req, fresh.clone());
+          }
+          return fresh;
+        } catch (_) {
+          const cached = await caches.match(req);
+          if (cached) return cached;
+          // Last-ditch: try the cached root.
+          const root = await caches.match('./');
+          if (root) return root;
+          throw _;
+        }
+      })());
+      return;
+    }
+
     event.respondWith((async () => {
       const cached = await caches.match(req);
       const fetchPromise = fetch(req).then((res) => {

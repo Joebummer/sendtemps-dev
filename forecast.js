@@ -1162,13 +1162,31 @@ export function scoreDay(crag, day, prevDay, nextDay) {
       ? ' — wall sits in the lee'
       : '';
 
+  // Direction-vs-aspect multiplier on the wind *penalty* (not the drying
+  // bonus, which has its own onshore/lee logic below).
+  //
+  // The same regional wind speed is perceived very differently depending on
+  // whether it's hitting the wall head-on or coming over the back of the
+  // cliff. We scale the base penalty by a subtle factor so the ranking nudges
+  // toward sheltered crags on windy days without dramatically reshuffling
+  // everything from a single signal.
+  //
+  //   onshore  → ×1.3  (worse, exposed to the brunt)
+  //   parallel → ×1.0  (no change)
+  //   lee      → ×0.8  (better, sheltered)
+  const windPenaltyMult = day.windExposure === 'onshore' ? 1.3
+    : day.windExposure === 'lee' ? 0.8
+    : 1.0;
+
   if (day.wind > 50) {
-    score -= 15;
+    const penalty = Math.round(15 * windPenaltyMult); // 12 lee / 15 parallel / 20 onshore
+    score -= penalty;
     reasons.push('very windy');
-    add('wind', 'Wind', -15, `${Math.round(day.wind)} km/h ${dirLabel} — very windy${exposureNote}`);
+    add('wind', 'Wind', -penalty, `${Math.round(day.wind)} km/h ${dirLabel} — very windy${exposureNote}`);
   } else if (day.wind > 35) {
-    score -= 5;
-    add('wind', 'Wind', -5, `${Math.round(day.wind)} km/h ${dirLabel} — gusty${exposureNote}`);
+    const penalty = Math.round(5 * windPenaltyMult); // 4 lee / 5 parallel / 7 onshore
+    score -= penalty;
+    add('wind', 'Wind', -penalty, `${Math.round(day.wind)} km/h ${dirLabel} — gusty${exposureNote}`);
   } else if (day.wind > 15 && day.wind < 30 && prevWasWetDuringDay) {
     // Only credit a drying wind if the wall is actually exposed to it.
     // A wall in the lee doesn't benefit, even if the regional wind is brisk.

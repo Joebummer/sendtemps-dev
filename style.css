@@ -531,13 +531,28 @@ html[data-theme="dark"] .reason-tag-closed {
 }
 .breakdown-item {
   display: grid;
-  grid-template-columns: 24px 1fr auto;
+  /* icon | label | ? help toggle | delta pill */
+  grid-template-columns: 24px 1fr auto auto;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2);
   background: var(--color-surface-2);
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-md, 8px);
+}
+/* The help <details> is a single grid cell holding both the (?) summary and,
+ * when open, a paragraph blurb. We let the cell auto-size to the summary in
+ * the row, then absolutely position the blurb so it can span the row width
+ * below without disrupting the centred row layout. */
+.breakdown-item .breakdown-help { position: relative; }
+.breakdown-item .breakdown-help[open] .breakdown-help-blurb {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  left: auto;
+  width: max(260px, min(80vw, 360px));
+  z-index: 5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 .breakdown-icon {
   font-size: 14px;
@@ -1268,9 +1283,11 @@ html[data-theme="dark"] .reason-tag-closed {
  * pill so it doesn't compete with the row content.
  */
 .breakdown-help {
+  /* When used inside a flex/inline context (legacy callsites), this keeps it
+   * inline. Inside the breakdown grid the parent overrides margin to 0. */
   display: inline-block;
-  margin-left: var(--space-2);
 }
+.breakdown-item .breakdown-help { margin-left: 0; }
 .breakdown-help > summary {
   list-style: none;
   cursor: pointer;

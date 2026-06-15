@@ -1,4 +1,4 @@
-// SendTemps service worker — v58
+// SendTemps service worker — v58.1
 //
 // Goal: SendTemps should still open at the crag with no signal. We precache
 // the static shell on install and use a cache-first strategy for it. Forecast
@@ -7,8 +7,8 @@
 //
 // Cache name is bumped per release so old shells get evicted on activate.
 
-const CACHE = 'sendtemps-v58';
-const RUNTIME_CACHE = 'sendtemps-runtime-v58';
+const CACHE = 'sendtemps-v58-1';
+const RUNTIME_CACHE = 'sendtemps-runtime-v58-1';
 
 // Static shell — paths are app-relative so this works under the
 // /sendtemps/ GitHub Pages prefix as well as a custom-domain root.
@@ -18,7 +18,7 @@ const SHELL = [
   './app.js?v=58',
   './forecast.js?v=35',
   './crags.js?v=22',
-  './style.css?v=30',
+  './style.css?v=31',
   './manifest.webmanifest',
   './icon-180.png',
   './icon-192.png',

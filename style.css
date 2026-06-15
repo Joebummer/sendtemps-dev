@@ -540,21 +540,49 @@ html[data-theme="dark"] .reason-tag-closed {
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-md, 8px);
 }
-/* The help <details> lives inside the row's grid. We use display:contents on
- * the <details> so its children (summary + blurb) participate directly in the
- * row's grid. The summary stays in column 3 (the auto-sized help slot); when
- * open, the blurb spans all four columns on a new implicit row beneath the
- * existing row content. This keeps the pill perfectly centred and gives the
- * blurb full row width without absolute positioning or overflow. */
-.breakdown-item .breakdown-help { display: contents; }
-.breakdown-item .breakdown-help > summary { grid-column: 3 / 4; }
-.breakdown-item .breakdown-help-blurb {
-  display: none; /* hidden unless [open] applies */
-  grid-column: 1 / -1; /* full row width when shown */
-  margin: var(--space-2) 0 0;
+/* The (?) toggle is a plain button that sits in the row's third grid column.
+ * Its associated blurb is a sibling <li.breakdown-blurb> below the row, so
+ * the row's centred alignment is never disturbed by the blurb expansion. */
+.breakdown-help-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.breakdown-item .breakdown-help[open] .breakdown-help-blurb {
-  display: block;
+.breakdown-help-toggle:hover,
+.breakdown-help-toggle:focus-visible,
+.breakdown-help-toggle.is-open {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast, #fff);
+  border-color: transparent;
+  outline: none;
+}
+/* The blurb is its own <li>. We style it to visually attach to the row above
+ * — sharing left/right margins, sitting just below with a faint accent border
+ * so it reads as continuation rather than a sibling row. */
+.breakdown-blurb {
+  margin: calc(var(--space-1) * -1) var(--space-2) 0;
+  padding: var(--space-3);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md, 8px) var(--radius-md, 8px);
+  list-style: none;
 }
 .breakdown-icon {
   font-size: 14px;
@@ -1277,57 +1305,8 @@ html[data-theme="dark"] .reason-tag-closed {
   vertical-align: middle;
 }
 
-/* ---- v57: methodology help affordances inside score breakdown ---- */
-/*
- * Each breakdown row gets a tiny `?` chip that expands to one paragraph of
- * plain-English explanation. We use a native <details> so it works without JS,
- * keyboard, and screen reader; we strip the marker and style the summary as a
- * pill so it doesn't compete with the row content.
- */
-.breakdown-help {
-  /* When used inside a flex/inline context (legacy callsites), this keeps it
-   * inline. Inside the breakdown grid the parent overrides margin to 0. */
-  display: inline-block;
-}
-.breakdown-item .breakdown-help { margin-left: 0; }
-.breakdown-help > summary {
-  list-style: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  line-height: 1;
-  border-radius: 999px;
-  background: var(--color-surface-2);
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border);
-  user-select: none;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.breakdown-help > summary::-webkit-details-marker { display: none; }
-.breakdown-help > summary::marker { content: ''; }
-.breakdown-help[open] > summary,
-.breakdown-help > summary:hover,
-.breakdown-help > summary:focus-visible {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast, #fff);
-  border-color: transparent;
-  outline: none;
-}
-.breakdown-help-blurb {
-  margin: var(--space-2) 0 0;
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-xs);
-  line-height: 1.45;
-  color: var(--color-text-muted);
-  background: var(--color-surface-2);
-  border-radius: var(--radius-sm);
-  border-left: 2px solid var(--color-accent);
-}
+/* v57 methodology <details> styles removed in v58.3 — replaced by
+ * .breakdown-help-toggle button + sibling .breakdown-blurb <li> above. */
 
 /* Footer: "How scoring works" summary, repeats all category blurbs in one
  * place for users who'd rather skim once than poke each row. */

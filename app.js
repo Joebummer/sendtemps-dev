@@ -500,6 +500,23 @@ function renderSplitRanked(dayRows, destinations) {
       shareForecast(btn.dataset.shareId);
     });
   });
+
+  // Breakdown row (?) help toggles. The blurb is the immediate next-sibling
+  // <li.breakdown-blurb>; we flip its hidden attribute and the button's
+  // aria-expanded state in sync.
+  list.querySelectorAll('.breakdown-help-toggle').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const row = btn.closest('.breakdown-item');
+      const blurb = row && row.nextElementSibling;
+      if (!blurb || !blurb.classList.contains('breakdown-blurb')) return;
+      const willOpen = blurb.hidden;
+      blurb.hidden = !willOpen;
+      btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      btn.classList.toggle('is-open', willOpen);
+    });
+  });
 }
 
 function renderDaySection(title, subtitle, rows, hiddenItems = []) {
@@ -933,10 +950,22 @@ function renderScoreBreakdown(contributions, finalScore) {
     const deltaCls = c.delta > 0 ? 'pos' : 'neg';
     const sign = c.delta > 0 ? '+' : '';
     const meth = CATEGORY_METHODOLOGY[c.category];
-    // Each row gets a small (?) that toggles a one-paragraph explanation
-    // below it. Native <details>, no JS handler needed.
-    const helpToggle = meth
-      ? `<details class="breakdown-help"><summary aria-label="How ${escapeHtml(meth.label)} is scored" title="How ${escapeHtml(meth.label)} is scored"><span aria-hidden="true">?</span></summary><p class="breakdown-help-blurb">${escapeHtml(meth.blurb)}</p></details>`
+    // Each row gets a small (?) button that toggles a one-paragraph blurb
+    // rendered as a sibling <li> beneath the row — keeps the row layout
+    // simple (no nested grid surprises) and lets the blurb take full width.
+    // The toggle is wired in setupBreakdownHelpToggles() after render.
+    const helpButton = meth
+      ? `<button class="breakdown-help-toggle" type="button"
+          aria-label="How ${escapeHtml(meth.label)} is scored"
+          title="How ${escapeHtml(meth.label)} is scored"
+          aria-expanded="false"
+        ><span aria-hidden="true">?</span></button>`
+      : '';
+    // Blurb is the immediate next sibling <li>. The toggle handler looks it up
+    // via .nextElementSibling, so no ids are needed (avoids collisions when
+    // multiple cards render breakdowns on the same page).
+    const blurbItem = meth
+      ? `<li class="breakdown-blurb" hidden>${escapeHtml(meth.blurb)}</li>`
       : '';
     return `
       <li class="breakdown-item">
@@ -945,9 +974,10 @@ function renderScoreBreakdown(contributions, finalScore) {
           <span class="breakdown-name">${escapeHtml(c.label)}</span>
           <span class="breakdown-detail">${escapeHtml(c.detail)}</span>
         </span>
-        ${helpToggle}
+        ${helpButton}
         <span class="breakdown-delta ${deltaCls}">${sign}${c.delta}</span>
       </li>
+      ${blurbItem}
     `;
   }).join('');
   // Sum check for honesty: starting from 100, sum deltas, clamped 0–100.

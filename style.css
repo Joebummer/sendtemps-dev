@@ -540,19 +540,21 @@ html[data-theme="dark"] .reason-tag-closed {
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-md, 8px);
 }
-/* The help <details> is a single grid cell holding both the (?) summary and,
- * when open, a paragraph blurb. We let the cell auto-size to the summary in
- * the row, then absolutely position the blurb so it can span the row width
- * below without disrupting the centred row layout. */
-.breakdown-item .breakdown-help { position: relative; }
+/* The help <details> lives inside the row's grid. We use display:contents on
+ * the <details> so its children (summary + blurb) participate directly in the
+ * row's grid. The summary stays in column 3 (the auto-sized help slot); when
+ * open, the blurb spans all four columns on a new implicit row beneath the
+ * existing row content. This keeps the pill perfectly centred and gives the
+ * blurb full row width without absolute positioning or overflow. */
+.breakdown-item .breakdown-help { display: contents; }
+.breakdown-item .breakdown-help > summary { grid-column: 3 / 4; }
+.breakdown-item .breakdown-help-blurb {
+  display: none; /* hidden unless [open] applies */
+  grid-column: 1 / -1; /* full row width when shown */
+  margin: var(--space-2) 0 0;
+}
 .breakdown-item .breakdown-help[open] .breakdown-help-blurb {
-  position: absolute;
-  top: calc(100% + var(--space-2));
-  right: 0;
-  left: auto;
-  width: max(260px, min(80vw, 360px));
-  z-index: 5;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  display: block;
 }
 .breakdown-icon {
   font-size: 14px;

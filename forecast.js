@@ -574,6 +574,8 @@ export function bestWindow(hourly) {
 
   // Step 2: within each run, find the best fixed-width sub-window.
   // For runs shorter than MAX_HOURS we just use the whole run.
+  // We also carry forward the *full* run's bounds and average so the UI can
+  // upgrade the label to "Good all day" when one run blankets the climbable day.
   let bestRun = null;
   for (const run of runs) {
     const n = run.hours.length;
@@ -589,6 +591,7 @@ export function bestWindow(hourly) {
     }
     const slice = run.hours.slice(bestStart, bestStart + winLen);
     const avg = bestSum / winLen;
+    const runSum = run.hours.reduce((a, h) => a + h.score, 0);
     const candidate = {
       start: slice[0].hour,
       end: slice[slice.length - 1].hour + 1,
@@ -596,6 +599,11 @@ export function bestWindow(hourly) {
       count: winLen,
       hours: slice,
       avg,
+      // Full underlying run — used by callers to detect "good all day" cases.
+      runStart: run.hours[0].hour,
+      runEnd: run.hours[run.hours.length - 1].hour + 1,
+      runHours: n,
+      runAvg: runSum / n,
     };
     // Pick the highest-avg sub-window across all runs; tie-break by length.
     if (!bestRun || candidate.avg > bestRun.avg ||

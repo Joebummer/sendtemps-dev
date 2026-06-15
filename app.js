@@ -9,7 +9,7 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=31';
+} from './forecast.js?v=32';
 
 // ---- Theme toggle ----
 (function () {
@@ -721,19 +721,37 @@ function renderTomorrowHourly(fc) {
   const bw = fc.tomorrowBestWindow;
 
   // ---- Best-window callout ----
-  // forecast.js caps the window at 5h so the pick is actionable ("go climbing
-  // 9am–2pm") rather than vague ("any time today"). Show the duration too.
+  // forecast.js caps the picked sub-window at 5h so the recommendation is
+  // actionable ("go climbing 9am–2pm") rather than vague. But when the
+  // underlying run blankets the climbable day (9am–6pm fully covered with
+  // score ≥ 60), pointing at one 5h slice is misleading — the whole day is
+  // genuinely good. Flag that case explicitly.
   let callout = '';
   if (bw && bw.count >= 2) {
     const avg = Math.round(bw.avg);
-    const band = scoreBand(avg);
-    callout = `
-      <div class="best-window-callout ${band.color}" title="Best ${bw.count}h block with score ≥ 60 (capped at 5h)">
-        <span class="best-window-label">🎯 Best ${bw.count}h block</span>
-        <span class="best-window-time">${formatHour12(bw.start)}–${formatHour12(bw.end)}</span>
-        <span class="best-window-avg">avg ${avg}</span>
-      </div>
-    `;
+    const runAvg = Math.round(bw.runAvg ?? bw.avg);
+    const goodAllDay = (bw.runHours ?? 0) > 5
+      && (bw.runStart ?? 99) <= 9
+      && (bw.runEnd ?? 0) >= 18;
+    if (goodAllDay) {
+      const band = scoreBand(runAvg);
+      callout = `
+        <div class="best-window-callout ${band.color}" title="Score ≥ 60 from ${formatHour12(bw.runStart)} through ${formatHour12(bw.runEnd)}">
+          <span class="best-window-label">✅ Good all day</span>
+          <span class="best-window-time">${formatHour12(bw.runStart)}–${formatHour12(bw.runEnd)}</span>
+          <span class="best-window-avg">avg ${runAvg}</span>
+        </div>
+      `;
+    } else {
+      const band = scoreBand(avg);
+      callout = `
+        <div class="best-window-callout ${band.color}" title="Best ${bw.count}h block with score ≥ 60 (capped at 5h)">
+          <span class="best-window-label">🎯 Best ${bw.count}h block</span>
+          <span class="best-window-time">${formatHour12(bw.start)}–${formatHour12(bw.end)}</span>
+          <span class="best-window-avg">avg ${avg}</span>
+        </div>
+      `;
+    }
   } else {
     callout = `
       <div class="best-window-callout muted" title="No continuous 2h+ window scored ≥ 60">
@@ -742,6 +760,14 @@ function renderTomorrowHourly(fc) {
       </div>
     `;
   }
+
+  // When the day is "good all day", the highlight should match the whole run,
+  // not just the picked 5h slice — otherwise the outline contradicts the label.
+  const goodAllDay = bw && (bw.runHours ?? 0) > 5
+    && (bw.runStart ?? 99) <= 9
+    && (bw.runEnd ?? 0) >= 18;
+  const highlightStart = goodAllDay ? bw.runStart : (bw ? bw.start : null);
+  const highlightEnd   = goodAllDay ? bw.runEnd   : (bw ? bw.end   : null);
 
   // ---- Hour cells ----
   const cells = fc.tomorrowHourly.map(h => {
@@ -758,7 +784,7 @@ function renderTomorrowHourly(fc) {
     const windArrow = h.windDir != null
       ? `<span class="hour-wind wind-${h.windExposure || 'parallel'}" title="${Math.round(h.wind)} km/h ${compassFromDeg(h.windDir)} · ${h.windExposure || 'parallel'}" style="transform: rotate(${(h.windDir + 180) % 360}deg)">↑</span>`
       : '<span class="hour-wind"></span>';
-    const inWindow = bw && h.hour >= bw.start && h.hour < bw.end ? 'in-window' : '';
+    const inWindow = highlightStart != null && h.hour >= highlightStart && h.hour < highlightEnd ? 'in-window' : '';
     return `
       <div class="hour-cell ${dryClass} ${inWindow}" data-score="${h.score}">
         <div class="hour-time">${formatHour12(h.hour)}</div>

@@ -1095,17 +1095,19 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // Dwell-time penalty: even if the mean is in-range, a window where only a
   // couple of hours sit inside the comfort band shouldn't score as "ideal".
   //   inRangeHours ≥ 6 → 0 penalty (most of the climbing day comfortable)
-  //   inRangeHours = 4 → -3
-  //   inRangeHours = 2 → -8
-  //   inRangeHours = 0 → -14 (capped) on top of the temp-distance penalty
+  //   inRangeHours = 4 → -1.4
+  //   inRangeHours = 2 → -5.6
+  //   inRangeHours = 0 → -10 (capped) on top of the temp-distance penalty
   let dwellPen = 0;
   if (climbHours >= 4) {
     const shortfall = Math.max(0, 6 - ct.hoursInRange);
-    dwellPen = Math.min(14, shortfall * shortfall * 0.5);
+    dwellPen = Math.min(10, shortfall * shortfall * 0.35);
   }
   if (t < idealMin) {
     const diff = idealMin - t;
-    const pen = Math.min(30, diff * 3) + dwellPen;
+    // Cold is climbable, just less pleasant — slightly gentler curve than
+    // the heat side (×2.5 vs ×4) and capped at 25.
+    const pen = Math.min(25, diff * 2.5) + dwellPen;
     score -= pen;
     if (diff > 5) reasons.push(`cold (${Math.round(t)}°C avg)`);
     const detail = climbHours > 0

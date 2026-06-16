@@ -9,7 +9,7 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=42';
+} from './forecast.js?v=43';
 
 // ---- Theme toggle ----
 (function () {

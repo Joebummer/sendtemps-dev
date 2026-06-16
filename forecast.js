@@ -27,6 +27,7 @@ export async function fetchAllForecasts() {
       'precipitation',
       'precipitation_probability',
       'temperature_2m',
+      'apparent_temperature',
       'relative_humidity_2m',
       'windspeed_10m',
       'winddirection_10m',
@@ -1120,16 +1121,19 @@ export function scoreDay(crag, day, prevDay, nextDay) {
       ? `${Math.round(t)}°C avg during climbing hours — ${Math.round(diff)}° above ideal (${idealMin}–${idealMax}°C); only ${ct.hoursInRange}/${climbHours}h in range`
       : `${Math.round(t)}°C — ${Math.round(diff)}° above ideal (${idealMin}–${idealMax}°C)`;
     add('temp', 'Temperature', -pen, detail);
-  } else if (climbHours > 0 && inRangeFrac < 0.6) {
+  } else if (climbHours > 0 && dwellPen > 0) {
     // Mean lands in-range but a chunk of the climbing window is outside it.
     // Apply just the dwell-time penalty so users see why the day still drags.
     score -= dwellPen;
     if (ct.hoursCold > ct.hoursHot) {
       reasons.push(`cool stretches (${ct.hoursCold}h)`);
       add('temp', 'Temperature', -dwellPen, `mean ${Math.round(t)}°C, but only ${ct.hoursInRange}/${climbHours}h in range — ${ct.hoursCold}h cooler than ideal`);
-    } else {
+    } else if (ct.hoursHot > 0) {
       reasons.push(`hot stretches (${ct.hoursHot}h)`);
       add('temp', 'Temperature', -dwellPen, `mean ${Math.round(t)}°C, but only ${ct.hoursInRange}/${climbHours}h in range — ${ct.hoursHot}h hotter than ideal`);
+    } else {
+      // Edge case: range is tiny so all out-of-range hours rounded to neither bucket
+      add('temp', 'Temperature', -dwellPen, `mean ${Math.round(t)}°C, but only ${ct.hoursInRange}/${climbHours}h in range`);
     }
   } else {
     reasons.push(`temp ideal (${Math.round(t)}°C)`);

@@ -729,11 +729,12 @@ function scoreHour(crag, h) {
   if (h.humidity != null) {
     const humSens = Math.max(0.25, (6 - (crag.dryRating ?? 3)) / 4);
     if (h.humidity >= 75) {
-      s -= Math.round(6 * humSens);          // muggy hour
-      if (h.temp >= 22) s -= 2;              // warm + sticky → poor friction
-      else if (h.temp <= 8) s -= 2;          // damp cold → won't dry or warm up
+      s -= Math.round(10 * humSens);         // muggy hour (was 6)
+      if (h.temp >= 22) s -= 3;              // warm + sticky → poor friction
+      else if (h.temp <= 12) s -= 3;         // damp/cool → won't dry, greasy holds
     } else if (h.humidity >= 60) {
-      s -= Math.round(2 * humSens);          // borderline moderate
+      s -= Math.round(3 * humSens);          // borderline moderate (was 2)
+      if (h.temp <= 12) s -= 1;              // even moderate RH bites in the cold
     } else if (h.humidity < 50 && h.temp >= 10 && h.temp <= 22) {
       s += 1;                                // crisp friction bonus
     }
@@ -1242,9 +1243,9 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     if (climbHours > 0 && t >= 22 && muggyHours >= 3) {
       compoundPen = 4;
       compoundLabel = `muggy — ${Math.round(hum.meanRh)}% RH at ${Math.round(t)}°C`;
-    } else if (climbHours > 0 && t <= 8 && muggyHours >= 3) {
-      compoundPen = 3;
-      compoundLabel = `damp cold — ${Math.round(hum.meanRh)}% RH at ${Math.round(t)}°C`;
+    } else if (climbHours > 0 && t <= 12 && muggyHours >= 3) {
+      compoundPen = 4;
+      compoundLabel = `damp cool — ${Math.round(hum.meanRh)}% RH at ${Math.round(t)}°C`;
     }
     const totalHumPen = humPen + compoundPen;
     if (totalHumPen >= 3) {

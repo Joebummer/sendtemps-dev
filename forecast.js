@@ -729,12 +729,13 @@ function scoreHour(crag, h) {
   if (h.humidity != null) {
     const humSens = Math.max(0.25, (6 - (crag.dryRating ?? 3)) / 4);
     if (h.humidity >= 75) {
-      s -= Math.round(10 * humSens);         // muggy hour (was 6)
+      s -= Math.round(10 * humSens);         // muggy hour
       if (h.temp >= 22) s -= 3;              // warm + sticky → poor friction
-      else if (h.temp <= 12) s -= 3;         // damp/cool → won't dry, greasy holds
+      else if (h.temp <= 12) s -= 3;         // damp/cool → greasy, won't dry
     } else if (h.humidity >= 60) {
-      s -= Math.round(3 * humSens);          // borderline moderate (was 2)
-      if (h.temp <= 12) s -= 1;              // even moderate RH bites in the cold
+      s -= Math.round(5 * humSens);          // borderline moderate — still drags friction
+      if (h.temp >= 22) s -= 2;              // warm + moderate humidity
+      else if (h.temp <= 12) s -= 2;         // cool + moderate humidity (very common Melbourne)
     } else if (h.humidity < 50 && h.temp >= 10 && h.temp <= 22) {
       s += 1;                                // crisp friction bonus
     }

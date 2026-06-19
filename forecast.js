@@ -1,7 +1,7 @@
 // Open-Meteo forecast fetching + scoring
 // API: https://open-meteo.com/en/docs — free, no key, CORS-enabled
 
-import { CRAGS } from './crags.js?v=25';
+import { CRAGS } from './crags.js?v=26';
 
 const API = 'https://api.open-meteo.com/v1/forecast';
 

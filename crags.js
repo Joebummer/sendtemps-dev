@@ -1018,7 +1018,7 @@ export const CRAGS = [
     aspect: 'W',
     rockType: 'sandstone',
     dryRating: 3,
-    closed: true,
+    closedAll: true,
     closureReason: 'Closed as of 2026',
     idealTemp: [6, 18],
     shade: 'morning',

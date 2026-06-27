@@ -1227,26 +1227,50 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     add('temp', 'Temperature', 0, detail);
   }
 
-  // — Humidity is shown as a stat + chip only (v59.14) —
+  // — Humidity: descriptive label + score delta (v59.15) —
   //
-  // We do NOT factor humidity into the score itself. The hourly experience of
-  // muggy or crisp conditions varies too much by aspect, shelter, and personal
-  // preference for a universal penalty to be honest. Instead, the day card
-  // surfaces the mean RH and muggy/dry hour counts as their own stat tile,
-  // and we push a contextual chip ("muggy", "humid", "crisp") so the vibe
-  // still reads at a glance. climbHumidity is still computed upstream and
-  // exposed on day.climbHumidity for the UI to render.
+  // Uses the same temperature-gated label logic as renderHumidityTile in app.js
+  // so the overview chip and the stat tile always read consistently.
+  // Score deltas are modest — humidity is secondary to rain and temp.
   {
     const hum = day.climbHumidity || {};
     const humClimbHours = hum.climbHours || 0;
     if (humClimbHours >= 4) {
-      const muggyHours = (hum.hoursHumid || 0) + 0.4 * (hum.hoursModerate || 0);
-      if (climbHours > 0 && t >= 22 && muggyHours >= 3) {
-        reasons.push('muggy');
-      } else if ((hum.hoursHumid || 0) >= 3 || muggyHours >= 5) {
-        reasons.push('humid');
-      } else if ((hum.hoursDry || 0) >= 6 && muggyHours === 0) {
-        reasons.push('crisp air');
+      const hoursHumid = hum.hoursHumid || 0;
+      const hoursDry = hum.hoursDry || 0;
+      const meanRh = hum.meanRh ?? 70;
+      const muggyHours = hoursHumid + 0.4 * (hum.hoursModerate || 0);
+
+      let humidLabel = null;
+      let humidDelta = 0;
+
+      if (climbHours > 0 && t >= 22 && hoursHumid >= 2) {
+        humidLabel = 'muggy';
+        humidDelta = -8;
+      } else if (t >= 18 && hoursHumid >= 4) {
+        humidLabel = 'muggy';
+        humidDelta = -8;
+      } else if (hoursHumid >= 3 || muggyHours >= 5) {
+        humidLabel = 'moist air';
+        humidDelta = -3;
+      } else if (hoursDry >= 6 && muggyHours === 0) {
+        humidLabel = 'crisp air';
+        humidDelta = +3;
+      } else if (meanRh < 55) {
+        humidLabel = 'dry air';
+        humidDelta = +2;
+      } else {
+        humidLabel = 'comfortable';
+        humidDelta = 0;
+      }
+
+      if (humidLabel) reasons.push(humidLabel);
+      if (humidDelta !== 0) {
+        score += humidDelta;
+        add('humidity', 'Humidity', humidDelta,
+          humidDelta < 0
+            ? `${humidLabel} — high RH${t >= 18 ? ' + warm temps' : ''} hurts friction`
+            : `${humidLabel} — low RH boosts friction`);
       }
     }
   }

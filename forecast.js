@@ -1304,13 +1304,19 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   }
 
   // Cold day (<8°C): morning sun on the wall is gold; full shade is grim.
+  // Full bonus requires 2h+ of sun; 1–2h earns a partial bonus; <1h nothing.
   if (t < 8) {
-    if (coolHours >= 0.5 || warmHours >= 1) {
+    if (coolHours >= 2 || warmHours >= 2.5) {
       const sunTrapHrs = coolHours + 0.5 * warmHours;
       const bon = Math.min(10, Math.round(sunTrapHrs * 2.5));
       score += bon;
       reasons.push('sun-trap wall');
       add('aspect', 'Sun on wall × cold', +bon, `${coolHours.toFixed(1)}h morning sun + ${warmHours.toFixed(1)}h midday on wall — a real sun-trap`);
+    } else if (coolHours >= 1 || warmHours >= 1.5) {
+      const sunTrapHrs = coolHours + 0.5 * warmHours;
+      const bon = Math.min(5, Math.round(sunTrapHrs * 2.5));
+      score += bon;
+      add('aspect', 'Sun on wall × cold (partial)', +bon, `${coolHours.toFixed(1)}h morning sun + ${warmHours.toFixed(1)}h midday — some warmth but limited`);
     }
     if (onWallHours < 1) {
       const pen = 8;
@@ -1319,11 +1325,16 @@ export function scoreDay(crag, day, prevDay, nextDay) {
       add('aspect', 'Shade × cold', -pen, `wall barely sees the sun — stays cold all day`);
     }
   } else if (t < 12) {
-    if (coolHours >= 1 || warmHours >= 1.5) {
+    // Full bonus requires 2h+ of sun; 1–2h earns a partial bonus; <1h nothing.
+    if (coolHours >= 2 || warmHours >= 2.5) {
       const sunTrapHrs = coolHours + 0.5 * warmHours;
       const bon = Math.min(5, Math.round(sunTrapHrs * 1.4));
       score += bon;
       add('aspect', 'Sun on wall × cool', +bon, `${onWallHours.toFixed(1)}h sun on wall on a cool day — takes the edge off`);
+    } else if (coolHours >= 1 || warmHours >= 1.5) {
+      const bon = 2;
+      score += bon;
+      add('aspect', 'Sun on wall × cool (partial)', +bon, `${onWallHours.toFixed(1)}h sun on wall — mild benefit on a cool day`);
     }
     if (onWallHours < 1) {
       const pen = 3;

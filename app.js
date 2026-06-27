@@ -1169,13 +1169,23 @@ function renderDaySubCrags(daySubCrags) {
   const sorted = [...daySubCrags].sort((a, b) => b.score - a.score);
   const rows = sorted.map(sub => {
     const band = scoreBand(sub.score);
+    const safeId = String(sub.crag.id).replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    const reasons = sub.reasons || [];
+    const contributions = sub.contributions || [];
+    const hasDetail = contributions.length > 0;
+    const reasonsHtml = reasons.length
+      ? reasons.map(r => `<span class="reason-tag reason-tag-sm">${escapeHtml(r)}</span>`).join('')
+      : '';
     return `
       <div class="subcrag-row-wrap" data-open="false">
-        <button type="button" class="subcrag-row is-static" tabindex="-1">
+        <button type="button" class="subcrag-row${hasDetail ? ' is-expandable' : ' is-static'}"${hasDetail ? ` aria-expanded="false" aria-controls="daysubdetail-${safeId}"` : ' tabindex="-1"'}>
           <span class="subcrag-name">${escapeHtml(sub.crag.name)}</span>
           <span class="subcrag-aspect">${sub.crag.aspect === 'mixed' ? 'mixed aspects' : `${sub.crag.aspect}-facing`}</span>
           <span class="subcrag-trip ${band.color}">${sub.score}</span>
+          ${hasDetail ? `<svg class="subcrag-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>` : ''}
         </button>
+        ${reasonsHtml ? `<div class="subcrag-reasons">${reasonsHtml}</div>` : ''}
+        ${hasDetail ? `<div class="subcrag-detail" id="daysubdetail-${safeId}" role="region" hidden>${renderScoreBreakdown(contributions, sub.score)}</div>` : ''}
       </div>
     `;
   }).join('');

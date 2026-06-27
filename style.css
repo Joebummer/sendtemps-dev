@@ -636,6 +636,17 @@ main {
   border-radius: var(--radius-full);
   white-space: nowrap;
 }
+/* Smaller reason tags inside sub-crag rows */
+.reason-tag-sm {
+  font-size: 0.7rem;
+  padding: 1px var(--space-1);
+}
+.subcrag-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.2rem var(--space-3) 0.3rem;
+}
 .reason-tag-closed {
   background: color-mix(in srgb, #c0392b 18%, transparent);
   color: #c0392b;

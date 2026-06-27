@@ -1100,7 +1100,7 @@ function renderCard(row, isTop, isWeekend) {
           <div class="metric"><div class="v">${Math.round(day.tMin)}°</div><div class="l">Low</div></div>
           <div class="metric"><div class="v">${Math.round(day.precipProb || 0)}%</div><div class="l">Rain</div></div>
           <div class="metric"><div class="v">${Math.round(day.wind)}</div><div class="l">Wind km/h</div></div>
-          ${renderHumidityTile(day)}
+          ${renderHumidityTile(day, reasons)}
         </div>
         <div class="detail-section">
           <div class="section-label">Forecast</div>
@@ -1609,25 +1609,14 @@ function renderDrynessLine(nowDryness, lastRain, daysAhead = 0) {
   `;
 }
 
-function renderHumidityTile(day) {
+function renderHumidityTile(day, reasons) {
   const hum = day.climbHumidity;
   if (!hum || !(hum.climbHours >= 1) || hum.meanRh == null) return '';
   const mean = Math.round(hum.meanRh);
-  const tMax = day.tMax ?? 20;
-  // Mugginess is a function of BOTH humidity AND temperature.
-  // At cool temps (<18°C), even 70-80% RH feels fine — it only becomes
-  // unpleasant when warmth and moisture combine (dewpoint effect).
-  // We gate 'muggy' labels on tMax >= 22 to match the scoring logic.
-  let sub;
-  const hoursHumid = hum.hoursHumid || 0;
-  const hoursDry = hum.hoursDry || 0;
-  if (tMax >= 22 && hoursHumid >= 2) sub = `${hoursHumid}h muggy`;
-  else if (tMax >= 18 && hoursHumid >= 4) sub = `${hoursHumid}h muggy`;
-  else if (hoursDry >= 6) sub = 'crisp';
-  else if (mean < 55) sub = 'dry';
-  else if (tMax < 18 && mean <= 80) sub = 'comfortable';
-  else if ((hum.hoursModerate || 0) >= 3) sub = 'moderate';
-  else sub = `peak ${Math.round(hum.maxRh)}%`;
+  // Pull the humidity label from scoreDay reasons so the tile and the chip
+  // always agree. Labels: 'muggy', 'moist air', 'crisp air', 'dry air', 'comfortable'.
+  const HUMID_LABELS = new Set(['muggy', 'moist air', 'crisp air', 'dry air', 'comfortable']);
+  const sub = (reasons || []).find(r => HUMID_LABELS.has(r)) ?? `${mean}%`;
   return `<div class="metric" title="Mean relative humidity during climbing hours"><div class="v">${mean}%</div><div class="l">Humidity <span class="metric-sub">· ${sub}</span></div></div>`;
 }
 

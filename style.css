@@ -217,48 +217,100 @@ main {
 
 
 
-/* ---- Weekend Away: trip window selector ---- */
-.weekend-category-header {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
+/* ---- Multi-day trip: trip date range display ---- */
+.trip-date-range {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
 }
-.weekend-header-top {
+.trip-date-range-label {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  width: 100%;
-  gap: var(--space-3);
-}
-.trip-window-selector {
-  display: flex;
-  gap: 0.4rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
-.trip-window-pill {
+.trip-date-range-text {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+.trip-date-range-count {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+.trip-set-dates-btn {
   font-family: var(--font-ui);
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-primary);
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+.trip-set-dates-btn:hover {
+  background: var(--color-primary);
+  color: white;
+}
+.trip-set-dates-btn:active { transform: scale(0.95); }
+
+/* ---- Trip range-pick mode: tab states ---- */
+/* Subtle dot under days that are in the current trip range */
+.day-tab.in-trip {
+  position: relative;
+}
+.trip-dot {
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  margin: 2px auto 0;
+}
+/* First tap in range-pick — tab glows primary */
+.day-tab.trip-pick-start {
+  background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* ---- Trip range prompt bar (shown during range pick) ---- */
+.trip-range-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0.6rem var(--page-padding);
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  font-size: var(--text-sm);
+}
+.trip-range-prompt-text {
+  font-weight: 500;
+  color: var(--color-text);
+}
+.trip-range-cancel {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 600;
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
   border: 1.5px solid var(--color-border);
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
-.trip-window-pill:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-.trip-window-pill.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
-}
-.trip-window-pill:active { transform: scale(0.95); }
+.trip-range-cancel:hover { color: var(--color-text); border-color: var(--color-text); }
 
 /* ---- Weekend Away: walls count in breakdown cells ---- */
 .breakdown-walls {

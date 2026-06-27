@@ -195,10 +195,28 @@ function loadRegionFilter() {
   return _storage.getItem(REGION_FILTER_KEY) || 'ALL';
 }
 
-const TRIP_WINDOW_KEY = 'st_tripWindow';
-// Valid values: 'fri-sun' | 'sat-sun' | 'sat'
-function loadTripWindow() {
-  return _storage.getItem(TRIP_WINDOW_KEY) || 'fri-sun';
+const TRIP_START_KEY = 'st_tripStart';
+const TRIP_END_KEY   = 'st_tripEnd';
+
+// Default trip range = the coming weekend dates (Fri–Sun, Sat–Sun, or Sun)
+// depending on today's weekday. Falls back gracefully if weekendDates isn't
+// available yet (called before forecast.js is loaded).
+function defaultTripDates() {
+  try { return weekendDates(); } catch { return []; }
+}
+
+function loadTripStart() {
+  const stored = _storage.getItem(TRIP_START_KEY);
+  if (stored) return stored;
+  const def = defaultTripDates();
+  return def[0] || null;
+}
+
+function loadTripEnd() {
+  const stored = _storage.getItem(TRIP_END_KEY);
+  if (stored) return stored;
+  const def = defaultTripDates();
+  return def[def.length - 1] || null;
 }
 
 const state = {
@@ -211,7 +229,9 @@ const state = {
   hiddenCrags: loadHidden(),
   favouriteCrags: loadFavourites(),
   regionFilter: loadRegionFilter(), // 'ALL' | 'VIC' | 'TAS'
-  tripWindow: loadTripWindow(),     // 'fri-sun' | 'sat-sun' | 'sat'
+  tripStart: loadTripStart(),       // date string e.g. '2026-06-26'
+  tripEnd: loadTripEnd(),           // date string e.g. '2026-06-28'
+  pickingTripRange: false,          // transient: true while user is picking start/end
 };
 
 // ---- Render functions ----
@@ -243,28 +263,105 @@ function renderRegionFilter() {
 
 function renderTabs() {
   const tabs = document.getElementById('day-tabs');
+  const picking = state.pickingTripRange;
+  // In range-pick mode, mark start/end/in-range tabs visually.
+  const tripSet = new Set(activeTripDates());
+
   tabs.innerHTML = state.dates.map(date => {
-    const selected = date === state.activeDate;
+    const selected = !picking && date === state.activeDate;
+    const isStart  = picking && date === state.tripPickStart;
+    const isEnd    = picking && date === state.tripEnd && state.tripPickStart;
+    const inTrip   = !picking && tripSet.has(date);
     const dayName = shortDayName(date);
     const dateLabel = formatDate(date).replace(/^[A-Za-z]+,?\s*/, ''); // strip weekday
+    let cls = 'day-tab';
+    if (selected) cls += ' selected';
+    if (picking && isStart) cls += ' trip-pick-start';
+    if (!picking && inTrip) cls += ' in-trip';
     return `
-      <button class="day-tab" role="tab"
+      <button class="${cls}" role="tab"
         aria-selected="${selected}"
         data-date="${date}">
         <span class="day-name">${dayName}</span>
         <span class="day-date">${dateLabel}</span>
+        ${!picking && inTrip ? '<span class="trip-dot" aria-hidden="true"></span>' : ''}
       </button>
     `;
   }).join('');
 
   tabs.querySelectorAll('.day-tab').forEach(btn => {
     btn.addEventListener('click', () => {
+      if (state.pickingTripRange) {
+        handleTripRangePick(btn.dataset.date);
+        return;
+      }
       state.activeDate = btn.dataset.date;
       renderTabs();
       renderDay();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   });
+}
+
+// Handle a tap during trip range-pick mode.
+// First tap = set start. Second tap = set end (or swap if earlier than start).
+function handleTripRangePick(date) {
+  if (!state.tripPickStart) {
+    // First tap: store start candidate, wait for second tap.
+    state.tripPickStart = date;
+    renderTabs();
+    renderTripRangePrompt('Now tap the last day of your trip');
+    return;
+  }
+  // Second tap: finalise range.
+  const allDates = state.dates;
+  const a = state.tripPickStart;
+  const b = date;
+  // Ensure start <= end by comparing index in allDates.
+  const ia = allDates.indexOf(a);
+  const ib = allDates.indexOf(b);
+  state.tripStart = ia <= ib ? a : b;
+  state.tripEnd   = ia <= ib ? b : a;
+  _storage.setItem(TRIP_START_KEY, state.tripStart);
+  _storage.setItem(TRIP_END_KEY,   state.tripEnd);
+  // Exit pick mode.
+  state.pickingTripRange = false;
+  state.tripPickStart = null;
+  // Recompute trip ranking and re-render.
+  state.tripDates = activeTripDates();
+  const weekendTrip = rankWeekendTrip(state.forecasts, state.tripDates);
+  state.weekendTrip = weekendTrip;
+  renderTabs();
+  hideTripRangePrompt();
+  renderDay();
+}
+
+function renderTripRangePrompt(msg) {
+  let el = document.getElementById('trip-range-prompt');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'trip-range-prompt';
+    el.className = 'trip-range-prompt';
+    // Insert after day-tabs
+    const tabs = document.getElementById('day-tabs');
+    tabs.insertAdjacentElement('afterend', el);
+  }
+  el.innerHTML = `
+    <span class="trip-range-prompt-text">${msg}</span>
+    <button class="trip-range-cancel" id="trip-range-cancel">Cancel</button>
+  `;
+  el.hidden = false;
+  document.getElementById('trip-range-cancel').addEventListener('click', () => {
+    state.pickingTripRange = false;
+    state.tripPickStart = null;
+    hideTripRangePrompt();
+    renderTabs();
+  });
+}
+
+function hideTripRangePrompt() {
+  const el = document.getElementById('trip-range-prompt');
+  if (el) el.hidden = true;
 }
 
 function renderDay() {
@@ -480,7 +577,7 @@ function renderSplitRanked(dayRows, destinations) {
     sections.push(renderDaySection('Overview', 'Daily crag score', dayRows, hiddenDay));
   }
   if (destinations.length || hiddenWeekendDest.length || hiddenWeekendCrag.length) {
-    sections.push(renderWeekendSection('Weekend Away', 'By destination · Fri–Sun trip score', destinations, [...hiddenWeekendDest, ...hiddenWeekendCrag]));
+    sections.push(renderWeekendSection('Multi-day trip', 'By destination · trip score', destinations, [...hiddenWeekendDest, ...hiddenWeekendCrag]));
   }
 
   list.innerHTML = sections.join('');
@@ -513,18 +610,17 @@ function renderSplitRanked(dayRows, destinations) {
   });
 
   // "N hidden — show" disclosure footer.
-  // Trip window pill clicks — re-fetch ranked data with new window and re-render.
-  list.querySelectorAll('.trip-window-pill').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      state.tripWindow = btn.dataset.window;
-      _storage.setItem(TRIP_WINDOW_KEY, state.tripWindow);
-      // Recompute tripDates from the new window and re-rank.
-      state.tripDates = activeTripDates();
-      const weekendTrip = rankWeekendTrip(state.forecasts, state.tripDates);
-      state.weekendTrip = weekendTrip;
-      renderDay();
+  // "Set dates" button — enter trip range-pick mode.
+  const setDatesBtn = list.querySelector('#trip-set-dates-btn');
+  if (setDatesBtn) {
+    setDatesBtn.addEventListener('click', () => {
+      state.pickingTripRange = true;
+      state.tripPickStart = null;
+      renderTabs();
+      renderTripRangePrompt('Tap the first day of your trip');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     });
-  });
+  }
 
   list.querySelectorAll('.hidden-footer-toggle').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -609,37 +705,15 @@ function renderDaySection(title, subtitle, rows, hiddenItems = []) {
   `;
 }
 
-function tripWindowOptions() {
-  // Returns only options relevant to today's weekday — e.g. on Saturday,
-  // Fri–Sun doesn't make sense so we hide it.
-  const all = [
-    { value: 'fri-sun', label: 'Fri–Sun' },
-    { value: 'sat-sun', label: 'Sat–Sun' },
-    { value: 'sat',     label: 'Sat only' },
-  ];
-  // state.tripDates is already filtered by weekendDates() — if it only has
-  // 1 date (Sunday) or 2 dates (Sat+Sun), prune options that don't fit.
-  const n = state.tripDates.length;
-  if (n === 1) return [{ value: 'sat', label: 'Today' }]; // Sunday — single day
-  if (n === 2) return all.filter(o => o.value !== 'fri-sun'); // Sat — no Fri
-  return all;
-}
-
-function renderTripWindowSelector() {
-  const opts = tripWindowOptions();
-  // If only one option, nothing to select — don't render.
-  if (opts.length <= 1) return '';
-  return `
-    <div class="trip-window-selector">
-      ${opts.map(o => `
-        <button class="trip-window-pill${state.tripWindow === o.value ? ' active' : ''}"
-          data-window="${o.value}"
-          aria-pressed="${state.tripWindow === o.value}">
-          ${o.label}
-        </button>
-      `).join('')}
-    </div>
-  `;
+// Format a date range as e.g. "Fri 27 Jun – Sun 29 Jun"
+function formatTripRange(start, end) {
+  const fmt = d => {
+    const dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
+  if (!start) return 'No dates set';
+  if (!end || start === end) return fmt(start);
+  return `${fmt(start)} – ${fmt(end)}`;
 }
 
 function renderWeekendSection(title, subtitle, destinations, hiddenItems = []) {
@@ -650,7 +724,7 @@ function renderWeekendSection(title, subtitle, destinations, hiddenItems = []) {
           <h3>${escapeHtml(title)}</h3>
           <span class="category-sub">By destination</span>
         </div>
-        ${renderTripWindowSelector()}
+        ${renderTripDateRange()}
       </header>
       <div class="category-list">
         ${destinations.map((dest, i) => renderDestinationCard(dest, i === 0)).join('')}
@@ -714,8 +788,8 @@ function renderHiddenFooter(items) {
 
 
 // Generate a plain-English arrival hint based on the daily scores for the trip.
-// e.g. "Arrive Friday — it's the best climbing day" or
-//      "Saturday morning arrival works — Friday is the weakest day"
+// Works for any trip length — looks at first day quality to advise arrival timing,
+// and calls out the standout day.
 function renderArrivalHint(destDailyScores, tripDates) {
   if (!destDailyScores || destDailyScores.length < 2) return '';
 
@@ -723,7 +797,7 @@ function renderArrivalHint(destDailyScores, tripDates) {
   for (const d of destDailyScores) byDate[d.date] = d.score;
 
   const scores = tripDates.map(date => ({ date, score: byDate[date] ?? 0 }));
-  const best = scores.reduce((a, b) => (a.score >= b.score ? a : b));
+  const best  = scores.reduce((a, b) => (a.score >= b.score ? a : b));
   const worst = scores.reduce((a, b) => (a.score <= b.score ? a : b));
 
   const dayName = (date) => {
@@ -732,22 +806,23 @@ function renderArrivalHint(destDailyScores, tripDates) {
   };
 
   let hint = '';
+  const firstDate  = tripDates[0];
+  const secondDate = tripDates[1];
+  const firstScore = byDate[firstDate] ?? 0;
+  const secondScore = secondDate ? (byDate[secondDate] ?? 0) : 0;
+  const spread = best.score - worst.score;
 
-  if (scores.length === 3) {
-    // Fri–Sun: tell them when to arrive
-    const friScore = byDate[tripDates[0]] ?? 0;
-    const satScore = byDate[tripDates[1]] ?? 0;
-    if (friScore >= 65) {
-      hint = `Arrive Friday — it's shaping up as the best climbing day (${friScore}/100).`;
-    } else if (friScore < 45) {
-      const satLabel = satScore >= 65 ? `${dayName(tripDates[1])} looks great` : `${dayName(tripDates[1])} is the stronger day`;
-      hint = `Friday is the weakest day (${friScore}/100) — Saturday morning arrival works fine. ${satLabel}.`;
+  if (scores.length >= 3) {
+    // Multi-day: advise on arrival timing based on first-day quality.
+    if (firstScore >= 65) {
+      hint = `Arrive ${dayName(firstDate)} — it's shaping up as a strong day (${firstScore}/100).`;
+    } else if (firstScore < 45 && secondScore > firstScore + 15) {
+      hint = `${dayName(firstDate)} is the weakest day (${firstScore}/100) — ${dayName(secondDate)} morning arrival works fine. ${dayName(best.date)} is the standout (${best.score}/100).`;
     } else {
-      hint = `Friday is passable (${friScore}/100). ${dayName(best.date)} is the standout day (${best.score}/100).`;
+      hint = `${dayName(best.date)} is the standout day (${best.score}/100). ${firstScore < 55 ? `Consider arriving ${dayName(secondDate)} if the first day is marginal.` : ''}`.trim();
     }
   } else if (scores.length === 2) {
-    // Sat–Sun
-    if (best.score - worst.score <= 10) {
+    if (spread <= 10) {
       hint = `Both days look similar — ${best.score}/100 best.`;
     } else {
       hint = `${dayName(best.date)} is the stronger day (${best.score}/100 vs ${worst.score}/100).`;
@@ -1592,27 +1667,31 @@ function paintUpdated() {
 const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 min auto-refresh while open
 const MIN_FOCUS_REFRESH_MS = 2 * 60 * 1000; // don't refetch on every focus; throttle to 2 min
 
-// Return the trip dates to use based on the user's selected window.
-// weekendDates() already handles Mon–Sun logic (e.g. Sat returns [Sat, Sun]).
-// We then trim or expand based on tripWindow preference.
+// Return the trip dates array from state.tripStart to state.tripEnd,
+// filtered to dates within the known 7-day forecast window (state.dates).
 function activeTripDates() {
-  const all = weekendDates(); // up to [Fri, Sat, Sun]
-  const win = state.tripWindow;
-  if (win === 'sat') {
-    // Just Saturday (or today if it's Saturday)
-    return all.filter(d => {
-      const dow = new Date(d + 'T00:00:00').getDay();
-      return dow === 6; // Saturday
-    }).slice(0, 1);
+  const allDates = state.dates && state.dates.length ? state.dates : weekDates();
+  const start = state.tripStart;
+  const end   = state.tripEnd;
+  if (!start || !end) return weekendDates().slice(0, 7);
+  // Build ordered range between start and end (inclusive), clamped to allDates.
+  const result = [];
+  let inRange = false;
+  for (const d of allDates) {
+    if (d === start) inRange = true;
+    if (inRange) result.push(d);
+    if (d === end) break;
   }
-  if (win === 'sat-sun') {
-    return all.filter(d => {
-      const dow = new Date(d + 'T00:00:00').getDay();
-      return dow === 6 || dow === 0; // Sat or Sun
-    });
+  // If start > end (user tapped backwards), reverse and re-slice.
+  if (!result.length) {
+    let inRange2 = false;
+    for (const d of allDates) {
+      if (d === end) inRange2 = true;
+      if (inRange2) result.push(d);
+      if (d === start) break;
+    }
   }
-  // fri-sun: use all (up to 3)
-  return all.slice(0, 3);
+  return result.length ? result : weekendDates().slice(0, 7);
 }
 
 async function fetchAndRank() {

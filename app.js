@@ -716,6 +716,23 @@ function formatTripRange(start, end) {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
+function renderTripDateRange() {
+  const label = formatTripRange(state.tripStart, state.tripEnd);
+  const n = state.tripDates.length;
+  const dayCount = n === 1 ? '1 day' : `${n} days`;
+  return `
+    <div class="trip-date-range">
+      <div class="trip-date-range-label">
+        <span class="trip-date-range-text">${label}</span>
+        <span class="trip-date-range-count">${dayCount}</span>
+      </div>
+      <button class="trip-set-dates-btn" id="trip-set-dates-btn" aria-label="Change trip dates">
+        Set dates
+      </button>
+    </div>
+  `;
+}
+
 function renderWeekendSection(title, subtitle, destinations, hiddenItems = []) {
   return `
     <section class="category" id="weekend-section">

@@ -1229,9 +1229,11 @@ export function scoreDay(crag, day, prevDay, nextDay) {
 
   // — Humidity: descriptive label + score delta (v59.15) —
   //
-  // Uses the same temperature-gated label logic as renderHumidityTile in app.js
-  // so the overview chip and the stat tile always read consistently.
-  // Score deltas are modest — humidity is secondary to rain and temp.
+  // Label is resolved here and pushed to reasons. The score delta is applied
+  // AFTER all other bonuses (just before finalScore) so it can't be offset
+  // by downstream bonuses pushing score back above 100.
+  let _humidLabel = null;
+  let _humidDelta = 0;
   {
     const hum = day.climbHumidity || {};
     const humClimbHours = hum.climbHours || 0;
@@ -1241,37 +1243,21 @@ export function scoreDay(crag, day, prevDay, nextDay) {
       const meanRh = hum.meanRh ?? 70;
       const muggyHours = hoursHumid + 0.4 * (hum.hoursModerate || 0);
 
-      let humidLabel = null;
-      let humidDelta = 0;
-
       if (climbHours > 0 && t >= 22 && hoursHumid >= 2) {
-        humidLabel = 'muggy';
-        humidDelta = -8;
+        _humidLabel = 'muggy';     _humidDelta = -8;
       } else if (t >= 18 && hoursHumid >= 4) {
-        humidLabel = 'muggy';
-        humidDelta = -8;
+        _humidLabel = 'muggy';     _humidDelta = -8;
       } else if (hoursHumid >= 3 || muggyHours >= 5) {
-        humidLabel = 'moist air';
-        humidDelta = -3;
+        _humidLabel = 'moist air'; _humidDelta = -3;
       } else if (hoursDry >= 6 && muggyHours === 0) {
-        humidLabel = 'crisp air';
-        humidDelta = +3;
+        _humidLabel = 'crisp air'; _humidDelta = +3;
       } else if (meanRh < 55) {
-        humidLabel = 'dry air';
-        humidDelta = +2;
+        _humidLabel = 'dry air';   _humidDelta = +2;
       } else {
-        humidLabel = 'comfortable';
-        humidDelta = 0;
+        _humidLabel = 'comfortable'; _humidDelta = 0;
       }
 
-      if (humidLabel) reasons.push(humidLabel);
-      if (humidDelta !== 0) {
-        score += humidDelta;
-        add('humidity', 'Humidity', humidDelta,
-          humidDelta < 0
-            ? `${humidLabel} — high RH${t >= 18 ? ' + warm temps' : ''} hurts friction`
-            : `${humidLabel} — low RH boosts friction`);
-      }
+      if (_humidLabel) reasons.push(_humidLabel);
     }
   }
 
@@ -1553,6 +1539,15 @@ export function scoreDay(crag, day, prevDay, nextDay) {
       score += bon;
       add('sun', 'Sunshine bonus', +bon, `${Math.round(sunHours)}h sun overall · wall lit for ${onWallHours.toFixed(1)}h`);
     }
+  }
+
+  // Apply humidity delta last so bonuses earlier in the function can't absorb it.
+  if (_humidDelta !== 0) {
+    score += _humidDelta;
+    add('humidity', 'Humidity', _humidDelta,
+      _humidDelta < 0
+        ? `${_humidLabel} — high RH${(_humidLabel === 'muggy') ? ' + warm temps' : ''} hurts friction`
+        : `${_humidLabel} — low RH boosts friction`);
   }
 
   const finalScore = Math.max(0, Math.min(100, Math.round(score)));

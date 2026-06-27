@@ -622,6 +622,22 @@ function renderSplitRanked(dayRows, destinations) {
     });
   }
 
+  // "Clear" button — reset to the default weekend range.
+  const clearBtn = list.querySelector('#trip-clear-btn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      _storage.removeItem(TRIP_START_KEY);
+      _storage.removeItem(TRIP_END_KEY);
+      const def = defaultTripDates();
+      state.tripStart = def[0] || null;
+      state.tripEnd   = def[def.length - 1] || null;
+      state.tripDates = activeTripDates();
+      const weekendTrip = rankWeekendTrip(state.forecasts, state.tripDates);
+      state.weekendTrip = weekendTrip;
+      renderDay();
+    });
+  }
+
   list.querySelectorAll('.hidden-footer-toggle').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -716,19 +732,29 @@ function formatTripRange(start, end) {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
+function isCustomTripRange() {
+  // True if the user has explicitly saved a range that differs from the current default.
+  const stored = _storage.getItem(TRIP_START_KEY);
+  if (!stored) return false;
+  const def = defaultTripDates();
+  return stored !== (def[0] || null) || _storage.getItem(TRIP_END_KEY) !== (def[def.length - 1] || null);
+}
+
 function renderTripDateRange() {
   const label = formatTripRange(state.tripStart, state.tripEnd);
   const n = state.tripDates.length;
   const dayCount = n === 1 ? '1 day' : `${n} days`;
+  const showClear = isCustomTripRange();
   return `
     <div class="trip-date-range">
       <div class="trip-date-range-label">
         <span class="trip-date-range-text">${label}</span>
         <span class="trip-date-range-count">${dayCount}</span>
       </div>
-      <button class="trip-set-dates-btn" id="trip-set-dates-btn" aria-label="Change trip dates">
-        Set dates
-      </button>
+      <div class="trip-date-range-actions">
+        ${showClear ? `<button class="trip-clear-btn" id="trip-clear-btn" aria-label="Reset to default weekend">Clear</button>` : ''}
+        <button class="trip-set-dates-btn" id="trip-set-dates-btn" aria-label="Change trip dates">Set dates</button>
+      </div>
     </div>
   `;
 }

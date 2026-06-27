@@ -241,6 +241,33 @@ main {
   color: var(--color-text-muted);
   font-weight: 500;
 }
+.trip-date-range-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+.trip-clear-btn {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+.trip-clear-btn:hover {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+.trip-clear-btn:active { transform: scale(0.95); }
 .trip-set-dates-btn {
   font-family: var(--font-ui);
   font-size: var(--text-xs);

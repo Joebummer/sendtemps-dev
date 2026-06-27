@@ -1,4 +1,4 @@
-/* ---- Design tokens — earthy stone / golden hour ---- */
+/* ---- Design tokens — limestone & forest ---- */
 :root {
   --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
   --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
@@ -33,59 +33,59 @@
   --safe-right: env(safe-area-inset-right, 0px);
 }
 
-/* Light: warm sandstone */
+/* Light: limestone & forest */
 :root,
 [data-theme='light'] {
-  --color-bg: #f7f4ee;
-  --color-surface: #fbf8f2;
-  --color-surface-2: #ffffff;
-  --color-surface-offset: #ede7da;
-  --color-divider: #ddd5c4;
-  --color-border: #cdc3ad;
+  --color-bg: #f5f2eb;
+  --color-surface: #fdfaf3;
+  --color-surface-2: #f0ece0;
+  --color-surface-offset: #e8e2d0;
+  --color-divider: #ddd7c4;
+  --color-border: #cfc8b0;
 
-  --color-text: #1f1d18;
-  --color-text-muted: #6f6a5d;
-  --color-text-faint: #a39d8c;
+  --color-text: #1a1c17;
+  --color-text-muted: #616754;
+  --color-text-faint: #9a9c85;
 
-  --color-primary: #b56a1f;          /* Burnt amber — the golden hour */
-  --color-primary-hover: #9b5618;
-  --color-primary-soft: #f0d9b8;
+  --color-primary: #2d5a27;          /* Deep forest green */
+  --color-primary-hover: #1e3f1a;
+  --color-primary-soft: #c8ddbd;
 
-  --color-success: #5e7d2c;          /* Eucalypt green */
-  --color-success-soft: #d8e2c0;
-  --color-warning: #b8780f;          /* Ochre */
-  --color-warning-soft: #ebd8a8;
-  --color-error: #a83a2a;            /* Iron oxide red */
-  --color-error-soft: #ebc7be;
+  --color-success: #2d5a27;          /* Forest green */
+  --color-success-soft: #c8ddbd;
+  --color-warning: #7a5c00;          /* Dark ochre */
+  --color-warning-soft: #f0dfa0;
+  --color-error: #8b2500;            /* Deep rust */
+  --color-error-soft: #f0cfc0;
 
-  --shadow-sm: 0 1px 2px rgba(60, 40, 20, 0.06);
-  --shadow-md: 0 4px 14px rgba(60, 40, 20, 0.10);
-  --shadow-lg: 0 16px 40px rgba(60, 40, 20, 0.14);
+  --shadow-sm: 0 1px 2px rgba(20, 30, 10, 0.07);
+  --shadow-md: 0 4px 14px rgba(20, 30, 10, 0.11);
+  --shadow-lg: 0 16px 40px rgba(20, 30, 10, 0.15);
 }
 
-/* Dark: granite night */
+/* Dark: deep forest night */
 [data-theme='dark'] {
-  --color-bg: #15140f;
-  --color-surface: #1d1c17;
-  --color-surface-2: #25241e;
-  --color-surface-offset: #2c2a23;
-  --color-divider: #2a2823;
-  --color-border: #3a382f;
+  --color-bg: #111410;
+  --color-surface: #191d16;
+  --color-surface-2: #20261c;
+  --color-surface-offset: #272e22;
+  --color-divider: #252c20;
+  --color-border: #333d2d;
 
-  --color-text: #e8e3d6;
-  --color-text-muted: #948d7c;
-  --color-text-faint: #5e5a4f;
+  --color-text: #e4e8dc;
+  --color-text-muted: #8a9480;
+  --color-text-faint: #575f4e;
 
-  --color-primary: #e6a050;
-  --color-primary-hover: #f0b370;
-  --color-primary-soft: #4b3722;
+  --color-primary: #6db560;          /* Bright forest green */
+  --color-primary-hover: #82cc74;
+  --color-primary-soft: #1e3019;
 
-  --color-success: #98c25a;
-  --color-success-soft: #2e3a1f;
-  --color-warning: #e0b04a;
-  --color-warning-soft: #3e3320;
-  --color-error: #d97a64;
-  --color-error-soft: #3e251f;
+  --color-success: #6db560;
+  --color-success-soft: #1e3019;
+  --color-warning: #d4a540;          /* Warm amber */
+  --color-warning-soft: #312a10;
+  --color-error: #d4644a;            /* Muted rust */
+  --color-error-soft: #321510;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5);

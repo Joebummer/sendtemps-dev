@@ -1613,15 +1613,20 @@ function renderHumidityTile(day) {
   const hum = day.climbHumidity;
   if (!hum || !(hum.climbHours >= 1) || hum.meanRh == null) return '';
   const mean = Math.round(hum.meanRh);
-  // Sub-label prefers the most informative signal:
-  //   - many humid hours → "Xh muggy"
-  //   - many dry hours → "crisp"
-  //   - otherwise show the climb-hours range as context
+  const tMax = day.tMax ?? 20;
+  // Mugginess is a function of BOTH humidity AND temperature.
+  // At cool temps (<18°C), even 70-80% RH feels fine — it only becomes
+  // unpleasant when warmth and moisture combine (dewpoint effect).
+  // We gate 'muggy' labels on tMax >= 22 to match the scoring logic.
   let sub;
-  if ((hum.hoursHumid || 0) >= 3) sub = `${hum.hoursHumid}h muggy`;
-  else if ((hum.hoursHumid || 0) >= 1) sub = `${hum.hoursHumid}h muggy`;
-  else if ((hum.hoursDry || 0) >= 6) sub = 'crisp';
-  else if ((hum.hoursModerate || 0) >= 3) sub = `${hum.hoursModerate}h moderate`;
+  const hoursHumid = hum.hoursHumid || 0;
+  const hoursDry = hum.hoursDry || 0;
+  if (tMax >= 22 && hoursHumid >= 2) sub = `${hoursHumid}h muggy`;
+  else if (tMax >= 18 && hoursHumid >= 4) sub = `${hoursHumid}h muggy`;
+  else if (hoursDry >= 6) sub = 'crisp';
+  else if (mean < 55) sub = 'dry';
+  else if (tMax < 18 && mean <= 80) sub = 'comfortable';
+  else if ((hum.hoursModerate || 0) >= 3) sub = 'moderate';
   else sub = `peak ${Math.round(hum.maxRh)}%`;
   return `<div class="metric" title="Mean relative humidity during climbing hours"><div class="v">${mean}%</div><div class="l">Humidity <span class="metric-sub">· ${sub}</span></div></div>`;
 }

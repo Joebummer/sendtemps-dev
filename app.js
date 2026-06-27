@@ -190,6 +190,11 @@ function toggleFavourite(cragId) {
   renderDay();
 }
 
+const REGION_FILTER_KEY = 'st_regionFilter';
+function loadRegionFilter() {
+  return _storage.getItem(REGION_FILTER_KEY) || 'ALL';
+}
+
 const state = {
   forecasts: null,
   ranked: null,
@@ -199,9 +204,36 @@ const state = {
   activeDate: null,
   hiddenCrags: loadHidden(),
   favouriteCrags: loadFavourites(),
+  regionFilter: loadRegionFilter(), // 'ALL' | 'VIC' | 'TAS'
 };
 
 // ---- Render functions ----
+// ---- State / region filter pill ----
+function renderRegionFilter() {
+  const bar = document.getElementById('region-filter');
+  if (!bar) return;
+  const options = [
+    { value: 'ALL', label: 'All states' },
+    { value: 'VIC', label: 'Victoria' },
+    { value: 'TAS', label: 'Tasmania' },
+  ];
+  bar.innerHTML = options.map(opt => `
+    <button class="region-pill${state.regionFilter === opt.value ? ' active' : ''}"
+      data-region="${opt.value}"
+      aria-pressed="${state.regionFilter === opt.value}">
+      ${opt.label}
+    </button>
+  `).join('');
+  bar.querySelectorAll('.region-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.regionFilter = btn.dataset.region;
+      _storage.setItem(REGION_FILTER_KEY, state.regionFilter);
+      renderRegionFilter();
+      renderDay();
+    });
+  });
+}
+
 function renderTabs() {
   const tabs = document.getElementById('day-tabs');
   tabs.innerHTML = state.dates.map(date => {
@@ -232,10 +264,12 @@ function renderDay() {
   const rows = state.ranked[state.activeDate] || [];
   const hidden = state.hiddenCrags;
   const isHidden = (r) => hidden.has(r.crag.id) || (r.crag.parentId && hidden.has(r.crag.parentId));
+  const isStateMatch = (r) => state.regionFilter === 'ALL' || r.crag.state === state.regionFilter;
 
   const allDayRows = rows
-    .filter(r => r.crag.trip === 'day' || r.crag.trip === 'both')
-    .filter(r => !isHidden(r));
+    .filter(r => r.crag.trip === 'day' || r.crag.trip === 'both' || r.crag.trip === 'interstate')
+    .filter(r => !isHidden(r))
+    .filter(isStateMatch);
 
   // Day-trip parent/sub grouping: rows with crag.parentId are surfaced inside
   // the parent card's detail rather than as standalone day-trip entries.
@@ -284,6 +318,7 @@ function renderDay() {
       // Destination-level hide (e.g. 'dest:Grampians', 'dest:Mt Arapiles')
       const destKey = t.crag.area.startsWith('Grampians') ? 'Grampians' : t.crag.area;
       if (hidden.has(`dest:${destKey}`)) return false;
+      if (state.regionFilter !== 'ALL' && t.crag.state !== state.regionFilter) return false;
       return true;
     })
     .map(t => {
@@ -365,6 +400,15 @@ function groupByDestination(weekendRows) {
     return b.tripScore - a.tripScore;
   });
   return out;
+}
+
+// Return a human-readable location line for a crag card.
+// For interstate crags with null driveTime, shows "From {baseCity}".
+// For local crags, shows "{driveTime} from {baseCity or Melbourne}".
+function driveLabel(crag) {
+  const city = crag.baseCity || 'Melbourne';
+  if (crag.driveTime == null) return `From ${city}`;
+  return `${crag.driveTime} from ${city}`;
 }
 
 function renderDaySummary(rows, dayRows, destinations) {
@@ -628,7 +672,7 @@ function renderDestinationCard(dest, isTop) {
         </div>
         <div class="crag-info">
           <h3>${escapeHtml(destination)}</h3>
-          <div class="area">${drive} from Melbourne · ${namedSubCrags.length} crag${namedSubCrags.length === 1 ? '' : 's'}</div>
+          <div class="area">${driveLabel({ driveTime: drive, baseCity: subCrags[0]?.crag?.baseCity })} · ${namedSubCrags.length} crag${namedSubCrags.length === 1 ? '' : 's'}</div>
           <div class="day-score-note">Today's best: <strong>${escapeHtml(bestForToday.crag.name)}</strong> · ${bestForToday.score}/100</div>
           ${renderDrynessLine(bestForToday.nowDryness, bestForToday.lastRain, daysAheadOfActive())}
           <div class="reasons">${reasonsHtml}</div>
@@ -792,7 +836,7 @@ function renderCard(row, isTop, isWeekend) {
         </div>
         <div class="crag-info">
           <h3>${escapeHtml(crag.name)}</h3>
-          ${showArea ? `<div class="area">${escapeHtml(crag.area)} · ${crag.driveTime} from Melbourne</div>` : `<div class="area">${crag.driveTime} from Melbourne</div>`}
+          ${showArea ? `<div class="area">${escapeHtml(crag.area)} · ${driveLabel(crag)}</div>` : `<div class="area">${driveLabel(crag)}</div>`}
           ${isWeekend && tripScore != null ? `<div class="day-score-note">Today scores <strong>${score}</strong> on its own</div>` : ''}
           ${bestSubCragName ? `<div class="day-score-note">Best: <strong>${escapeHtml(bestSubCragName)}</strong></div>` : ''}
           ${renderDrynessLine(nowDryness, lastRain, daysAheadOfActive())}
@@ -1557,6 +1601,7 @@ function applyDeepLinkFromUrl() {
   if (dateStr && state.dates && state.dates.includes(dateStr) && state.activeDate !== dateStr) {
     state.activeDate = dateStr;
     renderTabs();
+    renderRegionFilter();
     renderDay();
   }
 
@@ -1650,6 +1695,7 @@ async function init() {
     state.lastUpdated = Date.now();
 
     renderTabs();
+    renderRegionFilter();
     renderDay();
     paintUpdated();
 
@@ -1684,6 +1730,7 @@ async function refresh({ reason } = {}) {
       .map(c => c.dataset.id)
       .filter(Boolean);
     renderTabs();
+    renderRegionFilter();
     renderDay();
     if (expandedIds.length) {
       expandedIds.forEach(id => {

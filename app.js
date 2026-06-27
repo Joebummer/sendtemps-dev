@@ -195,6 +195,12 @@ function loadRegionFilter() {
   return _storage.getItem(REGION_FILTER_KEY) || 'ALL';
 }
 
+const TRIP_WINDOW_KEY = 'st_tripWindow';
+// Valid values: 'fri-sun' | 'sat-sun' | 'sat'
+function loadTripWindow() {
+  return _storage.getItem(TRIP_WINDOW_KEY) || 'fri-sun';
+}
+
 const state = {
   forecasts: null,
   ranked: null,
@@ -205,6 +211,7 @@ const state = {
   hiddenCrags: loadHidden(),
   favouriteCrags: loadFavourites(),
   regionFilter: loadRegionFilter(), // 'ALL' | 'VIC' | 'TAS'
+  tripWindow: loadTripWindow(),     // 'fri-sun' | 'sat-sun' | 'sat'
 };
 
 // ---- Render functions ----
@@ -388,6 +395,17 @@ function groupByDestination(weekendRows) {
     group.destDailyScores = tripDates
       .map(date => group.bestPerDay[date])
       .filter(Boolean);
+
+    // Count climbable walls (score >= 60) per trip date for the breakdown cells.
+    group.wallsPerDay = {};
+    for (const date of tripDates) {
+      const total = candidates.length;
+      const climbable = candidates.filter(sub => {
+        const ds = sub.dailyScores?.find(d => d.date === date);
+        return ds && ds.score >= 60;
+      }).length;
+      group.wallsPerDay[date] = { climbable, total };
+    }
     out.push(group);
   }
   // Favourited destinations float to the top (key = `dest:<name>`) so Sean's
@@ -495,6 +513,19 @@ function renderSplitRanked(dayRows, destinations) {
   });
 
   // "N hidden — show" disclosure footer.
+  // Trip window pill clicks — re-fetch ranked data with new window and re-render.
+  list.querySelectorAll('.trip-window-pill').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      state.tripWindow = btn.dataset.window;
+      _storage.setItem(TRIP_WINDOW_KEY, state.tripWindow);
+      // Recompute tripDates from the new window and re-rank.
+      state.tripDates = activeTripDates();
+      const weekendTrip = rankWeekendTrip(state.forecasts, state.tripDates);
+      state.weekendTrip = weekendTrip;
+      renderDay();
+    });
+  });
+
   list.querySelectorAll('.hidden-footer-toggle').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -578,12 +609,48 @@ function renderDaySection(title, subtitle, rows, hiddenItems = []) {
   `;
 }
 
+function tripWindowOptions() {
+  // Returns only options relevant to today's weekday — e.g. on Saturday,
+  // Fri–Sun doesn't make sense so we hide it.
+  const all = [
+    { value: 'fri-sun', label: 'Fri–Sun' },
+    { value: 'sat-sun', label: 'Sat–Sun' },
+    { value: 'sat',     label: 'Sat only' },
+  ];
+  // state.tripDates is already filtered by weekendDates() — if it only has
+  // 1 date (Sunday) or 2 dates (Sat+Sun), prune options that don't fit.
+  const n = state.tripDates.length;
+  if (n === 1) return [{ value: 'sat', label: 'Today' }]; // Sunday — single day
+  if (n === 2) return all.filter(o => o.value !== 'fri-sun'); // Sat — no Fri
+  return all;
+}
+
+function renderTripWindowSelector() {
+  const opts = tripWindowOptions();
+  // If only one option, nothing to select — don't render.
+  if (opts.length <= 1) return '';
+  return `
+    <div class="trip-window-selector">
+      ${opts.map(o => `
+        <button class="trip-window-pill${state.tripWindow === o.value ? ' active' : ''}"
+          data-window="${o.value}"
+          aria-pressed="${state.tripWindow === o.value}">
+          ${o.label}
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
 function renderWeekendSection(title, subtitle, destinations, hiddenItems = []) {
   return `
-    <section class="category">
-      <header class="category-header">
-        <h3>${escapeHtml(title)}</h3>
-        <span class="category-sub">${escapeHtml(subtitle)}</span>
+    <section class="category" id="weekend-section">
+      <header class="category-header weekend-category-header">
+        <div class="weekend-header-top">
+          <h3>${escapeHtml(title)}</h3>
+          <span class="category-sub">By destination</span>
+        </div>
+        ${renderTripWindowSelector()}
       </header>
       <div class="category-list">
         ${destinations.map((dest, i) => renderDestinationCard(dest, i === 0)).join('')}
@@ -645,8 +712,59 @@ function renderHiddenFooter(items) {
   `;
 }
 
+
+// Generate a plain-English arrival hint based on the daily scores for the trip.
+// e.g. "Arrive Friday — it's the best climbing day" or
+//      "Saturday morning arrival works — Friday is the weakest day"
+function renderArrivalHint(destDailyScores, tripDates) {
+  if (!destDailyScores || destDailyScores.length < 2) return '';
+
+  const byDate = {};
+  for (const d of destDailyScores) byDate[d.date] = d.score;
+
+  const scores = tripDates.map(date => ({ date, score: byDate[date] ?? 0 }));
+  const best = scores.reduce((a, b) => (a.score >= b.score ? a : b));
+  const worst = scores.reduce((a, b) => (a.score <= b.score ? a : b));
+
+  const dayName = (date) => {
+    const dow = new Date(date + 'T00:00:00').getDay();
+    return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dow];
+  };
+
+  let hint = '';
+
+  if (scores.length === 3) {
+    // Fri–Sun: tell them when to arrive
+    const friScore = byDate[tripDates[0]] ?? 0;
+    const satScore = byDate[tripDates[1]] ?? 0;
+    if (friScore >= 65) {
+      hint = `Arrive Friday — it's shaping up as the best climbing day (${friScore}/100).`;
+    } else if (friScore < 45) {
+      const satLabel = satScore >= 65 ? `${dayName(tripDates[1])} looks great` : `${dayName(tripDates[1])} is the stronger day`;
+      hint = `Friday is the weakest day (${friScore}/100) — Saturday morning arrival works fine. ${satLabel}.`;
+    } else {
+      hint = `Friday is passable (${friScore}/100). ${dayName(best.date)} is the standout day (${best.score}/100).`;
+    }
+  } else if (scores.length === 2) {
+    // Sat–Sun
+    if (best.score - worst.score <= 10) {
+      hint = `Both days look similar — ${best.score}/100 best.`;
+    } else {
+      hint = `${dayName(best.date)} is the stronger day (${best.score}/100 vs ${worst.score}/100).`;
+    }
+  }
+
+  if (!hint) return '';
+  return `
+    <div class="detail-section arrival-hint">
+      <div class="section-label">When to go</div>
+      <p class="arrival-hint-text">${hint}</p>
+    </div>
+  `;
+}
+
 function renderDestinationCard(dest, isTop) {
-  const { destination, drive, tripScore, subCrags, bestForToday, bestPerDay, destDailyScores } = dest;
+  const { destination, drive, tripScore, subCrags, bestForToday, bestPerDay, destDailyScores, wallsPerDay = {} } = dest;
   const band = scoreBand(tripScore);
   const w = weatherIcon(bestForToday.day.weatherCode);
   const todayBand = scoreBand(bestForToday.score);
@@ -682,7 +800,7 @@ function renderDestinationCard(dest, isTop) {
         </svg>
       </button>
       <div class="crag-detail" id="detail-dest-${safeDest}" role="region">
-        ${destDailyScores.length ? renderDestinationBreakdown(destDailyScores) : ''}
+        ${destDailyScores.length ? renderDestinationBreakdown(destDailyScores, wallsPerDay) : ''}
         ${(() => {
           const fcDest = state.forecasts?.[bestForToday.crag.id];
           if (!fcDest) return '';
@@ -690,6 +808,7 @@ function renderDestinationCard(dest, isTop) {
           if (fcDest.tomorrowDate && state.activeDate === fcDest.tomorrowDate) return renderHourlyStrip(fcDest, 'tomorrow', bestForToday.score);
           return '';
         })()}
+        ${renderArrivalHint(destDailyScores, state.tripDates)}
         ${renderPicksByDay(state.tripDates, bestPerDay)}
         <div class="detail-section">
           <div class="section-label">Sub-crags at this destination</div>
@@ -702,24 +821,33 @@ function renderDestinationCard(dest, isTop) {
   `;
 }
 
-function renderDestinationBreakdown(destDailyScores) {
+function renderDestinationBreakdown(destDailyScores, wallsPerDay = {}) {
   const cells = destDailyScores.map(d => {
     const band = scoreBand(d.score);
     const w = weatherIcon(d.day.weatherCode);
     const dn = shortDayName(d.date);
     const tFeel = Math.round(d.day.tFeel ?? d.day.tMax);
     const rain = Math.round(d.day.precipProb || 0);
+    const walls = wallsPerDay[d.date];
+    // Only show wall count if there are multiple walls at this destination.
+    const wallsHtml = walls && walls.total > 1
+      ? `<div class="breakdown-walls">${walls.climbable}/${walls.total} walls 60+</div>`
+      : '';
     return `
       <div class="breakdown-cell">
         <div class="breakdown-day">${dn}</div>
         <div class="breakdown-score ${band.color}">${d.score}</div>
         <div class="breakdown-meta">${w.icon} ${tFeel}° · ${rain}%</div>
+        ${wallsHtml}
       </div>
     `;
   }).join('');
+  const windowLabel = destDailyScores.length === 1 ? 'Day outlook'
+    : destDailyScores.length === 2 ? 'Sat–Sun outlook (best wall per day)'
+    : 'Fri–Sun outlook (best wall per day)';
   return `
     <div class="detail-section">
-      <div class="section-label">Fri–Sun outlook (best sub-crag per day)</div>
+      <div class="section-label">${windowLabel}</div>
       <div class="breakdown-row">${cells}</div>
     </div>
   `;
@@ -1407,7 +1535,7 @@ function renderDailyBreakdown(dailyScores) {
   }).join('');
   return `
     <div class="detail-section">
-      <div class="section-label">Fri–Sun breakdown</div>
+      <div class="section-label">Trip outlook</div>
       <div class="breakdown-row">${cells}</div>
     </div>
   `;
@@ -1464,10 +1592,33 @@ function paintUpdated() {
 const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 min auto-refresh while open
 const MIN_FOCUS_REFRESH_MS = 2 * 60 * 1000; // don't refetch on every focus; throttle to 2 min
 
+// Return the trip dates to use based on the user's selected window.
+// weekendDates() already handles Mon–Sun logic (e.g. Sat returns [Sat, Sun]).
+// We then trim or expand based on tripWindow preference.
+function activeTripDates() {
+  const all = weekendDates(); // up to [Fri, Sat, Sun]
+  const win = state.tripWindow;
+  if (win === 'sat') {
+    // Just Saturday (or today if it's Saturday)
+    return all.filter(d => {
+      const dow = new Date(d + 'T00:00:00').getDay();
+      return dow === 6; // Saturday
+    }).slice(0, 1);
+  }
+  if (win === 'sat-sun') {
+    return all.filter(d => {
+      const dow = new Date(d + 'T00:00:00').getDay();
+      return dow === 6 || dow === 0; // Sat or Sun
+    });
+  }
+  // fri-sun: use all (up to 3)
+  return all.slice(0, 3);
+}
+
 async function fetchAndRank() {
   const forecasts = await fetchAllForecasts();
   const dates = weekDates();
-  const tripDates = weekendDates().slice(0, 3);
+  const tripDates = activeTripDates();
   const ranked = rankByDay(forecasts, dates);
   const weekendTrip = rankWeekendTrip(forecasts, tripDates);
   return { forecasts, dates, tripDates, ranked, weekendTrip };

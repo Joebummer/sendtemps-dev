@@ -681,6 +681,13 @@ function renderSplitRanked(dayRows, destinations) {
   // Share buttons — both the icon on the header and the labelled button in
   // the expander. stopPropagation so the header icon doesn't also toggle the
   // card open/closed.
+  list.querySelectorAll('.dest-share-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      shareDestination(btn.dataset.destShare);
+    });
+  });
+
   list.querySelectorAll('.share-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -902,6 +909,7 @@ function renderDestinationCard(dest, isTop) {
     <article class="crag-card destination-card ${isTop ? 'top' : ''}" data-open="false" data-id="dest-${safeDest}">
       ${renderFavouriteButton(`dest:${destination}`, destination)}
       ${renderHideButton(`dest:${destination}`, destination)}
+      ${renderDestShareButton(destination, tripScore, destDailyScores)}
       <button class="crag-header" aria-expanded="false" aria-controls="detail-dest-${safeDest}">
         <div class="score-pill ${band.color}" aria-label="Trip score ${tripScore} out of 100">
           ${tripScore}
@@ -1142,6 +1150,18 @@ function renderCard(row, isTop, isWeekend) {
 function renderShareIconButton(cragId, cragName) {
   return `<button class="share-btn share-btn-icon" data-share-id="${escapeHtml(cragId)}"
     aria-label="Share ${escapeHtml(cragName)} forecast" title="Share forecast">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 3v13" />
+      <path d="M7 8l5-5 5 5" />
+      <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+    </svg>
+  </button>`;
+}
+
+function renderDestShareButton(destination, tripScore, destDailyScores) {
+  const safeId = 'dest:' + destination;
+  return `<button class="share-btn share-btn-icon dest-share-btn" data-dest-share="${escapeHtml(destination)}"
+    aria-label="Share ${escapeHtml(destination)} trip forecast" title="Share trip forecast">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M12 3v13" />
       <path d="M7 8l5-5 5 5" />
@@ -1808,6 +1828,50 @@ function shareForecast(cragId) {
     return;
   }
 
+  copyToClipboardWithToast(`${text}\n${url}`);
+}
+
+function shareDestination(destination) {
+  if (!destination) return;
+  // Find the destination's trip data from weekendTrip state
+  const dest = state.weekendTrip?.find(d => d.destination === destination);
+  if (!dest) { showToast('Nothing to share for this destination.'); return; }
+
+  const { tripScore, destDailyScores = [] } = dest;
+
+  // Build day-by-day summary lines
+  const dayLines = destDailyScores.map(d => {
+    try {
+      const label = new Date(d.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+      return `  ${label}: ${Math.round(d.score)}/100${d.bestCragName ? ' (' + d.bestCragName + ')' : ''}`;
+    } catch { return ''; }
+  }).filter(Boolean).join('\n');
+
+  const dateRange = (() => {
+    if (!state.tripDates?.length) return '';
+    const fmt = d => { try { return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }); } catch { return d; } };
+    const dates = state.tripDates;
+    return dates.length > 1 ? `${fmt(dates[0])}–${fmt(dates[dates.length - 1])}` : fmt(dates[0]);
+  })();
+
+  const text = [
+    `${destination} · ${dateRange}`,
+    `Trip score ${tripScore}/100`,
+    dayLines,
+    'via SendTemps',
+  ].filter(Boolean).join('\n');
+
+  const url = `${location.origin}${location.pathname}`;
+  const title = `${destination} trip forecast — SendTemps`;
+
+  if (typeof navigator.share === 'function') {
+    navigator.share({ title, text, url })
+      .catch(err => {
+        if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
+        copyToClipboardWithToast(`${text}\n${url}`);
+      });
+    return;
+  }
   copyToClipboardWithToast(`${text}\n${url}`);
 }
 

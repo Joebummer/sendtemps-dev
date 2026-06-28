@@ -533,9 +533,32 @@ main {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 1px var(--color-primary), var(--shadow-md);
 }
+.crag-card.rare-window {
+  border-color: var(--color-warning);
+  box-shadow: 0 0 0 1px var(--color-warning), var(--shadow-md);
+}
+.crag-card.rare-window .crag-header::before {
+  content: '✦ Rare window';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-warning);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 10px;
+  border-radius: 0 0 6px 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+}
 .crag-header {
   width: 100%;
   display: flex;
+  position: relative;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-4);

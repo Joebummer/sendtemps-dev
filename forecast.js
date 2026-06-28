@@ -1315,8 +1315,13 @@ export function scoreDay(crag, day, prevDay, nextDay) {
 
   // Cold day (<8°C): morning sun on the wall is gold; full shade is grim.
   // Full bonus requires 2h+ of sun; 1–2h earns a partial bonus; <1h nothing.
+  // tMax floor: if the day can't reach 6°C even with full sun, the wall stays
+  // too cold for sun to be a meaningful asset — no bonus awarded.
+  const tMax = day.tMax ?? t;
   if (t < 8) {
-    if (coolHours >= 2 || warmHours >= 2.5) {
+    if (tMax < 6) {
+      // Too cold for sun to help — skip bonus entirely, shade penalty still applies
+    } else if (coolHours >= 2 || warmHours >= 2.5) {
       const sunTrapHrs = coolHours + 0.5 * warmHours;
       const bon = Math.min(10, Math.round(sunTrapHrs * 2.5));
       score += bon;
@@ -1529,7 +1534,10 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // when the overall day is sunny AND it's a cool day where warmth is welcome.
   // The bonus scales with how much of that sun actually reaches the wall,
   // rather than the aspect label.
-  if (sunHours > 6 && t < 18 && crag.shade !== 'all-day') {
+  // t >= 8 floor: below 8°C ambient, sunshine doesn't improve friction or
+  // comfort enough to deserve a bonus — the sun-trap block above handles
+  // targeted wall-warming credit when it's warranted.
+  if (sunHours > 6 && t >= 8 && t < 18 && crag.shade !== 'all-day') {
     // Ratio of wall-lit hours to total clear-sky daylight on this day.
     // 0 = wall never sees the sun; 1 = wall is lit any time the sun is up.
     const totalLit = day.sunHoursTotal ?? sunHours;

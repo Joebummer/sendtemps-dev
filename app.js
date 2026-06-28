@@ -224,6 +224,7 @@ const state = {
   forecasts: null,
   ranked: null,
   weekendTrip: null,    // ranked array of weekend crags by Fri–Sun trip score
+  destinations: null,   // grouped destination objects for trip cards (set in renderDaySummary)
   tripDates: [],        // [Fri, Sat, Sun] used for trip scoring
   dates: [],            // 7 dates: today + next 6, used for tabs
   activeDate: null,
@@ -442,6 +443,7 @@ function renderDay() {
   // Group weekend rows by destination (parent area) and pick the best sub-crag
   // per day. The collapsed card shows the destination's best trip score.
   const destinations = groupByDestination(weekendRows);
+  state.destinations = destinations;
 
   renderDaySummary(rows, dayRows, destinations);
   renderSplitRanked(dayRows, destinations);
@@ -906,7 +908,7 @@ function renderDestinationCard(dest, isTop) {
   const namedSubCrags = subCrags.filter(s => s.crag.parentId);
 
   return `
-    <article class="crag-card destination-card ${isTop ? 'top' : ''} ${(bestForToday.reasons?.includes('rare window') || destDailyScores.some(d => d.reasons?.includes('rare window'))) ? 'rare-window' : ''}" data-open="false" data-id="dest-${safeDest}">
+    <article class="crag-card destination-card ${isTop ? 'top' : ''} ${tripScore >= 90 && (bestForToday.reasons?.includes('rare window') || destDailyScores.some(d => d.reasons?.includes('rare window'))) ? 'rare-window' : ''}" data-open="false" data-id="dest-${safeDest}">
       ${renderFavouriteButton(`dest:${destination}`, destination)}
       ${renderHideButton(`dest:${destination}`, destination)}
       ${renderDestShareButton(destination, tripScore, destDailyScores)}
@@ -1834,7 +1836,7 @@ function shareForecast(cragId) {
 function shareDestination(destination) {
   if (!destination) return;
   // Find the destination's trip data from weekendTrip state
-  const dest = state.weekendTrip?.find(d => d.destination === destination);
+  const dest = state.destinations?.find(d => d.destination === destination);
   if (!dest) { showToast('Nothing to share for this destination.'); return; }
 
   const { tripScore, destDailyScores = [] } = dest;

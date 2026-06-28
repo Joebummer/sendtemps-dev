@@ -690,7 +690,7 @@ function renderSplitRanked(dayRows, destinations) {
     });
   });
 
-  list.querySelectorAll('.share-btn').forEach(btn => {
+  list.querySelectorAll('.share-btn:not(.dest-share-btn)').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();

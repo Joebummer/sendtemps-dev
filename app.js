@@ -15,7 +15,8 @@ import {
 (function () {
   const t = document.querySelector('[data-theme-toggle]');
   const r = document.documentElement;
-  let d = matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+  const saved = localStorage.getItem('theme');
+  let d = saved ?? (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
   const apply = () => {
     r.setAttribute('data-theme', d);
     t.innerHTML = d === 'dark'
@@ -24,7 +25,7 @@ import {
     t.setAttribute('aria-label', `Switch to ${d === 'dark' ? 'light' : 'dark'} mode`);
   };
   apply();
-  t.addEventListener('click', () => { d = d === 'dark' ? 'light' : 'dark'; apply(); });
+  t.addEventListener('click', () => { d = d === 'dark' ? 'light' : 'dark'; localStorage.setItem('theme', d); apply(); });
 })();
 
 // Pageview tracking lives in index.html via GoatCounter (cookie-free, no

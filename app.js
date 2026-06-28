@@ -906,7 +906,7 @@ function renderDestinationCard(dest, isTop) {
   const namedSubCrags = subCrags.filter(s => s.crag.parentId);
 
   return `
-    <article class="crag-card destination-card ${isTop ? 'top' : ''}" data-open="false" data-id="dest-${safeDest}">
+    <article class="crag-card destination-card ${isTop ? 'top' : ''} ${(bestForToday.reasons?.includes('rare window') || destDailyScores.some(d => d.reasons?.includes('rare window'))) ? 'rare-window' : ''}" data-open="false" data-id="dest-${safeDest}">
       ${renderFavouriteButton(`dest:${destination}`, destination)}
       ${renderHideButton(`dest:${destination}`, destination)}
       ${renderDestShareButton(destination, tripScore, destDailyScores)}
@@ -1080,7 +1080,7 @@ function renderCard(row, isTop, isWeekend) {
   const todayStrip    = isToday    ? renderHourlyStrip(fc, 'today', headlineScore)    : '';
 
   return `
-    <article class="crag-card ${isTop ? 'top' : ''}" data-open="false" data-id="${crag.id}">
+    <article class="crag-card ${isTop ? 'top' : ''} ${reasons.includes('rare window') ? 'rare-window' : ''}" data-open="false" data-id="${crag.id}">
       ${renderFavouriteButton(crag.id, crag.name)}
       ${renderHideButton(crag.id, crag.name)}
       ${renderShareIconButton(shareId, crag.name)}

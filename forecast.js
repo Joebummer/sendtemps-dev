@@ -2,6 +2,7 @@
 // API: https://open-meteo.com/en/docs — free, no key, CORS-enabled
 
 import { CRAGS } from './crags.js?v=33';
+import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 
 const API = 'https://api.open-meteo.com/v1/forecast';
 
@@ -1130,7 +1131,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   let score = 100;
   const reasons = [];
   // Each contribution: { category, label, delta, detail }
-  // category: temp | aspect | bestIn | precip | dryness | wind | sun
+  // category: temp | aspect | bestIn | precip | dryness | wind | sun | climate
   // delta: positive (bonus) or negative (penalty); rounded to int when applied
   // detail: short human-readable description of why this contribution applied
   const contributions = [];
@@ -1138,6 +1139,18 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     if (delta === 0) return;
     contributions.push({ category, label, delta: Math.round(delta), detail });
   };
+
+  // — Climate baseline lookup (v59.17) —
+  // Resolve the monthly climate normals for this crag so downstream blocks
+  // can contextualise conditions against what’s typical here in this month.
+  const _month = new Date(day.date + 'T12:00:00').toLocaleString('en-AU', { month: 'short' });
+  const _profileKey = CRAG_TO_PROFILE[crag.id];
+  const _profile = _profileKey ? CLIMATE_PROFILES[_profileKey] : null;
+  const _norm = _profile?.monthly?.[_month] ?? null;
+  // Convenience accessors — fall back gracefully if no profile exists
+  const normTMax  = _norm?.tMax  ?? null;
+  const normRh    = _norm?.rhMean ?? null;
+  const normWind  = _norm?.windMax ?? null;
 
   // — Effective precipitation: only rain during climbable hours counts —
   // Climbable hours = climbStartHour..climbCutoffHour. Pre-climb rain (e.g. a
@@ -1242,6 +1255,9 @@ export function scoreDay(crag, day, prevDay, nextDay) {
       const hoursDry = hum.hoursDry || 0;
       const meanRh = hum.meanRh ?? 70;
       const muggyHours = hoursHumid + 0.4 * (hum.hoursModerate || 0);
+      // Baseline-adjusted dry threshold: if this crag normally sits at 80% RH,
+      // 65% is genuinely dry for it — raise the 'dry air' trigger accordingly.
+      const dryRhThresh = normRh != null ? Math.min(65, normRh - 15) : 55;
 
       if (climbHours > 0 && t >= 22 && hoursHumid >= 2) {
         _humidLabel = 'muggy';     _humidDelta = -8;
@@ -1251,7 +1267,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
         _humidLabel = 'moist air'; _humidDelta = -3;
       } else if (hoursDry >= 6 && muggyHours === 0) {
         _humidLabel = 'crisp air'; _humidDelta = +3;
-      } else if (meanRh < 55) {
+      } else if (meanRh < dryRhThresh) {
         _humidLabel = 'dry air';   _humidDelta = +2;
       } else {
         _humidLabel = 'comfortable'; _humidDelta = 0;
@@ -1546,6 +1562,55 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     if (bon > 0) {
       score += bon;
       add('sun', 'Sunshine bonus', +bon, `${Math.round(sunHours)}h sun overall · wall lit for ${onWallHours.toFixed(1)}h`);
+    }
+  }
+
+  // — Climate anomaly detection (v59.17) —
+  // Compare today’s forecast against the 10-year monthly norm for this crag.
+  // An anomalously good day gets a bonus + ‘rare window’ chip; anomalously bad
+  // gets a small additional penalty. Only fires when a profile exists.
+  if (_norm) {
+    const tForecast  = day.tMax ?? t;
+    const rhForecast = day.climbHumidity?.meanRh ?? null;
+    const wForecast  = day.wind ?? 0;
+
+    // Score each signal: positive = better than normal, negative = worse
+    const tempAnomaly = normTMax != null ? tForecast - normTMax : 0;
+    const rhAnomaly   = (normRh != null && rhForecast != null) ? normRh - rhForecast : 0; // positive = drier than norm
+    const windAnomaly = normWind != null ? normWind - wForecast : 0; // positive = calmer than norm
+
+    // Thresholds for ‘notable’ anomaly (each signal independently)
+    const tempGood  = tempAnomaly  >=  4;  // 4°C+ warmer than norm in winter, or cooler in summer
+    const tempBad   = tempAnomaly  <= -5;  // 5°C+ colder than norm
+    const rhGood    = rhAnomaly    >= 12;  // 12%+ drier than norm
+    const rhBad     = rhAnomaly    <= -12; // 12%+ wetter than norm
+    const windGood  = windAnomaly  >= 10;  // 10+ km/h calmer than norm
+    const windBad   = windAnomaly  <= -15; // 15+ km/h windier than norm
+
+    // ‘Rare window’: all three signals positive, or two strongly positive
+    const goodSignals = [tempGood, rhGood, windGood].filter(Boolean).length;
+    const badSignals  = [tempBad,  rhBad,  windBad ].filter(Boolean).length;
+
+    if (goodSignals >= 2) {
+      // Scale bonus: 2 signals = +5, all 3 = +10
+      const bon = goodSignals === 3 ? 10 : 5;
+      score += bon;
+      reasons.push('rare window');
+      const notes = [];
+      if (tempGood)  notes.push(`${Math.round(Math.abs(tempAnomaly))}° above norm`);
+      if (rhGood)    notes.push(`${Math.round(rhAnomaly)}% drier than usual`);
+      if (windGood)  notes.push(`${Math.round(windAnomaly)} km/h calmer than usual`);
+      add('climate', 'Rare window', +bon,
+        `Unusually good for ${_month} at ${crag.name}: ${notes.join(', ')}`);
+    } else if (badSignals >= 2) {
+      const pen = badSignals === 3 ? 8 : 4;
+      score -= pen;
+      const notes = [];
+      if (tempBad)   notes.push(`${Math.round(Math.abs(tempAnomaly))}° below norm`);
+      if (rhBad)     notes.push(`${Math.round(Math.abs(rhAnomaly))}% wetter than usual`);
+      if (windBad)   notes.push(`${Math.round(Math.abs(windAnomaly))} km/h windier than usual`);
+      add('climate', 'Worse than usual', -pen,
+        `Notably poor for ${_month} at ${crag.name}: ${notes.join(', ')}`);
     }
   }
 

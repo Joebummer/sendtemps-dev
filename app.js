@@ -198,6 +198,7 @@ function loadRegionFilter() {
 
 const TRIP_START_KEY = 'st_tripStart';
 const TRIP_END_KEY   = 'st_tripEnd';
+const SECTION_COLLAPSED_KEY = 'st_sectionCollapsed';
 
 // Default trip range = the coming weekend dates (Fri–Sun, Sat–Sun, or Sun)
 // depending on today's weekday. Falls back gracefully if weekendDates isn't
@@ -585,6 +586,19 @@ function renderSplitRanked(dayRows, destinations) {
 
   list.innerHTML = sections.join('');
 
+  // Section collapse/expand toggles (Overview + Multi-day trip headers).
+  list.querySelectorAll('.category-header').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const section = btn.closest('.category');
+      if (!section) return;
+      const id = section.dataset.section;
+      const collapsed = section.dataset.collapsed === 'true';
+      section.dataset.collapsed = collapsed ? 'false' : 'true';
+      btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+      if (id) setSectionCollapsed(id, !collapsed);
+    });
+  });
+
   list.querySelectorAll('.crag-header').forEach(btn => {
     btn.addEventListener('click', () => {
       const card = btn.closest('.crag-card');
@@ -716,14 +730,29 @@ function renderSplitRanked(dayRows, destinations) {
   });
 }
 
+const CHEVRON_SVG = `<svg class="category-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`;
+
+function getSectionCollapsed() {
+  try { return JSON.parse(_storage.getItem(SECTION_COLLAPSED_KEY) || '{}'); } catch { return {}; }
+}
+function setSectionCollapsed(id, collapsed) {
+  const map = getSectionCollapsed();
+  map[id] = collapsed;
+  _storage.setItem(SECTION_COLLAPSED_KEY, JSON.stringify(map));
+}
+
 function renderDaySection(title, subtitle, rows, hiddenItems = []) {
+  const collapsed = getSectionCollapsed()['day'] ?? false;
   return `
-    <section class="category">
-      <header class="category-header">
-        <h3>${escapeHtml(title)}</h3>
-        <span class="category-sub">${escapeHtml(subtitle)}</span>
-      </header>
-      <div class="category-list">
+    <section class="category" data-section="day" data-collapsed="${collapsed}">
+      <button type="button" class="category-header" aria-expanded="${!collapsed}" aria-controls="section-list-day">
+        <span class="category-header-label">
+          <h3>${escapeHtml(title)}</h3>
+          <span class="category-sub">${escapeHtml(subtitle)}</span>
+        </span>
+        ${CHEVRON_SVG}
+      </button>
+      <div class="category-list" id="section-list-day">
         ${rows.map((row, i) => renderCard(row, i === 0, false)).join('')}
       </div>
       ${renderHiddenFooter(hiddenItems)}
@@ -770,16 +799,20 @@ function renderTripDateRange() {
 }
 
 function renderWeekendSection(title, subtitle, destinations, hiddenItems = []) {
+  const collapsed = getSectionCollapsed()['weekend'] ?? false;
   return `
-    <section class="category" id="weekend-section">
-      <header class="category-header weekend-category-header">
-        <div class="weekend-header-top">
-          <h3>${escapeHtml(title)}</h3>
-          <span class="category-sub">By destination</span>
-        </div>
+    <section class="category" id="weekend-section" data-section="weekend" data-collapsed="${collapsed}">
+      <div class="weekend-category-header">
+        <button type="button" class="category-header" aria-expanded="${!collapsed}" aria-controls="section-list-weekend">
+          <span class="category-header-label">
+            <h3>${escapeHtml(title)}</h3>
+            <span class="category-sub">By destination</span>
+          </span>
+          ${CHEVRON_SVG}
+        </button>
         ${renderTripDateRange()}
-      </header>
-      <div class="category-list">
+      </div>
+      <div class="category-list" id="section-list-weekend">
         ${destinations.map((dest, i) => renderDestinationCard(dest, i === 0)).join('')}
       </div>
       ${renderHiddenFooter(hiddenItems)}

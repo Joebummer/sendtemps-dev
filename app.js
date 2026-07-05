@@ -931,10 +931,15 @@ function renderDestinationCard(dest, isTop) {
   const todayBand = scoreBand(bestForToday.score);
 
   // Reasons summary: pull top reasons from the best-for-today sub-crag.
+  // bestFromTag is intentionally excluded here — it only makes sense on individual
+  // crag cards where the wall aspect is unambiguous, not on destination summaries.
   const reasonsHtml = (bestForToday.reasons && bestForToday.reasons.length
     ? bestForToday.reasons
     : ['conditions ok']
-  ).map(r => `<span class="reason-tag">${escapeHtml(r)}</span>`).join('');
+  ).map(r => {
+    const cls = /^closed/i.test(r) ? 'reason-tag reason-tag-closed' : 'reason-tag';
+    return `<span class="${cls}">${escapeHtml(r)}</span>`;
+  }).join('');
 
   const safeDest = destination.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   // Exclude parent placeholder entries (e.g. 'gramps-main', 'arap-main') from the sub-crag list and count.

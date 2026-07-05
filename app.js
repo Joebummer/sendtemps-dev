@@ -1092,9 +1092,15 @@ function renderCard(row, isTop, isWeekend) {
 
   const sunHours = Math.round((day.sunshine || 0) / 3600);
 
-  const reasonsHtml = reasons.length
-    ? reasons.map(r => {
-        const cls = /^closed/i.test(r) ? 'reason-tag reason-tag-closed' : 'reason-tag';
+  const bfTag = bestFromTag(day.sunWindow, day.tMax, crag.aspect);
+  const allReasons = bfTag ? [bfTag, ...reasons] : reasons;
+  const reasonsHtml = allReasons.length
+    ? allReasons.map(r => {
+        const cls = /^closed/i.test(r)
+          ? 'reason-tag reason-tag-closed'
+          : /^Best from/i.test(r)
+            ? 'reason-tag reason-tag-bestfrom'
+            : 'reason-tag';
         return `<span class="${cls}">${escapeHtml(r)}</span>`;
       }).join('')
     : '<span class="reason-tag">conditions ok</span>';
@@ -1590,6 +1596,21 @@ function formatHour12(h) {
 // `staticText` is the author-written hint from crags.js (e.g. "All-day shade"
 // or "NE: morning sun only"). We use it as a fallback when no computed window
 // is available, and as a supplementary hint when one is.
+// Returns a "Best from X" tag string when a wall's sun window starts
+// after midday in cool conditions — surfaces the afternoon sun opportunity
+// that the whole-day score would otherwise understate.
+// Returns null when not applicable (morning sun, hot day, no window, mixed aspect).
+function bestFromTag(sunWindow, tMax, aspect) {
+  if (!sunWindow) return null;
+  if (!aspect || aspect === 'mixed' || aspect === 'all-day shade') return null;
+  // Only fire when sun arrives at 12pm or later — earlier windows are already
+  // well-represented by the morning score.
+  if (sunWindow.firstHour < 12) return null;
+  // Only meaningful in cool conditions where morning shade is a deterrent.
+  if (tMax >= 18) return null;
+  return `Best from ${formatHour12(sunWindow.firstHour)}`;
+}
+
 function renderSunWindow(sunWindow, staticText) {
   // No computed window: either crag is all-day shaded, or geometry says the
   // wall never gets hit on this date. Prefer the author hint if provided,

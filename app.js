@@ -1180,7 +1180,7 @@ function renderCard(row, isTop, isWeekend) {
           </div>
           ${renderSunWindow(day.sunWindow, crag.sunOnWall)}
         </div>
-        ${renderDaySubCrags(daySubCrags)}
+        ${renderDaySubCrags(daySubCrags, isToday ? 'today' : isTomorrow ? 'tomorrow' : null)}
         ${renderShareExpanderButton(shareId, crag.name)}
       </div>
     </article>
@@ -1230,7 +1230,7 @@ function renderShareExpanderButton(cragId, cragName) {
   </div>`;
 }
 
-function renderDaySubCrags(daySubCrags) {
+function renderDaySubCrags(daySubCrags, mode = null) {
   if (!Array.isArray(daySubCrags) || daySubCrags.length === 0) return '';
   // Sort by today's score (highest first) so the best sub-crag is at the top.
   const sorted = [...daySubCrags].sort((a, b) => b.score - a.score);
@@ -1239,10 +1239,22 @@ function renderDaySubCrags(daySubCrags) {
     const safeId = String(sub.crag.id).replace(/[^a-z0-9]+/gi, '-').toLowerCase();
     const reasons = sub.reasons || [];
     const contributions = sub.contributions || [];
-    const hasDetail = contributions.length > 0;
-    const reasonsHtml = reasons.length
-      ? reasons.map(r => `<span class="reason-tag reason-tag-sm">${escapeHtml(r)}</span>`).join('')
+    const bfTag = bestFromTag(sub.day?.sunWindow, sub.day?.tMax, sub.crag?.aspect);
+    const allReasons = bfTag ? [bfTag, ...reasons] : reasons;
+    const reasonsHtml = allReasons.length
+      ? allReasons.map(r => {
+          const cls = /^Best from/i.test(r) ? 'reason-tag reason-tag-sm reason-tag-bestfrom'
+            : /^closed/i.test(r) ? 'reason-tag reason-tag-sm reason-tag-closed'
+            : 'reason-tag reason-tag-sm';
+          return `<span class="${cls}">${escapeHtml(r)}</span>`;
+        }).join('')
       : '';
+
+    // Hourly strip for today/tomorrow tabs — each sub-crag has its own forecast.
+    const subFc = mode ? state.forecasts?.[sub.crag.id] : null;
+    const hourlyHtml = subFc ? renderHourlyStrip(subFc, mode, sub.score) : '';
+
+    const hasDetail = contributions.length > 0 || !!hourlyHtml;
     return `
       <div class="subcrag-row-wrap" data-open="false">
         <button type="button" class="subcrag-row${hasDetail ? ' is-expandable' : ' is-static'}"${hasDetail ? ` aria-expanded="false" aria-controls="daysubdetail-${safeId}"` : ' tabindex="-1"'}>
@@ -1252,7 +1264,7 @@ function renderDaySubCrags(daySubCrags) {
           ${hasDetail ? `<svg class="subcrag-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>` : ''}
         </button>
         ${reasonsHtml ? `<div class="subcrag-reasons">${reasonsHtml}</div>` : ''}
-        ${hasDetail ? `<div class="subcrag-detail" id="daysubdetail-${safeId}" role="region" hidden>${renderScoreBreakdown(contributions, sub.score)}</div>` : ''}
+        ${hasDetail ? `<div class="subcrag-detail" id="daysubdetail-${safeId}" role="region" hidden>${hourlyHtml}${renderScoreBreakdown(contributions, sub.score)}</div>` : ''}
       </div>
     `;
   }).join('');

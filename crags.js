@@ -1267,6 +1267,28 @@ export const CRAGS = [
     bestIn: 'mild',
   },
 
+  {
+    id: 'gramps-malta',
+    parentId: 'gramps-main',
+    name: 'The Malta Sector',
+    area: 'Grampians (Halls Gap)',
+    lat: -37.13914,
+    lon: 142.51148,
+    elevation: 320,
+    aspect: 'E',
+    rockType: 'sandstone',
+    dryRating: 5,
+    idealTemp: [8, 26],
+    heatCap: 29,
+    shade: 'afternoon',
+    driveTime: '3h45',
+    trip: 'both',
+    state: 'VIC',
+    notes: 'Steep, hard sport crag on Mackeys Peak in the Halls Gap Northern Wonderland Range — 5–10 min walk from Venus Baths trail. 27 routes grades 20–28 (mostly 25–27). Entire sector tagged dry-in-rain, morning sun, sheltered from wind — making it one of the most reliable foul-weather climbing options in the Grampians. Grade 22 and up to make the most of it; famous routes include Minister of Affairs (27★★★), Swarm of Goats (26★★★), The Swarm Short (23★★★). East-facing — best in morning, shaded by afternoon.',
+    sunOnWall: 'Morning sun; shaded by early afternoon',
+    bestIn: 'cool mornings; also wet/foul weather refuge',
+  },
+
   // — Mt Buffalo —
   {
     id: 'buffalo-main',
@@ -3320,7 +3342,7 @@ export const AREAS = {
   'Brisbane Ranges': ['staughton-vale'],
   'Harcourt': ['mt-alexander', 'harcourt-dogrocks', 'harcourt-wabbitwocks', 'harcourt-scorpionrocks'],
   'Mt Arapiles': ['arap-main', 'arap-cgleft', 'arap-cgright', 'arap-bard', 'arap-fang', 'arap-organpipes', 'arap-atridae', 'arap-watchtower', 'arap-kingrat', 'arap-piloterror', 'arap-tigerwall', 'arap-pinnacleface', 'arap-pharos-front', 'arap-pharos-back', 'arap-bluffmajor', 'arap-bluffs', 'arap-mitre', 'arap-northern', 'arap-henrybolte', 'arap-bushranger', 'arap-declaration', 'arap-colosseum', 'arap-castle', 'arap-grotto', 'arap-voodoo', 'arap-farnorth', 'arap-western'],
-  'Grampians': ['gramps-main', 'gramps-stapylton', 'gramps-taipan', 'gramps-dreamtime', 'gramps-bundaleer', 'gramps-muline', 'gramps-vicrange', 'gramps-guardhouse', 'gramps-rosea', 'gramps-westflank', 'gramps-iforget', 'gramps-ravine', 'gramps-vandiemens', 'gramps-hallsgap', 'gramps-hollowmtn', 'gramps-stapylton-amph', 'gramps-lowertaipan'],
+  'Grampians': ['gramps-main', 'gramps-stapylton', 'gramps-taipan', 'gramps-dreamtime', 'gramps-bundaleer', 'gramps-muline', 'gramps-vicrange', 'gramps-guardhouse', 'gramps-rosea', 'gramps-westflank', 'gramps-iforget', 'gramps-ravine', 'gramps-vandiemens', 'gramps-hallsgap', 'gramps-hollowmtn', 'gramps-stapylton-amph', 'gramps-lowertaipan', 'gramps-malta'],
   'Mt Buffalo': ['buffalo-main', 'buffalo-cathedral', 'buffalo-hump', 'buffalo-eurobin', 'buffalo-mackeys', 'buffalo-mcleod', 'buffalo-gorge-south', 'buffalo-gorge-north', 'buffalo-reservoir', 'buffalo-catani', 'buffalo-lesouef', 'buffalo-buckland', 'buffalo-tatra', 'buffalo-backwall', 'buffalo-horn'],
   // — Tasmania —
   'Ben Lomond': ['ben-lomond-main', 'ben-lomond-snake', 'ben-lomond-pavilion', 'ben-lomond-local-loser', 'ben-lomond-frews', 'ben-lomond-robins', 'ben-lomond-heathcliffe'],

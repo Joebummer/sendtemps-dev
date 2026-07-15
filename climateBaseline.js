@@ -70,6 +70,7 @@ export const CRAG_TO_PROFILE = {
   "gramps-hollowmtn": "gramps-stapylton",
   "gramps-stapylton-amph": "gramps-stapylton",
   "gramps-lowertaipan": "gramps-taipan",
+  "gramps-malta": "gramps-hallsgap",
   "buffalo-main": "buffalo-main",
   "buffalo-cathedral": "buffalo-main",
   "buffalo-hump": "buffalo-main",

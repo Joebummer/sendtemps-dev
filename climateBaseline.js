@@ -1,9 +1,3 @@
-// Auto-generated from Open-Meteo ERA5 archive data (2015–2024).
-// Monthly climate normals per crag location — used for anomaly detection
-// and context-aware scoring. Do not edit manually.
-// Regenerate with: python fetch_climate.py + generate_climate_js.py
-
-// CRAG_TO_PROFILE maps every crag ID to its climate profile key.
 export const CRAG_TO_PROFILE = {
   "camels-hump": "camels-hump",
   "ben-cairn": "ben-cairn",
@@ -136,11 +130,43 @@ export const CRAG_TO_PROFILE = {
   "fortescue-totem-pole": "fortescue-main",
   "fortescue-candlestick": "fortescue-main",
   "fortescue-moai": "fortescue-main",
-  "cape-raoul-main": "cape-raoul-main"
+  "cape-raoul-main": "cape-raoul-main",
+// — Blue Mountains sub-crags (Blackheath cluster) —
+  "bluemtns-medlowbath": "bluemtns-blackheath",
+  "bluemtns-wavewall": "bluemtns-blackheath",
+  "bluemtns-junketpumper": "bluemtns-blackheath",
+  "bluemtns-porterspass": "bluemtns-blackheath",
+  "bluemtns-bellsupercrag": "bluemtns-blackheath",
+  "bluemtns-cosmiccounty": "bluemtns-blackheath",
+  "bluemtns-mtyork-sunny": "bluemtns-blackheath",
+  "bluemtns-mtyork-shady": "bluemtns-blackheath",
+  // — Blue Mountains sub-crags (Katoomba cluster) —
+  "bluemtns-diamondfalls-access": "bluemtns-katoomba",
+  "bluemtns-diamondfalls-mrwall": "bluemtns-katoomba",
+  "bluemtns-sublimepoint": "bluemtns-katoomba",
+  "bluemtns-perrys": "bluemtns-blackheath",
+  // — New South Wales —
+  "nowra-main": "nowra",
+  "nowra-thompsons": "nowra",
+  "nowra-lot33": "nowra",
+  "nowra-grotto": "nowra",
+  "nowra-lair": "nowra",
+  "bluemtns-main": "bluemtns-blackheath",
+  "bluemtns-centennial": "bluemtns-blackheath",
+  "bluemtns-shipley": "bluemtns-blackheath",
+  "bluemtns-piddington": "bluemtns-katoomba",
+  "bluemtns-yorke": "bluemtns-katoomba",
+  "bluemtns-diamond": "bluemtns-katoomba",
+  "booroomba-main": "booroomba",
+  "booroomba-north": "booroomba",
+  "booroomba-south": "booroomba",
+  "bungonia-main": "bungonia",
+  "pointperp-main": "point-perp",
+  "pointperp-lighthouse": "point-perp",
+  "pointperp-bayside": "point-perp",
+  "lindfield-main": "lindfield",
 };
 
-// CLIMATE_PROFILES: monthly normals indexed by profile key.
-// Each month entry: { tMax, tMin, rhMean, windMax, precipMm }
 export const CLIMATE_PROFILES = {
   'camels-hump': {
     name: "Camels Hump",
@@ -630,38 +656,3 @@ export const CLIMATE_PROFILES = {
     },
   },
 };
-  // — Blue Mountains sub-crags (Blackheath cluster) —
-  "bluemtns-medlowbath": "bluemtns-blackheath",
-  "bluemtns-wavewall": "bluemtns-blackheath",
-  "bluemtns-junketpumper": "bluemtns-blackheath",
-  "bluemtns-porterspass": "bluemtns-blackheath",
-  "bluemtns-bellsupercrag": "bluemtns-blackheath",
-  "bluemtns-cosmiccounty": "bluemtns-blackheath",
-  "bluemtns-mtyork-sunny": "bluemtns-blackheath",
-  "bluemtns-mtyork-shady": "bluemtns-blackheath",
-  // — Blue Mountains sub-crags (Katoomba cluster) —
-  "bluemtns-diamondfalls-access": "bluemtns-katoomba",
-  "bluemtns-diamondfalls-mrwall": "bluemtns-katoomba",
-  "bluemtns-sublimepoint": "bluemtns-katoomba",
-  "bluemtns-perrys": "bluemtns-blackheath",
-  // — New South Wales —
-  "nowra-main": "nowra",
-  "nowra-thompsons": "nowra",
-  "nowra-lot33": "nowra",
-  "nowra-grotto": "nowra",
-  "nowra-lair": "nowra",
-  "bluemtns-main": "bluemtns-blackheath",
-  "bluemtns-centennial": "bluemtns-blackheath",
-  "bluemtns-shipley": "bluemtns-blackheath",
-  "bluemtns-piddington": "bluemtns-katoomba",
-  "bluemtns-yorke": "bluemtns-katoomba",
-  "bluemtns-diamond": "bluemtns-katoomba",
-  "booroomba-main": "booroomba",
-  "booroomba-north": "booroomba",
-  "booroomba-south": "booroomba",
-  "bungonia-main": "bungonia",
-  "pointperp-main": "point-perp",
-  "pointperp-lighthouse": "point-perp",
-  "pointperp-bayside": "point-perp",
-  "lindfield-main": "lindfield",
-

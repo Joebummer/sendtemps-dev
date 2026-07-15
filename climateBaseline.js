@@ -626,6 +626,20 @@ export const CLIMATE_PROFILES = {
     },
   },
 };
+  // — Blue Mountains sub-crags (Blackheath cluster) —
+  "bluemtns-medlowbath": "bluemtns-blackheath",
+  "bluemtns-wavewall": "bluemtns-blackheath",
+  "bluemtns-junketpumper": "bluemtns-blackheath",
+  "bluemtns-porterspass": "bluemtns-blackheath",
+  "bluemtns-bellsupercrag": "bluemtns-blackheath",
+  "bluemtns-cosmiccounty": "bluemtns-blackheath",
+  "bluemtns-mtyork-sunny": "bluemtns-blackheath",
+  "bluemtns-mtyork-shady": "bluemtns-blackheath",
+  // — Blue Mountains sub-crags (Katoomba cluster) —
+  "bluemtns-diamondfalls-access": "bluemtns-katoomba",
+  "bluemtns-diamondfalls-mrwall": "bluemtns-katoomba",
+  "bluemtns-sublimepoint": "bluemtns-katoomba",
+  "bluemtns-perrys": "bluemtns-blackheath",
   // — New South Wales —
   "nowra-main": "nowra",
   "nowra-thompsons": "nowra",

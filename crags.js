@@ -1202,7 +1202,7 @@ export const CRAGS = [
     driveTime: '3h45',
     trip: 'both',
     state: 'VIC',
-    notes: 'The northern amphitheatre surrounding Taipan Wall and Hollow Mountain — highest concentration of bolted sport in the Grampians. Key walls: Van Diemen's Land, Bad Moon Rising, Tribute Wall (all N-facing, grades 17–25+), Cut Lunch (steep 21–25), West Flank (easy access, grades 18+). Considered the top winter-sun destination in the Grampians — full sun most of the day on N-facing walls. Same Taipan/Gunigalg access rules apply; check current sub-wall status. Raptor nesting watch Aug–Dec.',
+    notes: "The northern amphitheatre surrounding Taipan Wall and Hollow Mountain — highest concentration of bolted sport in the Grampians. Key walls: Van Diemen's Land, Bad Moon Rising, Tribute Wall (all N-facing, grades 17–25+), Cut Lunch (steep 21–25), West Flank (easy access, grades 18+). Considered the top winter-sun destination in the Grampians — full sun most of the day on N-facing walls. Same Taipan/Gunigalg access rules apply; check current sub-wall status. Raptor nesting watch Aug–Dec.",
     sunOnWall: 'N-facing walls: most of the day (winter sun all day)',
     bestIn: 'cold/cool — premier winter destination',
   },

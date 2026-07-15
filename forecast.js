@@ -112,6 +112,7 @@ export async function fetchAllForecasts() {
         // greasy/damp territory — weighted by rockType-driven dryRating.
         climbHumidity: computeClimbHumidity(crag, f.hourly, date),
         sunshine: f.daily.sunshine_duration[di], // seconds
+        cloudMean: daytimeCloudMean(f.hourly, date), // mean daytime cloud cover %
         weatherCode: f.daily.weathercode[di],
         rainWindows: extractRainWindows(f.hourly, date),
         // Morning dryness (8am) and afternoon dryness (2pm) for this day,
@@ -367,6 +368,24 @@ function computeSolarExposure(crag, hourly, dateStr) {
     sunHoursTotal: total,
   };
 }
+
+// Mean cloud cover (%) across daytime hours (8am–6pm) for a given date.
+// Used to surface an 'overcast' callout when heavy cloud suppresses sun bonuses.
+function daytimeCloudMean(hourly, dateStr) {
+  if (!hourly?.time) return null;
+  let sum = 0, count = 0;
+  for (let i = 0; i < hourly.time.length; i++) {
+    const t = hourly.time[i];
+    if (!t.startsWith(dateStr)) continue;
+    const hour = parseInt(t.slice(11, 13), 10);
+    if (hour < 8 || hour >= 18) continue;
+    sum += hourly.cloudcover?.[i] ?? 50;
+    count++;
+  }
+  return count > 0 ? sum / count : null;
+}
+
+
 
 // Smallest angle (0–180°) between two compass bearings.
 function angularDistance(a, b) {
@@ -1292,6 +1311,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   const warmHours = day.sunHoursOnWallWarm ?? 0;
   const coolHours = day.sunHoursOnWallCool ?? 0;
   const onWallHours = day.sunHoursOnWall ?? 0;
+  const cloudMean = day.cloudMean ?? null; // mean daytime cloud cover %
 
   // Hot day (>22°C): each hour of direct sun on the wall during the hottest
   // part of the day adds a penalty. Capped so it can't dominate the score.
@@ -1562,6 +1582,31 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     if (bon > 0) {
       score += bon;
       add('sun', 'Sunshine bonus', +bon, `${Math.round(sunHours)}h sun overall · wall lit for ${onWallHours.toFixed(1)}h`);
+    }
+  }
+
+  // — Cloud cover callout —
+  // Surface an 'overcast' reason when heavy daytime cloud is suppressing what
+  // would otherwise be a sun bonus or sun-trap. Only fires when:
+  //   • cloudMean is available
+  //   • it's meaningfully overcast (>65% mean daytime cloud)
+  //   • the wall would geometrically see sun (aspect is concrete, not all-day shade)
+  //   • it's a day where sun matters: cool or mild temp, not already raining
+  // Three tiers: mostly overcast (65-80%), heavily overcast (80-90%), socked in (90%+).
+  if (cloudMean != null && cloudMean > 65 && hasConcreteAspect(crag.aspect) && crag.shade !== 'all-day') {
+    const noRain = (day.precipProb ?? 0) < 50;
+    const sunMatters = t < 22; // hot days don't need sun callout
+    if (noRain && sunMatters) {
+      if (cloudMean > 90) {
+        reasons.push('socked in');
+        add('sun', 'Overcast', 0, `${Math.round(cloudMean)}% mean daytime cloud cover — wall in full overcast, no useful sun`);
+      } else if (cloudMean > 80) {
+        reasons.push('overcast');
+        add('sun', 'Overcast', 0, `${Math.round(cloudMean)}% mean daytime cloud — heavy cloud suppressing sun on wall`);
+      } else {
+        reasons.push('mostly cloudy');
+        add('sun', 'Mostly cloudy', 0, `${Math.round(cloudMean)}% mean daytime cloud — sun limited, aspect less relevant`);
+      }
     }
   }
 

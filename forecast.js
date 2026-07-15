@@ -1349,6 +1349,33 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     }
   }
 
+  // — Cloud kills sun-trap penalty —
+  // On N/NE-facing crags whose appeal depends entirely on winter sun, heavy
+  // overcast is not just a neutral modifier — it actively makes the crag cold
+  // and grim. The sun-trap bonus already shrinks to zero via cloud-adjusted
+  // sunHoursOnWall, but we need an *extra* penalty to reflect that the whole
+  // reason to visit the crag (warmth) has been eliminated.
+  //
+  // Fires when:
+  //   • N or NE aspect (sun-dependent orientation)
+  //   • cold or cool day (t < 16°C — sun is the comfort mechanism)
+  //   • cloudMean > 70% (heavy enough to kill direct sun)
+  //   • no rain (rain is already penalised separately)
+  //   • crag shade is not already 'all-day' (would be redundant)
+  if (cloudMean != null && cloudMean > 70 && t < 16 &&
+      (crag.aspect === 'N' || crag.aspect === 'NE' || crag.aspect === 'NW') &&
+      crag.shade !== 'all-day' && (day.precipProb ?? 0) < 50) {
+    // Scale: 70–80% cloud → -4, 80–90% → -7, 90%+ → -10
+    // Steeper on colder days (t < 8 = full effect, t 8–16 = 70% effect)
+    const cloudSeverity = cloudMean > 90 ? 10 : cloudMean > 80 ? 7 : 4;
+    const coldMultiplier = t < 8 ? 1.0 : 0.7;
+    const pen = Math.round(cloudSeverity * coldMultiplier);
+    score -= pen;
+    reasons.push('overcast sun-trap');
+    add('sun', 'Cloud kills sun-trap', -pen,
+      `${Math.round(cloudMean)}% daytime cloud on a N-facing wall — no direct sun, loses its warmth advantage`);
+  }
+
   // Cold day (<8°C): morning sun on the wall is gold; full shade is grim.
   // Full bonus requires 2h+ of sun; 1–2h earns a partial bonus; <1h nothing.
   // tMax floor: if the day can't reach 10°C even with full sun, the wall stays

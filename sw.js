@@ -8,7 +8,6 @@
 // Cache name is bumped per release so old shells get evicted on activate.
 
 const CACHE = 'sendtemps-v64-0';
-const RUNTIME_CACHE = 'sendtemps-runtime-v64-0';
 
 // Static shell — paths are app-relative so this works under the
 // /sendtemps/ GitHub Pages prefix as well as a custom-domain root.
@@ -32,12 +31,17 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// Stable key for runtime cache — never deleted on SW update so cached
+// forecast responses survive version bumps and rate-limit windows.
+const RUNTIME_CACHE_STABLE = 'sendtemps-runtime-stable';
+
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(
       keys
-        .filter((k) => k !== CACHE && k !== RUNTIME_CACHE)
+        // Delete old shell caches but always keep the stable runtime cache
+        .filter((k) => k !== CACHE && k !== RUNTIME_CACHE_STABLE)
         .map((k) => caches.delete(k)),
     );
     await self.clients.claim();
@@ -56,8 +60,14 @@ self.addEventListener('fetch', (event) => {
       try {
         const fresh = await fetch(req);
         if (fresh && fresh.ok) {
-          const cache = await caches.open(RUNTIME_CACHE);
+          const cache = await caches.open(RUNTIME_CACHE_STABLE);
           cache.put(req, fresh.clone());
+          return fresh;
+        }
+        // 429 rate-limit — serve cached data rather than showing an error
+        if (fresh.status === 429) {
+          const cached = await caches.match(req);
+          if (cached) return cached;
         }
         return fresh;
       } catch (_) {

@@ -11,3 +11,10 @@ arap_entities.txt
 arap_remaining.txt
 yy_std_entities.txt
 arap_new_entities.txt
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example

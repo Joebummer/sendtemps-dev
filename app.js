@@ -134,6 +134,7 @@ function showUpdateBanner() {
 // ---- App state ----
 const HIDDEN_KEY = 'sendtemps:hidden';
 const FAV_KEY = 'sendtemps:favourites';
+const FAV_THRESHOLD_KEY = 'sendtemps:fav_thresholds'; // { [cragId]: number }
 // Access browser storage indirectly so static analyzers don't flag this PWA.
 // The published site (sendtemps.pplx.app) runs outside the iframe sandbox where
 // the storage API is fully available; this is a real iOS home-screen PWA.
@@ -189,6 +190,26 @@ function toggleFavourite(cragId) {
   else state.favouriteCrags.add(cragId);
   saveFavourites();
   renderDay();
+}
+
+function loadFavThresholds() {
+  try {
+    if (!_storage) return {};
+    return JSON.parse(_storage.getItem(FAV_THRESHOLD_KEY) || '{}');
+  } catch { return {}; }
+}
+
+function saveFavThreshold(cragId, value) {
+  try {
+    if (!_storage) return;
+    const all = loadFavThresholds();
+    all[cragId] = value;
+    _storage.setItem(FAV_THRESHOLD_KEY, JSON.stringify(all));
+  } catch { /* storage blocked */ }
+}
+
+function getFavThreshold(cragId) {
+  return loadFavThresholds()[cragId] ?? 75;
 }
 
 const REGION_FILTER_KEY = 'st_regionFilter';
@@ -629,6 +650,19 @@ function renderSplitRanked(dayRows, destinations) {
     });
   });
 
+  // Favourite alert threshold inputs — save on change
+  list.querySelectorAll('.fav-threshold-input').forEach(input => {
+    input.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const val = Math.min(100, Math.max(50, parseInt(input.value, 10) || 75));
+      input.value = val;
+      saveFavThreshold(input.dataset.thresholdId, val);
+    });
+    // Prevent card expand/collapse on click inside the input
+    input.addEventListener('click', e => e.stopPropagation());
+    input.addEventListener('pointerdown', e => e.stopPropagation());
+  });
+
   // "N hidden — show" disclosure footer.
   // "Set dates" button — enter trip range-pick mode.
   const setDatesBtn = list.querySelector('#trip-set-dates-btn');
@@ -712,6 +746,22 @@ function renderSplitRanked(dayRows, destinations) {
       e.stopPropagation();
       e.preventDefault();
       shareForecast(btn.dataset.shareId);
+    });
+  });
+
+  // Best weekend callout share button
+  list.querySelectorAll('.best-weekend-share').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const text = btn.dataset.shareText || '';
+      if (navigator.share) {
+        try { await navigator.share({ text }); } catch { /* cancelled */ }
+      } else {
+        await navigator.clipboard.writeText(text).catch(() => {});
+        const orig = btn.innerHTML;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.innerHTML = orig; }, 1800);
+      }
     });
   });
 
@@ -801,6 +851,48 @@ function renderTripDateRange() {
   `;
 }
 
+function renderBestWeekendCallout(destinations) {
+  if (!destinations.length) return '';
+  const top = destinations[0];
+  const score = top.tripScore;
+  const band = scoreBand(score);
+
+  // Build a one-line reason from the top destination's best day
+  const bestDay = top.bestForToday;
+  const reasons = bestDay?.reasons || [];
+  const positives = reasons.filter(r => !r.startsWith('−') && !r.startsWith('-') && !r.toLowerCase().includes('penalty'));
+  const reasonLine = positives.slice(0, 2).join(' · ') || 'Good conditions forecast';
+
+  // Date range label
+  const dates = state.tripDates;
+  const startLabel = dates[0] ? new Date(dates[0]).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+  const endLabel   = dates[dates.length - 1] ? new Date(dates[dates.length - 1]).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+  const rangeLabel = startLabel && endLabel && startLabel !== endLabel ? `${startLabel} – ${endLabel}` : startLabel;
+
+  const shareText = `${top.destination} looks like the best weekend destination — scoring ${score}/100 on SendTemps. ${reasonLine}. sendtemps.app`;
+
+  return `
+    <div class="best-weekend-callout">
+      <div class="best-weekend-inner">
+        <div class="best-weekend-label">Best this weekend</div>
+        <div class="best-weekend-destination">${escapeHtml(top.destination)}</div>
+        <div class="best-weekend-meta">
+          <span class="score-mini ${band.color}">${score}</span>
+          <span class="best-weekend-reason">${escapeHtml(reasonLine)}</span>
+        </div>
+        ${rangeLabel ? `<div class="best-weekend-dates">${escapeHtml(rangeLabel)}</div>` : ''}
+      </div>
+      <button type="button" class="best-weekend-share" data-share-text="${escapeHtml(shareText)}" aria-label="Share this weekend pick">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+        </svg>
+        Share
+      </button>
+    </div>
+  `;
+}
+
 function renderWeekendSection(title, subtitle, destinations, hiddenItems = []) {
   const collapsed = getSectionCollapsed()['weekend'] ?? false;
   return `
@@ -815,6 +907,7 @@ function renderWeekendSection(title, subtitle, destinations, hiddenItems = []) {
         </button>
         ${renderTripDateRange()}
       </div>
+      ${destinations.length ? renderBestWeekendCallout(destinations) : ''}
       <div class="category-list" id="section-list-weekend">
         ${destinations.map((dest, i) => renderDestinationCard(dest, i === 0)).join('')}
       </div>
@@ -842,9 +935,11 @@ function renderHideButton(id, label) {
 function renderFavouriteButton(id, label) {
   const active = state.favouriteCrags.has(id);
   const aria = active ? `Unpin ${label}` : `Pin ${label} to the top`;
+  const threshold = getFavThreshold(id);
+  const safeId = escapeHtml(id);
   return `
     <button type="button" class="favourite-btn${active ? ' active' : ''}"
-      data-fav-id="${escapeHtml(id)}"
+      data-fav-id="${safeId}"
       aria-label="${escapeHtml(aria)}"
       aria-pressed="${active}"
       title="${escapeHtml(aria)}">
@@ -852,6 +947,14 @@ function renderFavouriteButton(id, label) {
         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
       </svg>
     </button>
+    ${active ? `
+    <div class="fav-threshold" data-fav-threshold-id="${safeId}">
+      <label class="fav-threshold-label" for="thresh-${safeId}">Alert me when score ≥</label>
+      <input type="number" id="thresh-${safeId}" class="fav-threshold-input"
+        min="50" max="100" step="5" value="${threshold}"
+        data-threshold-id="${safeId}"
+        aria-label="Alert threshold for ${escapeHtml(label)}" />
+    </div>` : ''}
   `;
 }
 

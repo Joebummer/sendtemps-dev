@@ -2005,3 +2005,138 @@ html[data-theme="dark"] .reason-tag-bestfrom {
   border-color: var(--border, #393836);
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
+
+/* ── Best weekend callout ─────────────────────────────────────────────────── */
+.best-weekend-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  background: var(--surface, #F9F8F5);
+  border: 1px solid var(--border, #D4D1CA);
+  border-left: 3px solid var(--primary, #2d5a27);
+  border-radius: 10px;
+}
+
+.best-weekend-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary, #2d5a27);
+  margin-bottom: 3px;
+}
+
+.best-weekend-destination {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text, #28251D);
+  line-height: 1.2;
+}
+
+.best-weekend-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.best-weekend-reason {
+  font-size: 13px;
+  color: var(--text-muted, #7A7974);
+}
+
+.best-weekend-dates {
+  font-size: 12px;
+  color: var(--text-faint, #BAB9B4);
+  margin-top: 4px;
+}
+
+.best-weekend-share {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border: 1px solid var(--border, #D4D1CA);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted, #7A7974);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.best-weekend-share:hover {
+  background: var(--surface, #f0ede6);
+  color: var(--text, #28251D);
+}
+
+[data-theme="dark"] .best-weekend-callout {
+  background: var(--surface, #1C1B19);
+  border-color: var(--border, #393836);
+  border-left-color: #6DAA45;
+}
+
+[data-theme="dark"] .best-weekend-label {
+  color: #6DAA45;
+}
+
+[data-theme="dark"] .best-weekend-destination {
+  color: var(--text, #CDCCCA);
+}
+
+/* ── Favourite alert threshold ────────────────────────────────────────────── */
+.fav-threshold {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  background: var(--surface, #F9F8F5);
+  border: 1px solid var(--border, #D4D1CA);
+  border-radius: 6px;
+  position: absolute;
+  top: 36px;
+  left: 2px;
+  z-index: 10;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.fav-threshold-label {
+  font-size: 12px;
+  color: var(--text-muted, #7A7974);
+}
+
+.fav-threshold-input {
+  width: 48px;
+  padding: 3px 5px;
+  border: 1px solid var(--border, #D4D1CA);
+  border-radius: 4px;
+  background: var(--bg, #F7F6F2);
+  color: var(--text, #28251D);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.fav-threshold-input::-webkit-outer-spin-button,
+.fav-threshold-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+
+[data-theme="dark"] .fav-threshold {
+  background: var(--surface, #1C1B19);
+  border-color: var(--border, #393836);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+[data-theme="dark"] .fav-threshold-input {
+  background: var(--bg, #171614);
+  color: var(--text, #CDCCCA);
+  border-color: var(--border, #393836);
+}

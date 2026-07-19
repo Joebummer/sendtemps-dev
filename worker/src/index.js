@@ -289,9 +289,53 @@ async function checkRareWindows() {
   return windows;
 }
 
+// ─── Forecast proxy + edge cache ──────────────────────────────────────────────
+
+const FORECAST_CACHE_TTL = 900; // 15 minutes — forecasts don't need to be fresher than this
+
+async function handleForecastProxy(request, url, corsHeaders, ctx) {
+  const cache = caches.default;
+  // The query string (batched crag lat/lons) is identical for every client on
+  // the same app version, so this key is shared across all of them.
+  const cacheKey = new Request(url.toString(), { method: 'GET' });
+
+  const cached = await cache.match(cacheKey);
+  if (cached) {
+    const res = new Response(cached.body, cached);
+    for (const [k, v] of Object.entries(corsHeaders)) res.headers.set(k, v);
+    res.headers.set('X-SendTemps-Cache', 'HIT');
+    return res;
+  }
+
+  const upstreamUrl = `https://api.open-meteo.com/v1/forecast?${url.searchParams.toString()}`;
+  const upstream = await fetch(upstreamUrl);
+
+  if (!upstream.ok) {
+    // Upstream is failing (e.g. 429) and we have nothing cached yet — pass the
+    // status through so the client's existing retry/backoff still applies.
+    return new Response(await upstream.text(), { status: upstream.status, headers: corsHeaders });
+  }
+
+  const body = await upstream.text();
+  const response = new Response(body, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      'Cache-Control': `public, max-age=${FORECAST_CACHE_TTL}`,
+      'X-SendTemps-Cache': 'MISS',
+    },
+  });
+
+  // Store for the next request without delaying this one.
+  if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, response.clone()));
+  else await cache.put(cacheKey, response.clone());
+
+  return response;
+}
+
 // ─── Request handler ──────────────────────────────────────────────────────────
 
-async function handleRequest(request, env) {
+async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
   const { pathname } = url;
 
@@ -310,6 +354,18 @@ async function handleRequest(request, env) {
     'Access-Control-Allow-Origin': 'https://sendtemps.app',
     'Content-Type': 'application/json',
   };
+
+  // GET /forecast — proxies the Open-Meteo call all clients make on load,
+  // with an edge cache in front of it. Without this, every phone/iPad hits
+  // Open-Meteo directly and gets subject to Open-Meteo's own per-IP rate
+  // limit — which bites unpredictably depending on the device's network
+  // (mobile carrier NAT, iCloud Private Relay egress pool, etc.), so one
+  // device can 429 while another on the same wifi is fine. Proxying through
+  // here means every client shares one cached response per ~15 min window,
+  // fetched from Cloudflare's own IPs instead of the client's.
+  if (pathname === '/forecast' && request.method === 'GET') {
+    return handleForecastProxy(request, url, corsHeaders, ctx);
+  }
 
   if (pathname === '/subscribe' && request.method === 'POST') {
     const { subscription, state, favourites, thresholds } = await request.json();
@@ -565,11 +621,12 @@ async function handleCron(env) {
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 export default {
-  async fetch(request, env) {
-    return handleRequest(request, env);
+  async fetch(request, env, ctx) {
+    return handleRequest(request, env, ctx);
   },
   async scheduled(event, env) {
     await handleCron(env);
   },
 };
 // redeployed 2026-07-19T09:04:27Z — VAPID_SUBJECT added
+// added GET /forecast edge-cached proxy — fixes per-device Open-Meteo 429s

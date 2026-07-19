@@ -7,15 +7,15 @@
 //
 // Cache name is bumped per release so old shells get evicted on activate.
 
-const CACHE = 'sendtemps-v64-0';
+const CACHE = 'sendtemps-v64-2';
 
 // Static shell — paths are app-relative so this works under the
 // /sendtemps/ GitHub Pages prefix as well as a custom-domain root.
 const SHELL = [
   './',
   './index.html',
-  './app.js?v=64.1',
-  './forecast.js?v=50',
+  './app.js?v=64.2',
+  './forecast.js?v=54',
   './crags.js?v=25',
   './style.css?v=64.1',
   './manifest.webmanifest',
@@ -55,7 +55,13 @@ self.addEventListener('fetch', (event) => {
 
   // Forecast API — network-first so fresh data wins, fall back to last
   // successful response when offline so the UI still loads at the crag.
-  if (url.hostname === 'api.open-meteo.com') {
+  // Covers both the legacy direct Open-Meteo call and the current
+  // Worker-proxied /forecast endpoint (api.sendtemps.app), since the app
+  // now fetches forecasts through the Worker's edge cache instead of
+  // calling Open-Meteo directly from the client.
+  const isForecastCall = url.hostname === 'api.open-meteo.com'
+    || (url.hostname === 'api.sendtemps.app' && url.pathname === '/forecast');
+  if (isForecastCall) {
     event.respondWith((async () => {
       try {
         const fresh = await fetch(req);

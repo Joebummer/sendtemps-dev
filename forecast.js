@@ -4,7 +4,11 @@
 import { CRAGS } from './crags.js?v=33';
 import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 
-const API = 'https://api.open-meteo.com/v1/forecast';
+// Routed through the SendTemps Worker (not Open-Meteo directly) so every
+// client shares one edge-cached response instead of each device/network
+// being subject to Open-Meteo's own per-IP rate limit. See worker/src/index.js
+// GET /forecast.
+const API = 'https://api.sendtemps.app/forecast';
 
 // Fetch one batched request for ALL crags at once — Open-Meteo accepts comma-separated coords.
 export async function fetchAllForecasts() {

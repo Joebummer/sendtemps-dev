@@ -1,8 +1,8 @@
 {
-  "name": "SendTemps \u2014 Melbourne Weekend Forecast",
+  "name": "SendTemps — Australian Climbing Forecast",
   "short_name": "SendTemps",
-  "description": "Weekend climbing forecast across Melbourne crags",
-  "start_url": ".",
+  "description": "Climbing conditions forecast across Australia — score and rank crags by weather",
+  "start_url": "https://sendtemps.app/",
   "display": "standalone",
   "background_color": "#2d5a27",
   "theme_color": "#2d5a27",

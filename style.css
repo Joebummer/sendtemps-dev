@@ -1935,3 +1935,73 @@ html[data-theme="dark"] .reason-tag-bestfrom {
 [data-theme="dark"] .notify-toggle.notify-active {
   color: var(--primary-light, #6DAA45);
 }
+
+/* ── Notify popover ───────────────────────────────────────────────────────── */
+#notify-popover {
+  position: absolute;
+  z-index: 200;
+  width: 260px;
+  background: var(--surface, #F9F8F5);
+  border: 1px solid var(--border, #D4D1CA);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.notify-pop-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text, #28251D);
+  margin: 0 0 6px;
+}
+
+.notify-pop-body {
+  font-size: 13px;
+  color: var(--text-muted, #7A7974);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+.notify-pop-action {
+  display: block;
+  width: 100%;
+  padding: 9px 0;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.notify-pop-on {
+  background: var(--primary, #2d5a27);
+  color: #fff;
+}
+
+.notify-pop-off {
+  background: transparent;
+  color: var(--text-muted, #7A7974);
+  border: 1px solid var(--border, #D4D1CA);
+}
+
+.notify-pop-action:hover { opacity: 0.85; }
+
+.notify-pop-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: var(--text-faint, #BAB9B4);
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+[data-theme="dark"] #notify-popover {
+  background: var(--surface, #1C1B19);
+  border-color: var(--border, #393836);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}

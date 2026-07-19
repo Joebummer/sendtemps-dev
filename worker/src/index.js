@@ -100,7 +100,7 @@ async function encryptPayload(payloadStr, p256dhB64, authB64) {
     'raw',
     base64urlToUint8Array(p256dhB64),
     { name: 'ECDH', namedCurve: 'P-256' },
-    false,
+    true,  // must be extractable for HKDF info string
     []
   );
 

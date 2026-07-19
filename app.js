@@ -296,6 +296,21 @@ function loadRegionFilter() {
   return _storage.getItem(REGION_FILTER_KEY) || 'ALL';
 }
 
+// Debug helper: visiting ?resetRegion clears the saved region preference so
+// the location-detection flow runs again on this load, as if the app had
+// never been opened on this device/browser before. Not linked from the UI —
+// it's just for testing the detection prompt without wiping all site data.
+// Runs immediately (before `state` is built below) and strips itself from
+// the URL so a refresh doesn't re-trigger it.
+(function resetRegionFromUrl() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('resetRegion')) return;
+  try { _storage.removeItem(REGION_FILTER_KEY); } catch { /* storage blocked */ }
+  params.delete('resetRegion');
+  const clean = params.toString();
+  history.replaceState(null, '', location.pathname + (clean ? `?${clean}` : ''));
+})();
+
 // ---- Region auto-detection (first launch only) ----
 // Fetching every crag nationwide on every load is the biggest single cost in
 // startup time, since the forecast request (and its response) scales with

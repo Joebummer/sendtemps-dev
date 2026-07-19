@@ -544,3 +544,4 @@ export default {
     await handleCron(env);
   },
 };
+// redeployed 2026-07-19T09:04:27Z — VAPID_SUBJECT added

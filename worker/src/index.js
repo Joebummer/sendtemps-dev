@@ -368,16 +368,24 @@ async function getCragScoreToday(lat, lon) {
     const precipProb = d.precipitation_probability_max[0];
     const wind = d.windspeed_10m_max[0];
 
-    // Simple heuristic score (mirrors app logic directionally)
-    let score = 70;
-    if (tMax >= 18 && tMax <= 28) score += 10;
-    else if (tMax < 10 || tMax > 35) score -= 20;
-    else if (tMax < 14 || tMax > 32) score -= 10;
-    if (precip > 2) score -= 30;
-    else if (precip > 0.5) score -= 15;
-    if (precipProb > 60) score -= 10;
-    if (wind > 40) score -= 15;
-    else if (wind > 25) score -= 8;
+    // Heuristic score — penalty-only model starting from 100.
+    // Matches the app's directional intent: good days lose few/no points.
+    let score = 100;
+    // Temperature penalties
+    if (tMax < 8 || tMax > 38) score -= 40;
+    else if (tMax < 12 || tMax > 35) score -= 20;
+    else if (tMax < 15 || tMax > 32) score -= 8;
+    // Rain penalties
+    if (precip > 5) score -= 40;
+    else if (precip > 2) score -= 25;
+    else if (precip > 0.5) score -= 12;
+    // Rain probability penalty
+    if (precipProb > 70) score -= 15;
+    else if (precipProb > 40) score -= 8;
+    // Wind penalties
+    if (wind > 50) score -= 20;
+    else if (wind > 35) score -= 12;
+    else if (wind > 25) score -= 5;
     return Math.max(0, Math.min(100, Math.round(score)));
   } catch { return null; }
 }

@@ -9,7 +9,8 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=54';
+} from './forecast.js?v=55';
+import { CRAGS } from './crags.js?v=33';
 
 const API_BASE = 'https://api.sendtemps.app';
 
@@ -295,6 +296,75 @@ function loadRegionFilter() {
   return _storage.getItem(REGION_FILTER_KEY) || 'ALL';
 }
 
+// ---- Region auto-detection (first launch only) ----
+// Fetching every crag nationwide on every load is the biggest single cost in
+// startup time, since the forecast request (and its response) scales with
+// crag count. If someone has never picked a region filter, try to guess their
+// home state from their location so the very first fetch — and every one
+// after it — can be scoped to just that state instead of all five. This only
+// ever runs once: whatever it resolves to (detected, or the fallback) gets
+// saved immediately, so later launches skip straight to the scoped fetch.
+const GEO_TIMEOUT_MS = 5000;
+const REGION_FALLBACK = 'VIC'; // used if location is denied/unavailable/times out
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const toRad = d => d * Math.PI / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Nearest-crag lookup doubles as a nearest-state lookup — no separate
+// geocoding API or state boundary data needed.
+function nearestState(lat, lon) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const crag of CRAGS) {
+    const d = haversineKm(lat, lon, crag.lat, crag.lon);
+    if (d < bestDist) { bestDist = d; best = crag.state; }
+  }
+  return best;
+}
+
+function detectRegionFromLocation() {
+  return new Promise((resolve) => {
+    if (!('geolocation' in navigator)) { resolve(null); return; }
+    let settled = false;
+    const done = (region) => {
+      if (settled) return;
+      settled = true;
+      resolve(region);
+    };
+    const timer = setTimeout(() => done(null), GEO_TIMEOUT_MS);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(timer);
+        done(nearestState(pos.coords.latitude, pos.coords.longitude));
+      },
+      () => {
+        clearTimeout(timer);
+        done(null); // denied or unavailable
+      },
+      { timeout: GEO_TIMEOUT_MS, maximumAge: 3600000 }
+    );
+  });
+}
+
+// Resolves the region to scope the very first fetch to. Respects any
+// existing explicit preference (including 'ALL') without touching it —
+// this only kicks in the first time the app has ever run on this device.
+async function resolveInitialRegion() {
+  const stored = _storage.getItem(REGION_FILTER_KEY);
+  if (stored) return stored;
+  const detected = await detectRegionFromLocation();
+  const region = detected || REGION_FALLBACK;
+  try { _storage.setItem(REGION_FILTER_KEY, region); } catch { /* storage blocked */ }
+  return region;
+}
+
 const TRIP_START_KEY = 'st_tripStart';
 const TRIP_END_KEY   = 'st_tripEnd';
 const SECTION_COLLAPSED_KEY = 'st_sectionCollapsed';
@@ -358,10 +428,16 @@ function renderRegionFilter() {
   `).join('');
   bar.querySelectorAll('.region-pill').forEach(btn => {
     btn.addEventListener('click', () => {
-      state.regionFilter = btn.dataset.region;
+      const nextRegion = btn.dataset.region;
+      if (nextRegion === state.regionFilter) return;
+      // Forecasts are now fetched per-region rather than all-at-once, so
+      // switching regions needs a real (short) re-fetch, not just a
+      // client-side re-render. `refresh()` shows the existing lightweight
+      // "Refreshing…" indicator while it runs.
+      state.regionFilter = nextRegion;
       _storage.setItem(REGION_FILTER_KEY, state.regionFilter);
       renderRegionFilter();
-      renderDay();
+      refresh({ reason: 'region-switch' });
     });
   });
 }
@@ -2318,7 +2394,7 @@ function activeTripDates() {
 }
 
 async function fetchAndRank() {
-  const forecasts = await fetchAllForecasts();
+  const forecasts = await fetchAllForecasts(state.regionFilter);
   const dates = weekDates();
   const tripDates = activeTripDates();
   const ranked = rankByDay(forecasts, dates);
@@ -2591,6 +2667,9 @@ async function init() {
   errorEl.hidden = true;
 
   try {
+    // Resolve the region to fetch before the very first request goes out —
+    // on a brand-new device this may prompt for location permission.
+    state.regionFilter = await resolveInitialRegion();
     const next = await fetchAndRank();
     Object.assign(state, next);
     state.activeDate = state.dates[0];

@@ -10,10 +10,17 @@ import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 // GET /forecast.
 const API = 'https://api.sendtemps.app/forecast';
 
-// Fetch one batched request for ALL crags at once — Open-Meteo accepts comma-separated coords.
-export async function fetchAllForecasts() {
-  const lats = CRAGS.map(c => c.lat).join(',');
-  const lons = CRAGS.map(c => c.lon).join(',');
+// Fetch one batched request for the crags in `region` at once — Open-Meteo
+// accepts comma-separated coords. `region` is a state code ('VIC', 'TAS', …)
+// or 'ALL' for every crag nationwide. Scoping to one state cuts the request
+// (and the edge-cached response) down to roughly a fifth of the full payload
+// for most states, which is where most of the load-time cost was coming from.
+export async function fetchAllForecasts(region = 'ALL') {
+  const scoped = region === 'ALL' ? CRAGS : CRAGS.filter(c => c.state === region);
+  // Safety net: never send an empty request (e.g. an unrecognised region code).
+  const targetCrags = scoped.length ? scoped : CRAGS;
+  const lats = targetCrags.map(c => c.lat).join(',');
+  const lons = targetCrags.map(c => c.lon).join(',');
   const params = new URLSearchParams({
     latitude: lats,
     longitude: lons,
@@ -66,7 +73,7 @@ export async function fetchAllForecasts() {
 
   // Map each crag to its forecast object
   const byId = {};
-  CRAGS.forEach((crag, i) => {
+  targetCrags.forEach((crag, i) => {
     const f = list[i];
     if (!f) return;
     // Compute hourly rock-dryness series for the whole hourly window.

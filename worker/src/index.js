@@ -337,8 +337,10 @@ const FORECAST_CACHE_TTL = 900; // 15 minutes — forecasts don't need to be fre
 
 async function handleForecastProxy(request, url, corsHeaders, ctx) {
   const cache = caches.default;
-  // The query string (batched crag lat/lons) is identical for every client on
-  // the same app version, so this key is shared across all of them.
+  // The query string (batched crag lat/lons) is identical for every client
+  // viewing the same region filter on the same app version, so this key is
+  // shared across all of them — one cache entry per region (VIC, TAS, …, or
+  // ALL) rather than one giant shared entry for the whole country.
   const cacheKey = new Request(url.toString(), { method: 'GET' });
 
   const cached = await cache.match(cacheKey);

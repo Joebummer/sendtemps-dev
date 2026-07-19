@@ -291,7 +291,7 @@ async function checkRareWindows() {
 
 // ─── Beta access codes ───────────────────────────────────────────────────────────
 
-async function handleRedeem(env, url, corsHeaders) {
+async function handleRedeem(env, url, corsHeaders, ctx) {
   const code = (url.searchParams.get('code') || '').trim();
   if (!code) {
     return new Response(JSON.stringify({ ok: false, error: 'missing code' }), { status: 400, headers: corsHeaders });
@@ -316,11 +316,14 @@ async function handleRedeem(env, url, corsHeaders) {
     return new Response(JSON.stringify({ ok: false }), { status: 200, headers: corsHeaders });
   }
 
-  // Fire-and-forget usage tracking — doesn't block the response.
-  supabaseRequest(env, 'PATCH', `/access_codes?code=eq.${encodeURIComponent(code)}`, {
+  // Usage tracking — doesn't block the response, but must be registered with
+  // waitUntil so Cloudflare doesn't kill it right after we return.
+  const trackUsage = supabaseRequest(env, 'PATCH', `/access_codes?code=eq.${encodeURIComponent(code)}`, {
     redeemed_count: (row.redeemed_count || 0) + 1,
     last_redeemed_at: new Date().toISOString(),
   }).catch(() => {});
+  if (ctx?.waitUntil) ctx.waitUntil(trackUsage);
+  else await trackUsage;
 
   return new Response(
     JSON.stringify({ ok: true, tier: row.tier, expires_at: row.expires_at }),
@@ -411,7 +414,7 @@ async function handleRequest(request, env, ctx) {
   // yet, so this is what app.js calls when someone opens a link like
   // sendtemps.app/?code=INTERSTATE-BETA to hand out Pro access for testing.
   if (pathname === '/redeem' && request.method === 'GET') {
-    return handleRedeem(env, url, corsHeaders);
+    return handleRedeem(env, url, corsHeaders, ctx);
   }
 
   if (pathname === '/subscribe' && request.method === 'POST') {

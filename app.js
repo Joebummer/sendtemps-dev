@@ -248,6 +248,7 @@ function renderRegionFilter() {
     { value: 'TAS', label: 'Tasmania' },
     { value: 'NSW', label: 'NSW' },
     { value: 'SA', label: 'SA' },
+    { value: 'WA', label: 'WA' },
   ];
   bar.innerHTML = options.map(opt => `
     <button class="region-pill${state.regionFilter === opt.value ? ' active' : ''}"

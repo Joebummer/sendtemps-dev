@@ -5,3 +5,5 @@ compatibility_flags = ["nodejs_compat"]
 
 [triggers]
 crons = ["0 21 * * *"]
+
+# Deployed via GitHub Actions

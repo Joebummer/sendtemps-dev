@@ -146,7 +146,6 @@ export const CRAG_TO_PROFILE = {
   "bluemtns-sublimepoint": "bluemtns-katoomba",
   "bluemtns-perrys": "bluemtns-blackheath",
   // — South Australia —
-  "sa-main": "sa-morialta",
   "morialta-main": "sa-morialta",
   "morialta-farcrag": "sa-morialta",
   "morialta-thornbuttress": "sa-morialta",

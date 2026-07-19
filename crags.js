@@ -3334,28 +3334,7 @@ export const CRAGS = [
 
   // — Morialta —
   {
-    id: 'sa-main',
-    name: 'South Australia',
-    area: 'South Australia',
-    lat: -34.9043,
-    lon: 138.7082,
-    elevation: 280,
-    aspect: 'mixed',
-    rockType: 'quartzite',
-    dryRating: 3,
-    idealTemp: [10, 22],
-    heatCap: 26,
-    shade: 'variable',
-    driveTime: '20 min',
-    baseCity: 'Adelaide',
-    trip: 'day',
-    state: 'SA',
-    notes: 'South Australia overview entry. Adelaide Hills crags are 20–40 min from the CBD. Flinders Ranges destinations (Moonarie, Warren Gorge) are 4.5–5.5h north — proper expeditions. SA has a hot Mediterranean climate: Dec–Mar can be brutal, best climbing is Apr–Oct.',
-    bestIn: 'cool',
-  },
-  {
     id: 'morialta-main',
-    parentId: 'sa-main',
     name: 'Morialta',
     area: 'Adelaide Hills',
     lat: -34.9043,
@@ -3377,7 +3356,7 @@ export const CRAGS = [
   },
   {
     id: 'morialta-farcrag',
-    parentId: 'sa-main',
+    parentId: 'morialta-main',
     name: 'Morialta — Far Crag',
     area: 'Adelaide Hills',
     lat: -34.9060,
@@ -3399,7 +3378,7 @@ export const CRAGS = [
   },
   {
     id: 'morialta-thornbuttress',
-    parentId: 'sa-main',
+    parentId: 'morialta-main',
     name: 'Morialta — Thorn Buttress',
     area: 'Adelaide Hills',
     lat: -34.9020,
@@ -3424,7 +3403,6 @@ export const CRAGS = [
   // — Norton Summit —
   {
     id: 'norton-summit',
-    parentId: 'sa-main',
     name: 'Norton Summit',
     area: 'Adelaide Hills',
     lat: -34.9229,
@@ -3449,7 +3427,6 @@ export const CRAGS = [
   // — Onkaparinga —
   {
     id: 'onkaparinga-main',
-    parentId: 'sa-main',
     name: 'Onkaparinga',
     area: 'Adelaide Hills',
     lat: -35.1623,
@@ -3471,7 +3448,7 @@ export const CRAGS = [
   },
   {
     id: 'onkaparinga-topcliff',
-    parentId: 'sa-main',
+    parentId: 'onkaparinga-main',
     name: 'Onkaparinga — Top Cliff',
     area: 'Adelaide Hills',
     lat: -35.1610,
@@ -3493,7 +3470,7 @@ export const CRAGS = [
   },
   {
     id: 'onkaparinga-redcliff',
-    parentId: 'sa-main',
+    parentId: 'onkaparinga-main',
     name: 'Onkaparinga — Red Cliff',
     area: 'Adelaide Hills',
     lat: -35.1635,
@@ -3517,7 +3494,6 @@ export const CRAGS = [
   // — Flinders Ranges —
   {
     id: 'moonarie-main',
-    parentId: 'sa-main',
     name: 'Moonarie',
     area: 'Flinders Ranges',
     lat: -31.6129,
@@ -3540,7 +3516,7 @@ export const CRAGS = [
   },
   {
     id: 'moonarie-greatwall',
-    parentId: 'sa-main',
+    parentId: 'moonarie-main',
     name: 'Moonarie — Great Wall',
     area: 'Flinders Ranges',
     lat: -31.6100,
@@ -3562,7 +3538,6 @@ export const CRAGS = [
   },
   {
     id: 'warren-gorge',
-    parentId: 'sa-main',
     name: 'Warren Gorge',
     area: 'Flinders Ranges',
     lat: -32.1860,
@@ -3586,7 +3561,6 @@ export const CRAGS = [
   // — Fleurieu Peninsula —
   {
     id: 'waitpinga',
-    parentId: 'sa-main',
     name: 'Waitpinga Cliffs',
     area: 'Fleurieu Peninsula',
     lat: -35.6181,
@@ -3609,7 +3583,6 @@ export const CRAGS = [
   },
   {
     id: 'second-valley',
-    parentId: 'sa-main',
     name: 'Second Valley',
     area: 'Fleurieu Peninsula',
     lat: -35.5101,
@@ -3652,7 +3625,13 @@ export const AREAS = {
   'Fortescue Bay': ['fortescue-main', 'fortescue-totem-pole', 'fortescue-candlestick', 'fortescue-moai'],
   'Cape Raoul': ['cape-raoul-main'],
   // — South Australia —
-  'South Australia': ['sa-main', 'morialta-main', 'morialta-farcrag', 'morialta-thornbuttress', 'norton-summit', 'onkaparinga-main', 'onkaparinga-topcliff', 'onkaparinga-redcliff', 'moonarie-main', 'moonarie-greatwall', 'warren-gorge', 'waitpinga', 'second-valley'],
+  'Morialta': ['morialta-main', 'morialta-farcrag', 'morialta-thornbuttress'],
+  'Norton Summit': ['norton-summit'],
+  'Onkaparinga': ['onkaparinga-main', 'onkaparinga-topcliff', 'onkaparinga-redcliff'],
+  'Moonarie': ['moonarie-main', 'moonarie-greatwall'],
+  'Warren Gorge': ['warren-gorge'],
+  'Waitpinga': ['waitpinga'],
+  'Second Valley': ['second-valley'],
   // — New South Wales —
   'Nowra': ['nowra-main', 'nowra-thompsons', 'nowra-lot33', 'nowra-grotto', 'nowra-lair'],
   'Blue Mountains': ['bluemtns-main', 'bluemtns-centennial', 'bluemtns-shipley', 'bluemtns-piddington', 'bluemtns-yorke', 'bluemtns-diamond', 'bluemtns-medlowbath', 'bluemtns-wavewall', 'bluemtns-junketpumper', 'bluemtns-porterspass', 'bluemtns-bellsupercrag', 'bluemtns-cosmiccounty', 'bluemtns-mtyork-sunny', 'bluemtns-mtyork-shady', 'bluemtns-diamondfalls-access', 'bluemtns-diamondfalls-mrwall', 'bluemtns-sublimepoint', 'bluemtns-perrys'],

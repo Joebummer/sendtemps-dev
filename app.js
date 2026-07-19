@@ -60,6 +60,17 @@ async function redeemCodeFromUrl() {
 
 redeemCodeFromUrl();
 
+// Free tier sees today + tomorrow only; Pro unlocks the full rolling window
+// (currently 7 days, see weekDates() in forecast.js). Locked tabs stay
+// visible but dimmed so free users can see there's more forecast to unlock,
+// rather than the days just disappearing.
+const FREE_FORECAST_DAYS = 2;
+
+function visibleDayCount() {
+  const total = (state.dates && state.dates.length) || FREE_FORECAST_DAYS;
+  return isPro() ? total : Math.min(FREE_FORECAST_DAYS, total);
+}
+
 // ---- Theme toggle ----
 (function () {
   const t = document.querySelector('[data-theme-toggle]');
@@ -355,14 +366,20 @@ function renderRegionFilter() {
   });
 }
 
+const LOCK_SVG = `<svg class="day-lock-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+
 function renderTabs() {
   const tabs = document.getElementById('day-tabs');
   const picking = state.pickingTripRange;
   // In range-pick mode, mark start/end/in-range tabs visually.
   const tripSet = new Set(activeTripDates());
+  // Free tier only browses the first N days by date (see FREE_FORECAST_DAYS) —
+  // trip-range picking is a separate feature and isn't restricted here.
+  const limit = visibleDayCount();
 
-  tabs.innerHTML = state.dates.map(date => {
-    const selected = !picking && date === state.activeDate;
+  tabs.innerHTML = state.dates.map((date, idx) => {
+    const locked = !picking && idx >= limit;
+    const selected = !picking && !locked && date === state.activeDate;
     const isStart  = picking && date === state.tripPickStart;
     const isEnd    = picking && date === state.tripEnd && state.tripPickStart;
     const inTrip   = !picking && tripSet.has(date);
@@ -372,12 +389,15 @@ function renderTabs() {
     if (selected) cls += ' selected';
     if (picking && isStart) cls += ' trip-pick-start';
     if (!picking && inTrip) cls += ' in-trip';
+    if (locked) cls += ' day-locked';
     return `
       <button class="${cls}" role="tab"
         aria-selected="${selected}"
+        aria-disabled="${locked}"
         data-date="${date}">
         <span class="day-name">${dayName}</span>
         <span class="day-date">${dateLabel}</span>
+        ${locked ? LOCK_SVG : ''}
         ${!picking && inTrip ? '<span class="trip-dot" aria-hidden="true"></span>' : ''}
       </button>
     `;
@@ -389,12 +409,47 @@ function renderTabs() {
         handleTripRangePick(btn.dataset.date);
         return;
       }
+      if (btn.classList.contains('day-locked')) {
+        showDayLockPopover(btn);
+        return;
+      }
       state.activeDate = btn.dataset.date;
       renderTabs();
       renderDay();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   });
+}
+
+function showDayLockPopover(btn) {
+  document.getElementById('day-lock-popover')?.remove();
+  document.getElementById('notify-popover')?.remove();
+
+  const pop = document.createElement('div');
+  pop.id = 'day-lock-popover';
+  pop.className = 'pro-popover';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', 'Full forecast — Pro');
+  pop.innerHTML = `
+    <p class="notify-pop-title">Full week forecast — Pro</p>
+    <p class="notify-pop-body">Free shows today + tomorrow. Pro unlocks the full ${state.dates.length}-day outlook. Got an invite link? Open it once and this unlocks automatically.</p>
+    <button class="notify-pop-close" id="day-lock-pop-close" aria-label="Close">✕</button>
+  `;
+
+  const rect = btn.getBoundingClientRect();
+  pop.style.top = `${rect.bottom + 8 + window.scrollY}px`;
+  pop.style.left = `${rect.left + window.scrollX}px`;
+  document.body.appendChild(pop);
+
+  document.getElementById('day-lock-pop-close').addEventListener('click', () => pop.remove());
+  document.addEventListener('pointerdown', function outside(e) {
+    if (!pop.contains(e.target) && e.target !== btn) {
+      pop.remove();
+      document.removeEventListener('pointerdown', outside);
+    }
+  });
+
+  return pop;
 }
 
 // Handle a tap during trip range-pick mode.
@@ -2408,8 +2463,13 @@ function applyDeepLinkFromUrl() {
   const dateStr = params.get('date');
   if (!cragId && !dateStr) return;
 
-  // Switch tab if the requested date is in the current rolling window.
-  if (dateStr && state.dates && state.dates.includes(dateStr) && state.activeDate !== dateStr) {
+  // Switch tab if the requested date is in the current rolling window AND
+  // within what this tier can see — otherwise a shared link could be used
+  // to peek at Pro-only days. Free users stay on today; the locked tab is
+  // still visible so they know there's more forecast behind the link.
+  const dateIdx = dateStr && state.dates ? state.dates.indexOf(dateStr) : -1;
+  const withinTier = dateIdx !== -1 && dateIdx < visibleDayCount();
+  if (withinTier && state.activeDate !== dateStr) {
     state.activeDate = dateStr;
     renderTabs();
     renderRegionFilter();
@@ -2600,9 +2660,11 @@ function showNotifyPopover(btn, mode, activeState) {
   // mode: 'locked' (free tier) | 'subscribed' | 'unsubscribed'
   // Remove any existing popover
   document.getElementById('notify-popover')?.remove();
+  document.getElementById('day-lock-popover')?.remove();
 
   const pop = document.createElement('div');
   pop.id = 'notify-popover';
+  pop.className = 'pro-popover';
   pop.setAttribute('role', 'dialog');
   pop.setAttribute('aria-label', 'Rare window alerts');
 

@@ -435,6 +435,14 @@ main {
 .day-tab[aria-selected='true'] .day-date { color: white; }
 .day-tab:active { transform: scale(0.97); }
 
+.day-tab.day-locked {
+  opacity: 0.5;
+}
+.day-tab.day-locked .day-lock-icon {
+  color: var(--color-text-muted);
+  margin-top: 1px;
+}
+
 /* ---- Day summary header ---- */
 .day-summary {
   margin-bottom: var(--space-5);
@@ -1941,8 +1949,9 @@ html[data-theme="dark"] .reason-tag-bestfrom {
   opacity: 0.45;
 }
 
-/* ── Notify popover ───────────────────────────────────────────────────────── */
-#notify-popover {
+/* ── Notify + Pro-upsell popovers ────────────────────────────────────────────── */
+#notify-popover,
+.pro-popover {
   position: absolute;
   z-index: 200;
   width: 260px;
@@ -2005,7 +2014,8 @@ html[data-theme="dark"] .reason-tag-bestfrom {
   padding: 2px 4px;
 }
 
-[data-theme="dark"] #notify-popover {
+[data-theme="dark"] #notify-popover,
+[data-theme="dark"] .pro-popover {
   background: var(--surface, #1C1B19);
   border-color: var(--border, #393836);
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);

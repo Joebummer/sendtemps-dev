@@ -289,6 +289,45 @@ async function checkRareWindows() {
   return windows;
 }
 
+// ─── Beta access codes ───────────────────────────────────────────────────────────
+
+async function handleRedeem(env, url, corsHeaders) {
+  const code = (url.searchParams.get('code') || '').trim();
+  if (!code) {
+    return new Response(JSON.stringify({ ok: false, error: 'missing code' }), { status: 400, headers: corsHeaders });
+  }
+
+  const res = await supabaseRequest(
+    env,
+    'GET',
+    `/access_codes?code=eq.${encodeURIComponent(code)}&select=code,tier,expires_at,active,redeemed_count&limit=1`,
+    null
+  );
+
+  if (!res.ok) {
+    return new Response(JSON.stringify({ ok: false, error: 'lookup failed' }), { status: 502, headers: corsHeaders });
+  }
+
+  const rows = await res.json();
+  const row = rows[0];
+
+  const valid = row && row.active && (!row.expires_at || new Date(row.expires_at).getTime() > Date.now());
+  if (!valid) {
+    return new Response(JSON.stringify({ ok: false }), { status: 200, headers: corsHeaders });
+  }
+
+  // Fire-and-forget usage tracking — doesn't block the response.
+  supabaseRequest(env, 'PATCH', `/access_codes?code=eq.${encodeURIComponent(code)}`, {
+    redeemed_count: (row.redeemed_count || 0) + 1,
+    last_redeemed_at: new Date().toISOString(),
+  }).catch(() => {});
+
+  return new Response(
+    JSON.stringify({ ok: true, tier: row.tier, expires_at: row.expires_at }),
+    { status: 200, headers: corsHeaders }
+  );
+}
+
 // ─── Forecast proxy + edge cache ──────────────────────────────────────────────
 
 const FORECAST_CACHE_TTL = 900; // 15 minutes — forecasts don't need to be fresher than this
@@ -365,6 +404,14 @@ async function handleRequest(request, env, ctx) {
   // fetched from Cloudflare's own IPs instead of the client's.
   if (pathname === '/forecast' && request.method === 'GET') {
     return handleForecastProxy(request, url, corsHeaders, ctx);
+  }
+
+  // GET /redeem?code=XXXX — validates a beta-access code against the
+  // access_codes table and reports the tier it unlocks. No accounts/billing
+  // yet, so this is what app.js calls when someone opens a link like
+  // sendtemps.app/?code=INTERSTATE-BETA to hand out Pro access for testing.
+  if (pathname === '/redeem' && request.method === 'GET') {
+    return handleRedeem(env, url, corsHeaders);
   }
 
   if (pathname === '/subscribe' && request.method === 'POST') {

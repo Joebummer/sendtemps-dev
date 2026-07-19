@@ -1936,6 +1936,11 @@ html[data-theme="dark"] .reason-tag-bestfrom {
   color: var(--primary-light, #6DAA45);
 }
 
+/* Free tier — bell is visible but dimmed; tapping explains it's a Pro feature */
+.notify-toggle.notify-locked {
+  opacity: 0.45;
+}
+
 /* ── Notify popover ───────────────────────────────────────────────────────── */
 #notify-popover {
   position: absolute;

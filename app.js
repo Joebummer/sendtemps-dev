@@ -11,6 +11,55 @@ import {
   drynessBand,
 } from './forecast.js?v=54';
 
+const API_BASE = 'https://api.sendtemps.app';
+
+// ---- Free / Pro tier ----
+// There's no account system yet, so Pro access is a lightweight stand-in:
+// a shareable link like sendtemps.app/?code=XXXX redeems a code against the
+// `access_codes` table (via the Worker's GET /redeem) and stores the tier
+// client-side. Everyone else defaults to free. Good enough for sharing with
+// beta testers; swap for a real per-user `is_pro` flag once accounts exist.
+const TIER_KEY = 'st_tier';
+const TIER_EXPIRES_KEY = 'st_tier_expires';
+
+function isPro() {
+  if (localStorage.getItem(TIER_KEY) !== 'pro') return false;
+  const exp = localStorage.getItem(TIER_EXPIRES_KEY);
+  if (exp && new Date(exp).getTime() < Date.now()) {
+    localStorage.removeItem(TIER_KEY);
+    localStorage.removeItem(TIER_EXPIRES_KEY);
+    return false;
+  }
+  return true;
+}
+
+async function redeemCodeFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  if (code) {
+    let data;
+    try {
+      const res = await fetch(`${API_BASE}/redeem?code=${encodeURIComponent(code)}`);
+      data = await res.json();
+      if (data.ok) {
+        localStorage.setItem(TIER_KEY, data.tier || 'pro');
+        if (data.expires_at) localStorage.setItem(TIER_EXPIRES_KEY, data.expires_at);
+        else localStorage.removeItem(TIER_EXPIRES_KEY);
+      }
+    } catch { /* offline on first load — the code param below is preserved so it can retry */ }
+
+    // Only scrub the code out of the URL once we know it either redeemed or
+    // was invalid; on a network failure, leave it so the next load retries.
+    if (typeof data !== 'undefined') {
+      params.delete('code');
+      const clean = params.toString();
+      history.replaceState(null, '', location.pathname + (clean ? `?${clean}` : ''));
+    }
+  }
+}
+
+redeemCodeFromUrl();
+
 // ---- Theme toggle ----
 (function () {
   const t = document.querySelector('[data-theme-toggle]');
@@ -2531,7 +2580,6 @@ init();
 // ─── Web Push subscription ────────────────────────────────────────────────────
 
 const VAPID_PUBLIC_KEY = 'BDKj-7s-TEb5dmIoqLJ_pckUVYgkOPULfNtjUJUwLGHBzoYQaLSxQFEZebrW7Biqz-gaEHX9dNBnVXLd2t7p7ko';
-const API_BASE = 'https://api.sendtemps.app';
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -2548,7 +2596,8 @@ function getActiveState() {
   return activePill ? activePill.dataset.region || 'VIC' : 'VIC';
 }
 
-function showNotifyPopover(btn, subscribed, activeState) {
+function showNotifyPopover(btn, mode, activeState) {
+  // mode: 'locked' (free tier) | 'subscribed' | 'unsubscribed'
   // Remove any existing popover
   document.getElementById('notify-popover')?.remove();
 
@@ -2557,7 +2606,13 @@ function showNotifyPopover(btn, subscribed, activeState) {
   pop.setAttribute('role', 'dialog');
   pop.setAttribute('aria-label', 'Rare window alerts');
 
-  if (subscribed) {
+  if (mode === 'locked') {
+    pop.innerHTML = `
+      <p class="notify-pop-title">Rare window alerts — Pro</p>
+      <p class="notify-pop-body">Push alerts are a Pro feature while SendTemps is in testing. Got an invite link? Open it once and this unlocks automatically.</p>
+      <button class="notify-pop-close" id="notify-pop-close" aria-label="Close">✕</button>
+    `;
+  } else if (mode === 'subscribed') {
     pop.innerHTML = `
       <p class="notify-pop-title">Rare window alerts on</p>
       <p class="notify-pop-body">You'll be notified when an unusually good climbing day is forecast — warmer, drier, or calmer than normal for the season.</p>
@@ -2620,6 +2675,7 @@ async function initNotifyBtn() {
   const reg = await navigator.serviceWorker.ready;
   const existing = await reg.pushManager.getSubscription();
   updateNotifyBtn(!!existing);
+  btn.classList.toggle('notify-locked', !isPro());
 
   // On every load, re-POST the current endpoint so Supabase stays fresh.
   // This handles cases where the service worker updated and the endpoint changed.
@@ -2642,7 +2698,13 @@ async function initNotifyBtn() {
     const reg = await navigator.serviceWorker.ready;
     const existing = await reg.pushManager.getSubscription();
     const activeState = getActiveState();
-    const pop = showNotifyPopover(btn, !!existing, activeState);
+
+    if (!isPro()) {
+      showNotifyPopover(btn, 'locked', activeState);
+      return;
+    }
+
+    const pop = showNotifyPopover(btn, existing ? 'subscribed' : 'unsubscribed', activeState);
 
     // Wire up the action button inside the popover
     if (existing) {
@@ -2678,6 +2740,7 @@ async function initNotifyBtn() {
     } else {
       document.getElementById('notify-sub')?.addEventListener('click', async () => {
         pop.remove();
+        if (!isPro()) return; // safety net — shouldn't be reachable, gated above
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') {
           alert('Notifications are blocked. Enable them in your device settings to receive rare window alerts.');

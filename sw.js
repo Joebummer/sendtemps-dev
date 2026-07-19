@@ -7,18 +7,18 @@
 //
 // Cache name is bumped per release so old shells get evicted on activate.
 
-const CACHE = 'sendtemps-v59-14';
-const RUNTIME_CACHE = 'sendtemps-runtime-v59-14';
+const CACHE = 'sendtemps-v64-0';
+const RUNTIME_CACHE = 'sendtemps-runtime-v64-0';
 
 // Static shell — paths are app-relative so this works under the
 // /sendtemps/ GitHub Pages prefix as well as a custom-domain root.
 const SHELL = [
   './',
   './index.html',
-  './app.js?v=59_14',
+  './app.js?v=63.10',
   './forecast.js?v=50',
   './crags.js?v=25',
-  './style.css?v=35',
+  './style.css?v=63.10',
   './manifest.webmanifest',
   './icon-180.png',
   './icon-192.png',
@@ -128,14 +128,17 @@ self.addEventListener('push', event => {
   let data;
   try { data = event.data.json(); } catch { data = { title: 'SendTemps', body: event.data.text(), url: 'https://sendtemps.app/' }; }
 
+  const title = data.title || 'SendTemps';
+  const options = {
+    body: data.body || '',
+    icon: 'https://sendtemps.app/icon-192.png',
+    badge: 'https://sendtemps.app/icon-192.png',
+    data: { url: data.url || 'https://sendtemps.app/' },
+    requireInteraction: false,
+  };
+
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      data: { url: data.url || 'https://sendtemps.app/' },
-      requireInteraction: false,
-    })
+    self.registration.showNotification(title, options)
   );
 });
 

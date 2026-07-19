@@ -352,11 +352,10 @@ async function handleRequest(request, env) {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const res = await supabaseRequest(
       env, 'GET',
-      `/checkins?crag_id=eq.${encodeURIComponent(cragId)}&climbed_date=gte.${since}&select=rock,temp_feel`,
+      `/checkins?crag_id=eq.${encodeURIComponent(cragId)}&climbed_date=gte.${since}&select=rock,temp_feel,climbed_date&order=climbed_date.desc`,
       null
     );
     const rows = await res.json();
-    // Aggregate: most common rock + temp
     const count = rows.length;
     const mode = (arr, key) => {
       const freq = {};
@@ -365,7 +364,8 @@ async function handleRequest(request, env) {
     };
     const rock = mode(rows, 'rock');
     const temp = mode(rows, 'temp_feel');
-    return new Response(JSON.stringify({ count, rock, temp }), { headers: corsHeaders });
+    const lastDate = rows[0]?.climbed_date ?? null;
+    return new Response(JSON.stringify({ count, rock, temp, lastDate }), { headers: corsHeaders });
   }
 
   if (pathname === '/checkin' && request.method === 'POST') {

@@ -1380,16 +1380,27 @@ function renderDestShareButton(destination, tripScore, destDailyScores) {
 const ROCK_LABEL    = { dry: 'rock dry', damp: 'rock damp', wet: 'rock wet' };
 const TEMP_LABEL    = { too_cold: 'conditions cold', good: 'conditions good', too_hot: 'conditions hot' };
 
+function daysAgoLabel(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const diff = Math.round((new Date(today) - new Date(dateStr)) / 86400000);
+  if (diff === 0) return 'today';
+  if (diff === 1) return 'yesterday';
+  return `${diff} days ago`;
+}
+
 async function fetchCheckinSummary(cragId, el) {
   try {
     const res = await fetch(`${API_BASE}/checkins/${encodeURIComponent(cragId)}`);
-    const { count, rock, temp } = await res.json();
+    const { count, rock, temp, lastDate } = await res.json();
     if (!count) { el.remove(); return; }
     const parts = [];
     if (rock) parts.push(ROCK_LABEL[rock] || rock);
     if (temp) parts.push(TEMP_LABEL[temp] || temp);
     const who = count === 1 ? '1 climbed recently' : `${count} climbed recently`;
-    el.textContent = parts.length ? `${who} · ${parts.join(' · ')}` : who;
+    const when = daysAgoLabel(lastDate);
+    const whenStr = when ? ` (last ${when})` : '';
+    el.textContent = parts.length ? `${who}${whenStr} · ${parts.join(' · ')}` : `${who}${whenStr}`;
     el.style.display = '';
   } catch {
     el.remove();

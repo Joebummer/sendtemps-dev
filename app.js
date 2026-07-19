@@ -980,7 +980,6 @@ function renderHideButton(id, label) {
 function renderFavouriteButton(id, label) {
   const active = state.favouriteCrags.has(id);
   const aria = active ? `Unpin ${label}` : `Pin ${label} to the top`;
-  const threshold = getFavThreshold(id);
   const safeId = escapeHtml(id);
   return `
     <button type="button" class="favourite-btn${active ? ' active' : ''}"
@@ -992,7 +991,15 @@ function renderFavouriteButton(id, label) {
         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
       </svg>
     </button>
-    ${active ? `
+  `;
+}
+
+// Rendered inside the detail panel — only when the crag is starred
+function renderFavThresholdControl(id) {
+  if (!state.favouriteCrags.has(id)) return '';
+  const threshold = getFavThreshold(id);
+  const safeId = escapeHtml(id);
+  return `
     <div class="fav-threshold" data-fav-threshold-id="${safeId}">
       <span class="fav-threshold-label">Alert when score higher than</span>
       <div class="fav-threshold-stepper">
@@ -1002,7 +1009,7 @@ function renderFavouriteButton(id, label) {
       </div>
       <input type="hidden" id="thresh-${safeId}" class="fav-threshold-input"
         value="${threshold}" data-threshold-id="${safeId}" />
-    </div>` : ''}
+    </div>
   `;
 }
 
@@ -1335,6 +1342,7 @@ function renderCard(row, isTop, isWeekend) {
           ${renderSunWindow(day.sunWindow, crag.sunOnWall)}
         </div>
         ${renderDaySubCrags(daySubCrags, isToday ? 'today' : isTomorrow ? 'tomorrow' : null)}
+        ${renderFavThresholdControl(crag.id)}
         <div class="checkin-summary" style="display:none"></div>
         <button type="button" class="climbed-here-btn" data-checkin-id="${escapeHtml(crag.id)}" data-checkin-name="${escapeHtml(crag.name)}" data-checkin-score="${headlineScore}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2L8 8H3l4 4-2 7 7-4 7 4-2-7 4-4h-5z"/></svg>

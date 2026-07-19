@@ -2094,11 +2094,11 @@ html[data-theme="dark"] .reason-tag-bestfrom {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px 6px 12px;
-  margin-top: 6px;
+  padding: 8px 12px;
+  margin: 12px 0 4px;
   background: var(--surface, #F9F8F5);
   border: 1px solid var(--border, #D4D1CA);
-  border-radius: 20px;
+  border-radius: 10px;
   white-space: nowrap;
 }
 

@@ -689,7 +689,9 @@ function renderDaySummary(rows, dayRows, destinations) {
   const dayLine = dayTop
     ? `<strong>Daily crag score:</strong> ${escapeHtml(dayTop.crag.name)} <span class="score-mini ${scoreBand(dayTop.score).color}">${dayTop.score}</span>`
     : `<strong>Daily crag score:</strong> no data`;
-  const wkLine = destTop
+  const wkLine = !isPro()
+    ? `<strong>Weekend away:</strong> <span class="pro-inline-lock">Pro feature</span>`
+    : destTop
     ? `<strong>Weekend away (Fri–Sun):</strong> ${escapeHtml(destTop.destination)} <span class="score-mini ${scoreBand(destTop.tripScore).color}">${destTop.tripScore}</span>`
     : `<strong>Weekend away:</strong> no data`;
 
@@ -726,7 +728,11 @@ function renderSplitRanked(dayRows, destinations) {
   if (dayRows.length || hiddenDay.length) {
     sections.push(renderDaySection('Overview', 'Daily crag score', dayRows, hiddenDay));
   }
-  if (destinations.length || hiddenWeekendDest.length || hiddenWeekendCrag.length) {
+  if (!isPro()) {
+    // Multi-day trip planning is Pro-only — show the section header (so it's
+    // discoverable) but keep the destination cards/trip-date controls locked.
+    sections.push(renderWeekendSectionLocked('Multi-day trip'));
+  } else if (destinations.length || hiddenWeekendDest.length || hiddenWeekendCrag.length) {
     sections.push(renderWeekendSection('Multi-day trip', 'By destination · trip score', destinations, [...hiddenWeekendDest, ...hiddenWeekendCrag]));
   }
 
@@ -1046,6 +1052,31 @@ function renderBestWeekendCallout(destinations) {
         Share
       </button>
     </div>
+  `;
+}
+
+// Pro-gated version of the Multi-day trip section — keeps the header visible
+// (so free users know the feature exists) but replaces the trip-date controls,
+// best-weekend callout and destination cards with a single locked teaser.
+function renderWeekendSectionLocked(title) {
+  const collapsed = getSectionCollapsed()['weekend'] ?? false;
+  return `
+    <section class="category" id="weekend-section" data-section="weekend" data-collapsed="${collapsed}">
+      <div class="weekend-category-header">
+        <button type="button" class="category-header" aria-expanded="${!collapsed}" aria-controls="section-list-weekend">
+          <span class="category-header-label">
+            <h3>${escapeHtml(title)}</h3>
+            <span class="category-sub">By destination</span>
+          </span>
+          ${CHEVRON_SVG}
+        </button>
+      </div>
+      <div class="trip-locked-teaser" id="section-list-weekend">
+        <svg class="trip-locked-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <p class="trip-locked-title">Multi-day trip planning — Pro</p>
+        <p class="trip-locked-body">See which destination has the best conditions across your whole trip, plus pick your own dates. Got an invite link? Open it once and this unlocks automatically.</p>
+      </div>
+    </section>
   `;
 }
 

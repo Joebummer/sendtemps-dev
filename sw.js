@@ -120,3 +120,33 @@ self.addEventListener('fetch', (event) => {
 
   // Cross-origin (e.g. GoatCounter) — pass through; don't cache.
 });
+
+// ─── Web Push handlers ────────────────────────────────────────────────────────
+
+self.addEventListener('push', event => {
+  if (!event.data) return;
+  let data;
+  try { data = event.data.json(); } catch { data = { title: 'SendTemps', body: event.data.text(), url: 'https://sendtemps.app/' }; }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url: data.url || 'https://sendtemps.app/' },
+      requireInteraction: false,
+    })
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = event.notification.data?.url || 'https://sendtemps.app/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const existing = list.find(c => c.url.startsWith('https://sendtemps.app'));
+      if (existing) return existing.focus();
+      return clients.openWindow(url);
+    })
+  );
+});

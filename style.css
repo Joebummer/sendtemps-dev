@@ -1896,3 +1896,42 @@ html[data-theme="dark"] .reason-tag-bestfrom {
   background: rgba(255, 255, 255, 0.18);
   outline: none;
 }
+
+/* ── Notify bell button ───────────────────────────────────────────────────── */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.notify-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted, #7A7974);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.notify-toggle:hover {
+  background: var(--surface, #F9F8F5);
+  color: var(--text, #28251D);
+}
+
+.notify-toggle.notify-active {
+  color: var(--primary, #2d5a27);
+}
+
+[data-theme="dark"] .notify-toggle:hover {
+  background: var(--surface, #1C1B19);
+  color: var(--text, #CDCCCA);
+}
+
+[data-theme="dark"] .notify-toggle.notify-active {
+  color: var(--primary-light, #6DAA45);
+}

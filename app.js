@@ -2183,3 +2183,98 @@ document.addEventListener('visibilitychange', () => {
 setInterval(paintUpdated, 30 * 1000);
 
 init();
+
+// ─── Web Push subscription ────────────────────────────────────────────────────
+
+const VAPID_PUBLIC_KEY = 'BDKj-7s-TEb5dmIoqLJ_pckUVYgkOPULfNtjUJUwLGHBzoYQaLSxQFEZebrW7Biqz-gaEHX9dNBnVXLd2t7p7ko';
+const API_BASE = 'https://api.sendtemps.app';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+function updateNotifyBtn(subscribed) {
+  const btn = document.getElementById('notify-btn');
+  if (!btn) return;
+  if (subscribed) {
+    btn.setAttribute('aria-label', 'Disable rare window alerts');
+    btn.setAttribute('title', 'Rare window alerts on');
+    btn.classList.add('notify-active');
+    btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6V11c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>`;
+  } else {
+    btn.setAttribute('aria-label', 'Enable rare window alerts');
+    btn.setAttribute('title', 'Rare window alerts');
+    btn.classList.remove('notify-active');
+    btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
+  }
+}
+
+async function initNotifyBtn() {
+  const btn = document.getElementById('notify-btn');
+  if (!btn) return;
+
+  // Hide if push not supported
+  if (!('PushManager' in window) || !('serviceWorker' in navigator)) {
+    btn.style.display = 'none';
+    return;
+  }
+
+  // Check existing subscription state
+  const reg = await navigator.serviceWorker.ready;
+  const existing = await reg.pushManager.getSubscription();
+  updateNotifyBtn(!!existing);
+
+  btn.addEventListener('click', async () => {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+
+    if (existing) {
+      // Unsubscribe
+      await existing.unsubscribe();
+      await fetch(`${API_BASE}/subscribe`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: existing.endpoint }),
+      }).catch(() => {});
+      updateNotifyBtn(false);
+    } else {
+      // Subscribe — request permission first
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        alert('Notifications blocked. Enable them in your browser settings to receive rare window alerts.');
+        return;
+      }
+
+      try {
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+
+        // Detect current state from active region pill
+        const activePill = document.querySelector('.region-pill[aria-pressed="true"]');
+        const state = activePill ? activePill.dataset.region || 'VIC' : 'VIC';
+
+        await fetch(`${API_BASE}/subscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: sub.toJSON(), state }),
+        });
+
+        updateNotifyBtn(true);
+      } catch (err) {
+        console.error('Push subscribe failed:', err);
+      }
+    }
+  });
+}
+
+// Initialise after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initNotifyBtn);
+} else {
+  initNotifyBtn();
+}

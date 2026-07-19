@@ -190,14 +190,25 @@ async function supabaseRequest(env, method, path, body) {
 }
 
 async function saveSubscription(env, sub, state, favourites, thresholds) {
-  return supabaseRequest(env, 'POST', '/push_subscriptions', {
-    endpoint: sub.endpoint,
-    p256dh: sub.keys.p256dh,
-    auth: sub.keys.auth,
-    state: state || 'VIC',
-    favourites: favourites || [],
-    thresholds: thresholds || {},
+  // Upsert on endpoint so re-subscribes after SW updates overwrite the stale row
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/push_subscriptions`, {
+    method: 'POST',
+    headers: {
+      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify({
+      endpoint: sub.endpoint,
+      p256dh: sub.keys.p256dh,
+      auth: sub.keys.auth,
+      state: state || 'VIC',
+      favourites: favourites || [],
+      thresholds: thresholds || {},
+    }),
   });
+  return res;
 }
 
 async function updateSubscriptionFavourites(env, endpoint, favourites, thresholds) {

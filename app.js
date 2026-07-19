@@ -2566,10 +2566,27 @@ async function initNotifyBtn() {
     return;
   }
 
-  // Check existing subscription state
+  // Check existing subscription state + silently re-register if stale
   const reg = await navigator.serviceWorker.ready;
   const existing = await reg.pushManager.getSubscription();
   updateNotifyBtn(!!existing);
+
+  // On every load, re-POST the current endpoint so Supabase stays fresh.
+  // This handles cases where the service worker updated and the endpoint changed.
+  if (existing) {
+    try {
+      await fetch(`${API_BASE}/subscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscription: existing.toJSON(),
+          state: getActiveState(),
+          favourites: [...state.favouriteCrags],
+          thresholds: loadFavThresholds(),
+        }),
+      });
+    } catch { /* offline — fine */ }
+  }
 
   btn.addEventListener('click', async () => {
     const reg = await navigator.serviceWorker.ready;

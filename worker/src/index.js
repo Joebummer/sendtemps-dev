@@ -350,39 +350,61 @@ async function getCragScoreToday(lat, lon) {
   } catch { return null; }
 }
 
-// Crag ID → lat/lon map for favourite lookups
-// Covers all crags in the app — keyed by crag id from crags.js
+// Crag ID → lat/lon map for favourite lookups.
+// IDs match crags.js exactly. Sub-crags inherit their parent's coords.
 const CRAG_COORDS = {
-  // VIC
-  'arapiles': { lat: -36.7556, lon: 141.8403, name: 'Mt Arapiles' },
-  'gramps-stapylton': { lat: -37.1389, lon: 142.5217, name: 'Grampians Stapylton' },
-  'gramps-taipan': { lat: -36.9036, lon: 142.4131, name: 'Grampians Taipan' },
-  'mt-buffalo': { lat: -36.7367, lon: 146.8153, name: 'Mt Buffalo' },
-  'cathedral': { lat: -37.3667, lon: 145.7333, name: 'Cathedral Ranges' },
-  'you-yangs': { lat: -37.9489, lon: 144.4297, name: 'You Yangs' },
-  'harcourt': { lat: -36.9977, lon: 144.3049, name: 'Harcourt' },
-  'mt-beckworth': { lat: -37.3022, lon: 143.7356, name: 'Mt Beckworth' },
-  'camels-hump': { lat: -37.3947, lon: 144.5547, name: "Camel's Hump" },
-  'falcons': { lat: -37.6736, lon: 144.4322, name: 'Falcons Lookout' },
-  // NSW
-  'nowra': { lat: -34.8833, lon: 150.6, name: 'Nowra' },
-  'blue-mountains': { lat: -33.7167, lon: 150.3167, name: 'Blue Mountains' },
-  'booroomba': { lat: -35.5833, lon: 148.8167, name: 'Booroomba Rocks' },
-  'bungonia': { lat: -34.8333, lon: 149.95, name: 'Bungonia' },
-  'point-perpendicular': { lat: -35.1, lon: 150.8, name: 'Point Perpendicular' },
-  // TAS
-  'freycinet': { lat: -42.15, lon: 148.3, name: 'Freycinet' },
-  'ben-lomond': { lat: -41.55, lon: 147.65, name: 'Ben Lomond' },
-  'organ-pipes': { lat: -42.9, lon: 147.25, name: 'Organ Pipes' },
-  // SA
-  'morialta': { lat: -34.9167, lon: 138.7, name: 'Morialta' },
-  'onkaparinga': { lat: -35.15, lon: 138.5667, name: 'Onkaparinga' },
-  'moonarie': { lat: -31.3833, lon: 138.6333, name: 'Moonarie' },
-  'warren-gorge': { lat: -32.5, lon: 138.35, name: 'Warren Gorge' },
-  // WA
-  'mountain-quarry': { lat: -31.9667, lon: 116.1, name: 'Mountain Quarry' },
-  'wilyabrup': { lat: -33.9, lon: 115.0167, name: 'Wilyabrup' },
-  'west-cape-howe': { lat: -35.1333, lon: 117.6167, name: 'West Cape Howe' },
+  // ── VIC ──
+  'arap-main':         { lat: -36.7556, lon: 141.8403, name: 'Mt Arapiles' },
+  'gramps-main':       { lat: -37.1389, lon: 142.5217, name: 'Grampians' },
+  'gramps-stapylton':  { lat: -37.1389, lon: 142.5217, name: 'Mt Stapylton' },
+  'gramps-taipan':     { lat: -36.9036, lon: 142.4131, name: 'Taipan Wall' },
+  'buffalo-main':      { lat: -36.7367, lon: 146.8153, name: 'Mt Buffalo' },
+  'cathedral-main':    { lat: -37.3667, lon: 145.7333, name: 'Cathedral Ranges' },
+  'youyangs-main':     { lat: -37.9489, lon: 144.4297, name: 'You Yangs' },
+  'mt-beckworth':      { lat: -37.3022, lon: 143.7356, name: 'Mt Beckworth' },
+  'camels-hump':       { lat: -37.3947, lon: 144.5547, name: "Camel's Hump" },
+  'falcons-lookout':   { lat: -37.6736, lon: 144.4322, name: 'Falcons Lookout' },
+  'mt-alexander':      { lat: -36.9977, lon: 144.3049, name: 'Mt Alexander' },
+  'staughton-vale':    { lat: -37.7972, lon: 144.3308, name: 'Staughton Vale' },
+  'harcourt-dogrocks': { lat: -37.0089, lon: 144.3049, name: 'Dog Rocks' },
+  'harcourt-wabbitwocks': { lat: -37.0023, lon: 144.3049, name: 'Wabbit Wocks' },
+  'harcourt-scorpionrocks': { lat: -36.9977, lon: 144.3049, name: 'Scorpion Rocks' },
+  // ── TAS ──
+  'ben-lomond-main':   { lat: -41.530,  lon: 147.650,  name: 'Ben Lomond' },
+  'freycinet-main':    { lat: -42.2076, lon: 148.290,  name: 'Freycinet' },
+  'mtwellington-main': { lat: -42.9084, lon: 147.234,  name: 'Kunanyi / Mt Wellington' },
+  'sand-river-main':   { lat: -42.515,  lon: 147.710,  name: 'Sand River' },
+  'fortescue-main':    { lat: -43.1394, lon: 148.006,  name: 'Fortescue Bay' },
+  'cape-raoul-main':   { lat: -43.2346, lon: 147.795,  name: 'Cape Raoul' },
+  // ── NSW ──
+  'nowra-main':        { lat: -34.8704, lon: 150.601,  name: 'Nowra' },
+  'bluemtns-main':     { lat: -33.632,  lon: 150.317,  name: 'Blue Mountains' },
+  'booroomba-main':    { lat: -35.5576, lon: 148.817,  name: 'Booroomba Rocks' },
+  'bungonia-main':     { lat: -34.7961, lon: 149.950,  name: 'Bungonia Gorge' },
+  'pointperp-main':    { lat: -35.094,  lon: 150.800,  name: 'Point Perpendicular' },
+  'lindfield-main':    { lat: -33.7688, lon: 151.179,  name: 'Lindfield Rocks' },
+  // ── SA ──
+  'morialta-main':     { lat: -34.9043, lon: 138.700,  name: 'Morialta' },
+  'norton-summit':     { lat: -34.9229, lon: 138.717,  name: 'Norton Summit' },
+  'onkaparinga-main':  { lat: -35.1623, lon: 138.567,  name: 'Onkaparinga' },
+  'moonarie-main':     { lat: -31.6129, lon: 138.633,  name: 'Moonarie' },
+  'warren-gorge':      { lat: -32.186,  lon: 138.350,  name: 'Warren Gorge' },
+  'waitpinga':         { lat: -35.6181, lon: 138.550,  name: 'Waitpinga Cliffs' },
+  'second-valley':     { lat: -35.5101, lon: 138.217,  name: 'Second Valley' },
+  // ── WA ──
+  'wa-mountain-quarry':  { lat: -31.913, lon: 116.100, name: 'Mountain Quarry' },
+  'wa-wungong':          { lat: -32.199, lon: 116.031, name: 'Wungong Valley' },
+  'wa-roleystone':       { lat: -32.132, lon: 116.070, name: 'Roleystone' },
+  'wa-mt-cooke':         { lat: -32.416, lon: 116.309, name: 'Mt Cooke' },
+  'wa-wilyabrup':        { lat: -33.805, lon: 115.001, name: 'Wilyabrup' },
+  'wa-bobs-hollow':      { lat: -34.064, lon: 115.001, name: "Bob's Hollow" },
+  'wa-mt-frankland':     { lat: -34.886, lon: 116.673, name: 'Mt Frankland' },
+  'wa-albany':           { lat: -35.033, lon: 118.074, name: 'Albany' },
+  'wa-west-cape-howe':   { lat: -35.109, lon: 117.621, name: 'West Cape Howe' },
+  'wa-porongurup':       { lat: -34.685, lon: 117.885, name: 'Porongurup Range' },
+  'wa-stirling-ranges':  { lat: -34.391, lon: 118.037, name: 'Stirling Ranges' },
+  'wa-eaglestone':       { lat: -31.083, lon: 118.242, name: 'Eaglestone Rocks' },
+  'wa-kalbarri':         { lat: -27.669, lon: 114.393, name: 'Kalbarri' },
 };
 
 // ─── Cron handler ─────────────────────────────────────────────────────────────

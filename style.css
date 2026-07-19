@@ -2362,3 +2362,77 @@ html[data-theme="dark"] .reason-tag-bestfrom {
 [data-theme="dark"] .checkin-summary {
   border-color: var(--border, #393836);
 }
+
+/* ── Check-in sub-crag picker ────────────────────────────────────────────── */
+.checkin-subcrag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  max-height: 55vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.checkin-subcrag-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 13px 14px;
+  background: var(--surface, #F9F8F5);
+  border: 1px solid var(--border, #D4D1CA);
+  border-radius: 10px;
+  color: var(--text, #28251D);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.checkin-subcrag-btn:hover,
+.checkin-subcrag-btn:active {
+  background: var(--bg, #F5F2EB);
+  border-color: var(--primary, #2d5a27);
+  color: var(--primary, #2d5a27);
+}
+
+.checkin-subcrag-btn svg {
+  flex-shrink: 0;
+  opacity: 0.4;
+}
+
+[data-theme="dark"] .checkin-subcrag-btn {
+  background: var(--surface, #1C1B19);
+  border-color: var(--border, #393836);
+  color: var(--text, #CDCCCA);
+}
+
+[data-theme="dark"] .checkin-subcrag-btn:hover {
+  border-color: #6DAA45;
+  color: #6DAA45;
+}
+
+/* ── Check-in back button ────────────────────────────────────────────────── */
+.checkin-back {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: var(--text-muted, #7A7974);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0 0 8px;
+  margin-bottom: 4px;
+}
+
+.checkin-back:hover {
+  color: var(--primary, #2d5a27);
+}
+
+[data-theme="dark"] .checkin-back:hover {
+  color: #6DAA45;
+}

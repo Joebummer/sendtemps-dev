@@ -700,10 +700,17 @@ function renderSplitRanked(dayRows, destinations) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
+      const parentId = btn.dataset.checkinId;
+      // Collect sub-crags for this parent so the sheet can offer a picker
+      const subCrags = (state.forecasts || [])
+        .filter(r => r.crag.parentId === parentId)
+        .map(r => ({ id: r.crag.id, name: r.crag.name }))
+        .filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
       showCheckinSheet(
-        btn.dataset.checkinId,
+        parentId,
         btn.dataset.checkinName,
-        parseInt(btn.dataset.checkinScore, 10) || null
+        parseInt(btn.dataset.checkinScore, 10) || null,
+        subCrags
       );
     });
   });
@@ -1417,8 +1424,7 @@ async function fetchCheckinSummary(cragId, el) {
 
 // ─── Check-in bottom sheet ───────────────────────────────────────────────────────
 
-function showCheckinSheet(cragId, cragName, appScore) {
-  // Remove any existing sheet
+function showCheckinSheet(cragId, cragName, appScore, subCrags = []) {
   document.getElementById('checkin-sheet')?.remove();
   document.getElementById('checkin-backdrop')?.remove();
 
@@ -1432,76 +1438,7 @@ function showCheckinSheet(cragId, cragName, appScore) {
   sheet.className = 'checkin-sheet';
   sheet.setAttribute('role', 'dialog');
   sheet.setAttribute('aria-label', 'Log conditions');
-  sheet.innerHTML = `
-    <div class="checkin-handle"></div>
-    <div class="checkin-title">How were conditions?</div>
-    <div class="checkin-crag">${escapeHtml(cragName)}</div>
-
-    <div class="checkin-section">
-      <div class="checkin-label">Rock</div>
-      <div class="checkin-options" data-group="rock">
-        <button type="button" class="checkin-option" data-value="dry">Dry</button>
-        <button type="button" class="checkin-option" data-value="damp">Damp</button>
-        <button type="button" class="checkin-option" data-value="wet">Wet</button>
-      </div>
-    </div>
-
-    <div class="checkin-section">
-      <div class="checkin-label">Temperature</div>
-      <div class="checkin-options" data-group="temp">
-        <button type="button" class="checkin-option" data-value="too_cold">Too cold</button>
-        <button type="button" class="checkin-option" data-value="good">Good</button>
-        <button type="button" class="checkin-option" data-value="too_hot">Too hot</button>
-      </div>
-    </div>
-
-    <button type="button" class="checkin-submit" id="checkin-submit" disabled>Submit</button>
-  `;
   document.body.appendChild(sheet);
-
-  // Animate in
-  requestAnimationFrame(() => sheet.classList.add('open'));
-
-  const selections = { rock: null, temp: null };
-  const submitBtn = sheet.querySelector('#checkin-submit');
-
-  sheet.querySelectorAll('.checkin-option').forEach(opt => {
-    opt.addEventListener('click', () => {
-      const group = opt.closest('[data-group]').dataset.group;
-      opt.closest('[data-group]').querySelectorAll('.checkin-option').forEach(o => o.classList.remove('selected'));
-      opt.classList.add('selected');
-      selections[group] = opt.dataset.value;
-      if (selections.rock && selections.temp) submitBtn.disabled = false;
-    });
-  });
-
-  submitBtn.addEventListener('click', async () => {
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Saving…';
-    const today = new Date();
-    const climbed_date = today.toISOString().slice(0, 10);
-    const month = today.getMonth() + 1;
-    try {
-      await fetch(`${API_BASE}/checkin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          crag_id: cragId,
-          crag_name: cragName,
-          climbed_date,
-          month,
-          app_score: appScore,
-          rock: selections.rock,
-          temp_feel: selections.temp,
-        }),
-      });
-      submitBtn.textContent = 'Thanks — logged!';
-      setTimeout(() => closeCheckinSheet(), 1200);
-    } catch {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Failed — try again';
-    }
-  });
 
   function closeCheckinSheet() {
     sheet.classList.remove('open');
@@ -1509,6 +1446,119 @@ function showCheckinSheet(cragId, cragName, appScore) {
     setTimeout(() => { sheet.remove(); backdrop.remove(); }, 300);
   }
 
+  // Track resolved crag — starts as parent, overridden if sub-crag picked
+  let resolvedId = cragId;
+  let resolvedName = cragName;
+
+  const hasSubCrags = subCrags.length > 1;
+
+  function renderConditionsStep() {
+    sheet.innerHTML = `
+      <div class="checkin-handle"></div>
+      ${hasSubCrags ? `<button type="button" class="checkin-back" aria-label="Back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Back
+      </button>` : ''}
+      <div class="checkin-title">How were conditions?</div>
+      <div class="checkin-crag">${escapeHtml(resolvedName)}</div>
+
+      <div class="checkin-section">
+        <div class="checkin-label">Rock</div>
+        <div class="checkin-options" data-group="rock">
+          <button type="button" class="checkin-option" data-value="dry">Dry</button>
+          <button type="button" class="checkin-option" data-value="damp">Damp</button>
+          <button type="button" class="checkin-option" data-value="wet">Wet</button>
+        </div>
+      </div>
+
+      <div class="checkin-section">
+        <div class="checkin-label">Temperature</div>
+        <div class="checkin-options" data-group="temp">
+          <button type="button" class="checkin-option" data-value="too_cold">Too cold</button>
+          <button type="button" class="checkin-option" data-value="good">Good</button>
+          <button type="button" class="checkin-option" data-value="too_hot">Too hot</button>
+        </div>
+      </div>
+
+      <button type="button" class="checkin-submit" id="checkin-submit" disabled>Submit</button>
+    `;
+
+    sheet.querySelector('.checkin-back')?.addEventListener('click', renderSubCragStep);
+
+    const selections = { rock: null, temp: null };
+    const submitBtn = sheet.querySelector('#checkin-submit');
+
+    sheet.querySelectorAll('.checkin-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const group = opt.closest('[data-group]').dataset.group;
+        opt.closest('[data-group]').querySelectorAll('.checkin-option').forEach(o => o.classList.remove('selected'));
+        opt.classList.add('selected');
+        selections[group] = opt.dataset.value;
+        if (selections.rock && selections.temp) submitBtn.disabled = false;
+      });
+    });
+
+    submitBtn.addEventListener('click', async () => {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving…';
+      const today = new Date();
+      const climbed_date = today.toISOString().slice(0, 10);
+      const month = today.getMonth() + 1;
+      try {
+        await fetch(`${API_BASE}/checkin`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            crag_id: resolvedId,
+            crag_name: resolvedName,
+            climbed_date,
+            month,
+            app_score: appScore,
+            rock: selections.rock,
+            temp_feel: selections.temp,
+          }),
+        });
+        submitBtn.textContent = 'Thanks — logged!';
+        setTimeout(() => closeCheckinSheet(), 1200);
+      } catch {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Failed — try again';
+      }
+    });
+  }
+
+  function renderSubCragStep() {
+    sheet.innerHTML = `
+      <div class="checkin-handle"></div>
+      <div class="checkin-title">Where did you climb?</div>
+      <div class="checkin-crag">${escapeHtml(cragName)}</div>
+      <div class="checkin-subcrag-list">
+        ${subCrags.map(s => `
+          <button type="button" class="checkin-subcrag-btn" data-id="${escapeHtml(s.id)}" data-name="${escapeHtml(s.name)}">
+            ${escapeHtml(s.name)}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        `).join('')}
+      </div>
+    `;
+
+    sheet.querySelectorAll('.checkin-subcrag-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        resolvedId = btn.dataset.id;
+        resolvedName = btn.dataset.name;
+        renderConditionsStep();
+      });
+    });
+  }
+
+  // Start at sub-crag picker if needed, otherwise go straight to conditions
+  if (hasSubCrags) {
+    renderSubCragStep();
+  } else {
+    renderConditionsStep();
+  }
+
+  requestAnimationFrame(() => sheet.classList.add('open'));
   backdrop.addEventListener('click', closeCheckinSheet);
   requestAnimationFrame(() => backdrop.classList.add('open'));
 }

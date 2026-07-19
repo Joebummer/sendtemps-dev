@@ -1695,13 +1695,36 @@ export function scoreDay(crag, day, prevDay, nextDay) {
         : `${_humidLabel} — low RH boosts friction`);
   }
 
-  const finalScore = Math.max(0, Math.min(100, Math.round(score)));
-  // Sort contributions: largest absolute delta first so the top of the list
-  // is always the most-impactful factor.
-  contributions.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  // — Penalty integrity cap —
+  // A crag that earned any score penalty cannot claim a perfect 100.
+  // If penalties fired but bonuses compensated back to 100, cap at 99
+  // so the score honestly reflects that something is working against it.
+  const hasPenalty = contributions.some(c => c.delta < 0);
+  const rawFinal = Math.max(0, Math.min(100, Math.round(score)));
+  const finalScore = (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
+
+  // Sort contributions: penalties first (most impactful negative), then bonuses.
+  // This ensures penalty reasons surface at the top of the breakdown even
+  // when bonuses are numerically larger — critical for transparency.
+  contributions.sort((a, b) => {
+    // Penalties always before bonuses
+    if (a.delta < 0 && b.delta >= 0) return -1;
+    if (a.delta >= 0 && b.delta < 0) return 1;
+    // Within same sign: largest absolute delta first
+    return Math.abs(b.delta) - Math.abs(a.delta);
+  });
+
+  // Reasons: always include penalty reasons, then fill remaining slots with bonuses.
+  // This prevents penalties from being silently buried behind high-impact bonuses.
+  const penaltyReasons = reasons.filter(r =>
+    contributions.some(c => c.delta < 0 && (c.detail?.includes(r) || c.label?.toLowerCase().includes(r.toLowerCase().split(' ')[0])))
+  );
+  const otherReasons = reasons.filter(r => !penaltyReasons.includes(r));
+  const surfacedReasons = [...new Set([...penaltyReasons, ...otherReasons])].slice(0, 3);
+
   return {
     score: finalScore,
-    reasons: reasons.slice(0, 3),
+    reasons: surfacedReasons,
     contributions,
   };
 }

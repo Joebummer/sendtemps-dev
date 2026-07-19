@@ -15,10 +15,10 @@ const RUNTIME_CACHE = 'sendtemps-runtime-v64-0';
 const SHELL = [
   './',
   './index.html',
-  './app.js?v=63.10',
+  './app.js?v=64.0',
   './forecast.js?v=50',
   './crags.js?v=25',
-  './style.css?v=63.10',
+  './style.css?v=64.0',
   './manifest.webmanifest',
   './icon-180.png',
   './icon-192.png',

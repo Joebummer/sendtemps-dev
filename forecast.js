@@ -43,7 +43,13 @@ export async function fetchAllForecasts() {
   });
 
   const url = `${API}?${params}`;
-  const res = await fetch(url);
+  // Retry up to 3 times with backoff — handles transient 429s
+  let res;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500));
+    res = await fetch(url);
+    if (res.status !== 429) break;
+  }
   if (!res.ok) throw new Error(`Forecast API error ${res.status}`);
   const data = await res.json();
 

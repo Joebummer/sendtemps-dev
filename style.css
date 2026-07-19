@@ -2140,3 +2140,15 @@ html[data-theme="dark"] .reason-tag-bestfrom {
   color: var(--text, #CDCCCA);
   border-color: var(--border, #393836);
 }
+
+/* ── Notify test push button ─────────────────────────────────────────────── */
+.notify-pop-test {
+  background: transparent;
+  border: 1px solid var(--border, #D4D1CA);
+  color: var(--text-muted, #7A7974);
+  font-size: 13px;
+}
+.notify-pop-test:hover {
+  background: var(--surface, #f0ede6);
+  color: var(--text, #28251D);
+}

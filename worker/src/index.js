@@ -312,6 +312,38 @@ async function handleRequest(request, env) {
     return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
   }
 
+  // Test endpoint — triggers favourite alerts for the calling subscription
+  // POST { endpoint } — looks up the sub in Supabase and fires alerts immediately
+  if (pathname === '/test-push' && request.method === 'POST') {
+    const { endpoint } = await request.json();
+    const allSubs = await getAllSubscriptions(env);
+    const sub = allSubs.find(s => s.endpoint === endpoint);
+    if (!sub) return new Response(JSON.stringify({ ok: false, error: 'subscription not found' }), { status: 404, headers: corsHeaders });
+
+    const favs = Array.isArray(sub.favourites) ? sub.favourites : [];
+    const thresholds = sub.thresholds || {};
+    const results = [];
+
+    for (const cragId of favs) {
+      const coords = CRAG_COORDS[cragId];
+      if (!coords) { results.push({ cragId, status: 'unknown id' }); continue; }
+      const threshold = thresholds[cragId] ?? 75;
+      const score = await getCragScoreToday(coords.lat, coords.lon);
+      results.push({ cragId, name: coords.name, score, threshold, willAlert: score >= threshold });
+    }
+
+    const hits = results.filter(r => r.willAlert);
+    if (hits.length) {
+      const title = '★ Test — Favourite crag alert';
+      const body = hits.map(r => `${r.name} — scoring ${r.score}/100 today`).join('\n') + '\n\nsendtemps.app';
+      const payload = JSON.stringify({ title, body, url: 'https://sendtemps.app/' });
+      const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
+      await sendWebPush(pushSub, payload, env);
+    }
+
+    return new Response(JSON.stringify({ ok: true, results, pushed: hits.length > 0 }), { headers: corsHeaders });
+  }
+
   if (pathname === '/subscribe' && request.method === 'DELETE') {
     const { endpoint } = await request.json();
     await deleteSubscription(env, endpoint);

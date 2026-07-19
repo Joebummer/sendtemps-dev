@@ -2339,6 +2339,7 @@ function showNotifyPopover(btn, subscribed, activeState) {
     pop.innerHTML = `
       <p class="notify-pop-title">Rare window alerts on</p>
       <p class="notify-pop-body">You'll be notified when an unusually good climbing day is forecast — warmer, drier, or calmer than normal for the season.</p>
+      <button class="notify-pop-action notify-pop-test" id="notify-test">Send test push</button>
       <button class="notify-pop-action notify-pop-off" id="notify-unsub">Turn off alerts</button>
       <button class="notify-pop-close" id="notify-pop-close" aria-label="Close">✕</button>
     `;
@@ -2406,6 +2407,25 @@ async function initNotifyBtn() {
 
     // Wire up the action button inside the popover
     if (existing) {
+      document.getElementById('notify-test')?.addEventListener('click', async () => {
+        const testBtn = document.getElementById('notify-test');
+        if (testBtn) { testBtn.textContent = 'Sending…'; testBtn.disabled = true; }
+        try {
+          const res = await fetch(`${API_BASE}/test-push`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: existing.endpoint }),
+          });
+          const data = await res.json();
+          if (testBtn) {
+            testBtn.textContent = data.pushed ? 'Push sent!' : 'No alerts (score below threshold)';
+            setTimeout(() => { if (testBtn) { testBtn.textContent = 'Send test push'; testBtn.disabled = false; } }, 3000);
+          }
+        } catch {
+          if (testBtn) { testBtn.textContent = 'Failed — try again'; testBtn.disabled = false; }
+        }
+      });
+
       document.getElementById('notify-unsub')?.addEventListener('click', async () => {
         pop.remove();
         await existing.unsubscribe();

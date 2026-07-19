@@ -2093,52 +2093,78 @@ html[data-theme="dark"] .reason-tag-bestfrom {
 .fav-threshold {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px 4px 10px;
+  gap: 8px;
+  padding: 6px 10px 6px 12px;
+  margin-top: 6px;
   background: var(--surface, #F9F8F5);
   border: 1px solid var(--border, #D4D1CA);
-  border-radius: 6px;
-  position: absolute;
-  top: 36px;
-  left: 2px;
-  z-index: 10;
+  border-radius: 20px;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
 .fav-threshold-label {
   font-size: 12px;
   color: var(--text-muted, #7A7974);
+  flex: 1;
 }
 
-.fav-threshold-input {
-  width: 48px;
-  padding: 3px 5px;
-  border: 1px solid var(--border, #D4D1CA);
-  border-radius: 4px;
+.fav-threshold-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
   background: var(--bg, #F7F6F2);
-  color: var(--text, #28251D);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  -moz-appearance: textfield;
+  border: 1px solid var(--border, #D4D1CA);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.fav-threshold-input::-webkit-outer-spin-button,
-.fav-threshold-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
+.fav-threshold-step {
+  width: 28px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #7A7974);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+  line-height: 1;
+  padding: 0;
+}
+
+.fav-threshold-step:hover {
+  background: var(--border, #D4D1CA);
+  color: var(--text, #28251D);
+}
+
+.fav-threshold-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary, #2d5a27);
+  min-width: 28px;
+  text-align: center;
 }
 
 [data-theme="dark"] .fav-threshold {
   background: var(--surface, #1C1B19);
   border-color: var(--border, #393836);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
-[data-theme="dark"] .fav-threshold-input {
+[data-theme="dark"] .fav-threshold-stepper {
   background: var(--bg, #171614);
-  color: var(--text, #CDCCCA);
   border-color: var(--border, #393836);
+}
+
+[data-theme="dark"] .fav-threshold-step:hover {
+  background: var(--border, #393836);
+  color: var(--text, #CDCCCA);
+}
+
+[data-theme="dark"] .fav-threshold-value {
+  color: #6DAA45;
 }
 
 /* ── Notify test push button ─────────────────────────────────────────────── */

@@ -668,18 +668,24 @@ function renderSplitRanked(dayRows, destinations) {
     });
   });
 
-  // Favourite alert threshold inputs — save on change
-  list.querySelectorAll('.fav-threshold-input').forEach(input => {
-    input.addEventListener('change', (e) => {
+  // Favourite alert threshold stepper buttons
+  list.querySelectorAll('.fav-threshold-step').forEach(btn => {
+    btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const val = Math.min(100, Math.max(50, parseInt(input.value, 10) || 75));
-      input.value = val;
-      saveFavThreshold(input.dataset.thresholdId, val);
+      e.preventDefault();
+      const cragId = btn.dataset.for;
+      const hiddenInput = list.querySelector(`#thresh-${cragId}`);
+      const display = list.querySelector(`#thresh-display-${cragId}`);
+      if (!hiddenInput || !display) return;
+      const step = parseInt(btn.dataset.step, 10);
+      const current = parseInt(hiddenInput.value, 10) || 75;
+      const next = Math.min(100, Math.max(50, current + step));
+      hiddenInput.value = next;
+      display.textContent = next;
+      saveFavThreshold(cragId, next);
       syncFavouritesToWorker();
     });
-    // Prevent card expand/collapse on click inside the input
-    input.addEventListener('click', e => e.stopPropagation());
-    input.addEventListener('pointerdown', e => e.stopPropagation());
+    btn.addEventListener('pointerdown', e => e.stopPropagation());
   });
 
   // "N hidden — show" disclosure footer.
@@ -968,11 +974,14 @@ function renderFavouriteButton(id, label) {
     </button>
     ${active ? `
     <div class="fav-threshold" data-fav-threshold-id="${safeId}">
-      <label class="fav-threshold-label" for="thresh-${safeId}">Alert me when score ≥</label>
-      <input type="number" id="thresh-${safeId}" class="fav-threshold-input"
-        min="50" max="100" step="5" value="${threshold}"
-        data-threshold-id="${safeId}"
-        aria-label="Alert threshold for ${escapeHtml(label)}" />
+      <span class="fav-threshold-label">Alert when score higher than</span>
+      <div class="fav-threshold-stepper">
+        <button type="button" class="fav-threshold-step" data-step="-5" data-for="${safeId}" aria-label="Decrease threshold">-</button>
+        <span class="fav-threshold-value" id="thresh-display-${safeId}">${threshold}</span>
+        <button type="button" class="fav-threshold-step" data-step="5" data-for="${safeId}" aria-label="Increase threshold">+</button>
+      </div>
+      <input type="hidden" id="thresh-${safeId}" class="fav-threshold-input"
+        value="${threshold}" data-threshold-id="${safeId}" />
     </div>` : ''}
   `;
 }

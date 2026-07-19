@@ -334,8 +334,10 @@ async function handleRequest(request, env) {
 
     const hits = results.filter(r => r.willAlert);
     if (hits.length) {
-      const title = '★ Test — Favourite crag alert';
-      const body = hits.map(r => `${r.name} — scoring ${r.score}/100 today`).join('\n') + '\n\nsendtemps.app';
+      const title = hits.length === 1
+        ? `${hits[0].name} is looking good today`
+        : `${hits.length} of your pinned crags are looking good today`;
+      const body = hits.map(r => `${r.name} — ${r.score}/100`).join('\n') + '\n\nCheck the full forecast at sendtemps.app';
       const payload = JSON.stringify({ title, body, url: 'https://sendtemps.app/' });
       const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
       await sendWebPush(pushSub, payload, env);
@@ -488,8 +490,10 @@ async function handleCron(env) {
 
     if (!hits.length) continue;
 
-    const title = '★ Favourite crag alert';
-    const body = hits.join('\n') + '\n\nsendtemps.app';
+    const title = hits.length === 1
+      ? `${hits[0].name} is looking good today`
+      : `${hits.length} of your pinned crags are looking good today`;
+    const body = hits.map(r => `${r.name} — ${r.score}/100`).join('\n') + '\n\nCheck the full forecast at sendtemps.app';
     const payload = JSON.stringify({ title, body, url: 'https://sendtemps.app/' });
     const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
     try {

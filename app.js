@@ -189,7 +189,25 @@ function toggleFavourite(cragId) {
   if (state.favouriteCrags.has(cragId)) state.favouriteCrags.delete(cragId);
   else state.favouriteCrags.add(cragId);
   saveFavourites();
+  syncFavouritesToWorker();
   renderDay();
+}
+
+async function syncFavouritesToWorker() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return; // not subscribed, nothing to sync
+    await fetch(`${API_BASE}/subscribe`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: sub.endpoint,
+        favourites: [...state.favouriteCrags],
+        thresholds: loadFavThresholds(),
+      }),
+    });
+  } catch { /* offline — fine, next subscribe will sync */ }
 }
 
 function loadFavThresholds() {
@@ -657,6 +675,7 @@ function renderSplitRanked(dayRows, destinations) {
       const val = Math.min(100, Math.max(50, parseInt(input.value, 10) || 75));
       input.value = val;
       saveFavThreshold(input.dataset.thresholdId, val);
+      syncFavouritesToWorker();
     });
     // Prevent card expand/collapse on click inside the input
     input.addEventListener('click', e => e.stopPropagation());
@@ -2410,10 +2429,18 @@ async function initNotifyBtn() {
             userVisibleOnly: true,
             applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
           });
+          // Include favourites + thresholds so the Worker can send targeted alerts
+          const favs = [...state.favouriteCrags];
+          const thresholds = loadFavThresholds();
           await fetch(`${API_BASE}/subscribe`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subscription: sub.toJSON(), state: activeState }),
+            body: JSON.stringify({
+              subscription: sub.toJSON(),
+              state: activeState,
+              favourites: favs,
+              thresholds,
+            }),
           });
           updateNotifyBtn(true);
         } catch (err) {

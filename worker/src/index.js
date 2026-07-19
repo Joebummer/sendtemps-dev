@@ -1,8 +1,11 @@
 /**
  * SendTemps API Worker
- * - POST /subscribe  — saves a Web Push subscription to Supabase
+ * - POST /subscribe   — saves a Web Push subscription to Supabase
+ * - PATCH /subscribe  — updates favourites + thresholds for an existing subscription
  * - DELETE /subscribe — removes a subscription (unsubscribe)
- * - Cron trigger (0 21 * * * UTC = 7am AEST) — checks VIC crags for rare windows
+ * - Cron trigger (0 21 * * * UTC = 7am AEST):
+ *     1. Checks VIC crags for rare windows (state-wide alert)
+ *     2. Checks each subscriber's favourited crags against their score threshold
  */
 
 // ─── VAPID helpers (Web Push without npm) ────────────────────────────────────
@@ -186,13 +189,24 @@ async function supabaseRequest(env, method, path, body) {
   return res;
 }
 
-async function saveSubscription(env, sub, state) {
+async function saveSubscription(env, sub, state, favourites, thresholds) {
   return supabaseRequest(env, 'POST', '/push_subscriptions', {
     endpoint: sub.endpoint,
     p256dh: sub.keys.p256dh,
     auth: sub.keys.auth,
     state: state || 'VIC',
+    favourites: favourites || [],
+    thresholds: thresholds || {},
   });
+}
+
+async function updateSubscriptionFavourites(env, endpoint, favourites, thresholds) {
+  return supabaseRequest(
+    env,
+    'PATCH',
+    `/push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`,
+    { favourites: favourites || [], thresholds: thresholds || {} }
+  );
 }
 
 async function deleteSubscription(env, endpoint) {
@@ -275,7 +289,7 @@ async function handleRequest(request, env) {
     return new Response(null, {
       headers: {
         'Access-Control-Allow-Origin': 'https://sendtemps.app',
-        'Access-Control-Allow-Methods': 'POST, DELETE, OPTIONS',
+        'Access-Control-Allow-Methods': 'POST, PATCH, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
       }
     });
@@ -287,8 +301,14 @@ async function handleRequest(request, env) {
   };
 
   if (pathname === '/subscribe' && request.method === 'POST') {
-    const { subscription, state } = await request.json();
-    await saveSubscription(env, subscription, state);
+    const { subscription, state, favourites, thresholds } = await request.json();
+    await saveSubscription(env, subscription, state, favourites, thresholds);
+    return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+  }
+
+  if (pathname === '/subscribe' && request.method === 'PATCH') {
+    const { endpoint, favourites, thresholds } = await request.json();
+    await updateSubscriptionFavourites(env, endpoint, favourites, thresholds);
     return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
   }
 
@@ -301,31 +321,119 @@ async function handleRequest(request, env) {
   return new Response('Not found', { status: 404 });
 }
 
+// ─── Favourite score lookup ───────────────────────────────────────────────────
+// Simplified scoring proxy: fetch today's tMax, precip, wind for a crag lat/lon
+// and produce a rough 0-100 score comparable to the app's scoring model.
+// Not a full replica — used only to detect threshold crossings.
+async function getCragScoreToday(lat, lon) {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,precipitation_sum,precipitation_probability_max,windspeed_10m_max&forecast_days=1&timezone=Australia%2FMelbourne`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const d = data.daily;
+    const tMax = d.temperature_2m_max[0];
+    const precip = d.precipitation_sum[0];
+    const precipProb = d.precipitation_probability_max[0];
+    const wind = d.windspeed_10m_max[0];
+
+    // Simple heuristic score (mirrors app logic directionally)
+    let score = 70;
+    if (tMax >= 18 && tMax <= 28) score += 10;
+    else if (tMax < 10 || tMax > 35) score -= 20;
+    else if (tMax < 14 || tMax > 32) score -= 10;
+    if (precip > 2) score -= 30;
+    else if (precip > 0.5) score -= 15;
+    if (precipProb > 60) score -= 10;
+    if (wind > 40) score -= 15;
+    else if (wind > 25) score -= 8;
+    return Math.max(0, Math.min(100, Math.round(score)));
+  } catch { return null; }
+}
+
+// Crag ID → lat/lon map for favourite lookups
+// Covers all crags in the app — keyed by crag id from crags.js
+const CRAG_COORDS = {
+  // VIC
+  'arapiles': { lat: -36.7556, lon: 141.8403, name: 'Mt Arapiles' },
+  'gramps-stapylton': { lat: -37.1389, lon: 142.5217, name: 'Grampians Stapylton' },
+  'gramps-taipan': { lat: -36.9036, lon: 142.4131, name: 'Grampians Taipan' },
+  'mt-buffalo': { lat: -36.7367, lon: 146.8153, name: 'Mt Buffalo' },
+  'cathedral': { lat: -37.3667, lon: 145.7333, name: 'Cathedral Ranges' },
+  'you-yangs': { lat: -37.9489, lon: 144.4297, name: 'You Yangs' },
+  'harcourt': { lat: -36.9977, lon: 144.3049, name: 'Harcourt' },
+  'mt-beckworth': { lat: -37.3022, lon: 143.7356, name: 'Mt Beckworth' },
+  'camels-hump': { lat: -37.3947, lon: 144.5547, name: "Camel's Hump" },
+  'falcons': { lat: -37.6736, lon: 144.4322, name: 'Falcons Lookout' },
+  // NSW
+  'nowra': { lat: -34.8833, lon: 150.6, name: 'Nowra' },
+  'blue-mountains': { lat: -33.7167, lon: 150.3167, name: 'Blue Mountains' },
+  'booroomba': { lat: -35.5833, lon: 148.8167, name: 'Booroomba Rocks' },
+  'bungonia': { lat: -34.8333, lon: 149.95, name: 'Bungonia' },
+  'point-perpendicular': { lat: -35.1, lon: 150.8, name: 'Point Perpendicular' },
+  // TAS
+  'freycinet': { lat: -42.15, lon: 148.3, name: 'Freycinet' },
+  'ben-lomond': { lat: -41.55, lon: 147.65, name: 'Ben Lomond' },
+  'organ-pipes': { lat: -42.9, lon: 147.25, name: 'Organ Pipes' },
+  // SA
+  'morialta': { lat: -34.9167, lon: 138.7, name: 'Morialta' },
+  'onkaparinga': { lat: -35.15, lon: 138.5667, name: 'Onkaparinga' },
+  'moonarie': { lat: -31.3833, lon: 138.6333, name: 'Moonarie' },
+  'warren-gorge': { lat: -32.5, lon: 138.35, name: 'Warren Gorge' },
+  // WA
+  'mountain-quarry': { lat: -31.9667, lon: 116.1, name: 'Mountain Quarry' },
+  'wilyabrup': { lat: -33.9, lon: 115.0167, name: 'Wilyabrup' },
+  'west-cape-howe': { lat: -35.1333, lon: 117.6167, name: 'West Cape Howe' },
+};
+
 // ─── Cron handler ─────────────────────────────────────────────────────────────
 
 async function handleCron(env) {
-  const windows = await checkRareWindows();
-  if (windows.length === 0) return; // silent exit
-
-  const title = '✦ Rare window in Victoria';
-  const body = windows.join('\n') + '\n\nCheck sendtemps.app for the full forecast.';
-  const payload = JSON.stringify({ title, body, url: 'https://sendtemps.app/' });
-
   const subscriptions = await getAllSubscriptions(env);
-  const vicSubs = subscriptions.filter(s => s.state === 'VIC' || !s.state);
 
-  for (const sub of vicSubs) {
-    const pushSub = {
-      endpoint: sub.endpoint,
-      keys: { p256dh: sub.p256dh, auth: sub.auth },
-    };
+  // 1. Rare window alerts (VIC state-wide)
+  const windows = await checkRareWindows();
+  if (windows.length > 0) {
+    const title = '✦ Rare window in Victoria';
+    const body = windows.join('\n') + '\n\nCheck sendtemps.app for the full forecast.';
+    const payload = JSON.stringify({ title, body, url: 'https://sendtemps.app/' });
+    const vicSubs = subscriptions.filter(s => s.state === 'VIC' || !s.state);
+    for (const sub of vicSubs) {
+      const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
+      try {
+        await sendWebPush(pushSub, payload, env);
+      } catch (e) {
+        if (e?.status === 410 || e?.status === 404) await deleteSubscription(env, sub.endpoint);
+      }
+    }
+  }
+
+  // 2. Favourite crag alerts — per subscriber, per pinned crag
+  for (const sub of subscriptions) {
+    const favs = Array.isArray(sub.favourites) ? sub.favourites : [];
+    const thresholds = sub.thresholds || {};
+    if (!favs.length) continue;
+
+    const hits = [];
+    for (const cragId of favs) {
+      const coords = CRAG_COORDS[cragId];
+      if (!coords) continue;
+      const threshold = thresholds[cragId] ?? 75;
+      const score = await getCragScoreToday(coords.lat, coords.lon);
+      if (score !== null && score >= threshold) {
+        hits.push(`${coords.name} — scoring ${score}/100 today`);
+      }
+    }
+
+    if (!hits.length) continue;
+
+    const title = '★ Favourite crag alert';
+    const body = hits.join('\n') + '\n\nsendtemps.app';
+    const payload = JSON.stringify({ title, body, url: 'https://sendtemps.app/' });
+    const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
     try {
       await sendWebPush(pushSub, payload, env);
     } catch (e) {
-      // Subscription expired — clean it up
-      if (e.status === 410 || e.status === 404) {
-        await deleteSubscription(env, sub.endpoint);
-      }
+      if (e?.status === 410 || e?.status === 404) await deleteSubscription(env, sub.endpoint);
     }
   }
 }

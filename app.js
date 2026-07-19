@@ -688,6 +688,19 @@ function renderSplitRanked(dayRows, destinations) {
     btn.addEventListener('pointerdown', e => e.stopPropagation());
   });
 
+  // "I climbed here" check-in buttons
+  list.querySelectorAll('.climbed-here-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      showCheckinSheet(
+        btn.dataset.checkinId,
+        btn.dataset.checkinName,
+        parseInt(btn.dataset.checkinScore, 10) || null
+      );
+    });
+  });
+
   // "N hidden — show" disclosure footer.
   // "Set dates" button — enter trip range-pick mode.
   const setDatesBtn = list.querySelector('#trip-set-dates-btn');
@@ -1315,6 +1328,10 @@ function renderCard(row, isTop, isWeekend) {
           ${renderSunWindow(day.sunWindow, crag.sunOnWall)}
         </div>
         ${renderDaySubCrags(daySubCrags, isToday ? 'today' : isTomorrow ? 'tomorrow' : null)}
+        <button type="button" class="climbed-here-btn" data-checkin-id="${escapeHtml(crag.id)}" data-checkin-name="${escapeHtml(crag.name)}" data-checkin-score="${headlineScore}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2L8 8H3l4 4-2 7 7-4 7 4-2-7 4-4h-5z"/></svg>
+          I climbed here
+        </button>
         ${renderShareExpanderButton(shareId, crag.name)}
       </div>
     </article>
@@ -1348,6 +1365,104 @@ function renderDestShareButton(destination, tripScore, destDailyScores) {
       <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
     </svg>
   </button>`;
+}
+
+// ─── Check-in bottom sheet ───────────────────────────────────────────────────────
+
+function showCheckinSheet(cragId, cragName, appScore) {
+  // Remove any existing sheet
+  document.getElementById('checkin-sheet')?.remove();
+  document.getElementById('checkin-backdrop')?.remove();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'checkin-backdrop';
+  backdrop.className = 'checkin-backdrop';
+  document.body.appendChild(backdrop);
+
+  const sheet = document.createElement('div');
+  sheet.id = 'checkin-sheet';
+  sheet.className = 'checkin-sheet';
+  sheet.setAttribute('role', 'dialog');
+  sheet.setAttribute('aria-label', 'Log conditions');
+  sheet.innerHTML = `
+    <div class="checkin-handle"></div>
+    <div class="checkin-title">How were conditions?</div>
+    <div class="checkin-crag">${escapeHtml(cragName)}</div>
+
+    <div class="checkin-section">
+      <div class="checkin-label">Rock</div>
+      <div class="checkin-options" data-group="rock">
+        <button type="button" class="checkin-option" data-value="dry">Dry</button>
+        <button type="button" class="checkin-option" data-value="damp">Damp</button>
+        <button type="button" class="checkin-option" data-value="wet">Wet</button>
+      </div>
+    </div>
+
+    <div class="checkin-section">
+      <div class="checkin-label">Temperature</div>
+      <div class="checkin-options" data-group="temp">
+        <button type="button" class="checkin-option" data-value="too_cold">Too cold</button>
+        <button type="button" class="checkin-option" data-value="good">Good</button>
+        <button type="button" class="checkin-option" data-value="too_hot">Too hot</button>
+      </div>
+    </div>
+
+    <button type="button" class="checkin-submit" id="checkin-submit" disabled>Submit</button>
+  `;
+  document.body.appendChild(sheet);
+
+  // Animate in
+  requestAnimationFrame(() => sheet.classList.add('open'));
+
+  const selections = { rock: null, temp: null };
+  const submitBtn = sheet.querySelector('#checkin-submit');
+
+  sheet.querySelectorAll('.checkin-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const group = opt.closest('[data-group]').dataset.group;
+      opt.closest('[data-group]').querySelectorAll('.checkin-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      selections[group] = opt.dataset.value;
+      if (selections.rock && selections.temp) submitBtn.disabled = false;
+    });
+  });
+
+  submitBtn.addEventListener('click', async () => {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving…';
+    const today = new Date();
+    const climbed_date = today.toISOString().slice(0, 10);
+    const month = today.getMonth() + 1;
+    try {
+      await fetch(`${API_BASE}/checkin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          crag_id: cragId,
+          crag_name: cragName,
+          climbed_date,
+          month,
+          app_score: appScore,
+          rock: selections.rock,
+          temp_feel: selections.temp,
+        }),
+      });
+      submitBtn.textContent = 'Thanks — logged!';
+      setTimeout(() => closeCheckinSheet(), 1200);
+    } catch {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Failed — try again';
+    }
+  });
+
+  function closeCheckinSheet() {
+    sheet.classList.remove('open');
+    backdrop.classList.remove('open');
+    setTimeout(() => { sheet.remove(); backdrop.remove(); }, 300);
+  }
+
+  backdrop.addEventListener('click', closeCheckinSheet);
+  requestAnimationFrame(() => backdrop.classList.add('open'));
 }
 
 function renderShareExpanderButton(cragId, cragName) {

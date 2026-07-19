@@ -2178,3 +2178,178 @@ html[data-theme="dark"] .reason-tag-bestfrom {
   background: var(--surface, #f0ede6);
   color: var(--text, #28251D);
 }
+
+/* ── I climbed here button ───────────────────────────────────────────────── */
+.climbed-here-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 11px 14px;
+  margin-top: 8px;
+  background: transparent;
+  border: 1px solid var(--border, #D4D1CA);
+  border-radius: 10px;
+  color: var(--text-muted, #7A7974);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  text-align: left;
+}
+
+.climbed-here-btn:hover {
+  background: var(--surface, #F9F8F5);
+  color: var(--primary, #2d5a27);
+  border-color: var(--primary, #2d5a27);
+}
+
+[data-theme="dark"] .climbed-here-btn {
+  border-color: var(--border, #393836);
+  color: var(--text-muted, #797876);
+}
+
+[data-theme="dark"] .climbed-here-btn:hover {
+  background: var(--surface, #1C1B19);
+  color: #6DAA45;
+  border-color: #6DAA45;
+}
+
+/* ── Check-in bottom sheet ───────────────────────────────────────────────── */
+.checkin-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  z-index: 200;
+  transition: background 0.25s;
+}
+
+.checkin-backdrop.open {
+  background: rgba(0,0,0,0.4);
+}
+
+.checkin-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 201;
+  background: var(--bg, #F7F6F2);
+  border-radius: 18px 18px 0 0;
+  padding: 12px 20px 36px;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+.checkin-sheet.open {
+  transform: translateY(0);
+}
+
+.checkin-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--border, #D4D1CA);
+  border-radius: 2px;
+  margin: 0 auto 20px;
+}
+
+.checkin-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text, #28251D);
+  margin-bottom: 4px;
+}
+
+.checkin-crag {
+  font-size: 13px;
+  color: var(--text-muted, #7A7974);
+  margin-bottom: 24px;
+}
+
+.checkin-section {
+  margin-bottom: 20px;
+}
+
+.checkin-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #7A7974);
+  margin-bottom: 10px;
+}
+
+.checkin-options {
+  display: flex;
+  gap: 8px;
+}
+
+.checkin-option {
+  flex: 1;
+  padding: 10px 8px;
+  border: 1px solid var(--border, #D4D1CA);
+  border-radius: 10px;
+  background: var(--surface, #F9F8F5);
+  color: var(--text, #28251D);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.checkin-option:hover {
+  border-color: var(--primary, #2d5a27);
+  color: var(--primary, #2d5a27);
+}
+
+.checkin-option.selected {
+  background: var(--primary, #2d5a27);
+  border-color: var(--primary, #2d5a27);
+  color: #fff;
+}
+
+.checkin-submit {
+  width: 100%;
+  padding: 14px;
+  margin-top: 8px;
+  background: var(--primary, #2d5a27);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.checkin-submit:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.checkin-submit:not(:disabled):hover {
+  opacity: 0.88;
+}
+
+[data-theme="dark"] .checkin-sheet {
+  background: var(--bg, #171614);
+}
+
+[data-theme="dark"] .checkin-option {
+  background: var(--surface, #1C1B19);
+  border-color: var(--border, #393836);
+  color: var(--text, #CDCCCA);
+}
+
+[data-theme="dark"] .checkin-option.selected {
+  background: #437A22;
+  border-color: #437A22;
+  color: #fff;
+}
+
+[data-theme="dark"] .checkin-submit {
+  background: #437A22;
+}

@@ -346,6 +346,14 @@ async function handleRequest(request, env) {
     return new Response(JSON.stringify({ ok: true, results, pushed: hits.length > 0 }), { headers: corsHeaders });
   }
 
+  if (pathname === '/checkin' && request.method === 'POST') {
+    const { crag_id, crag_name, climbed_date, month, app_score, rock, temp_feel } = await request.json();
+    await supabaseRequest(env, 'POST', '/checkins', {
+      crag_id, crag_name, climbed_date, month, app_score, rock, temp_feel,
+    });
+    return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+  }
+
   if (pathname === '/subscribe' && request.method === 'DELETE') {
     const { endpoint } = await request.json();
     await deleteSubscription(env, endpoint);

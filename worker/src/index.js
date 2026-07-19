@@ -368,6 +368,23 @@ async function handleRequest(request, env) {
     return new Response(JSON.stringify({ count, rock, temp, lastDate }), { headers: corsHeaders });
   }
 
+  // Debug endpoint — returns raw error from push attempt
+  if (pathname === '/debug-push' && request.method === 'POST') {
+    const { endpoint } = await request.json();
+    const allSubs = await getAllSubscriptions(env);
+    const sub = allSubs.find(s => s.endpoint === endpoint);
+    if (!sub) return new Response(JSON.stringify({ error: 'sub not found' }), { headers: corsHeaders });
+    try {
+      const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
+      const payload = JSON.stringify({ title: 'Debug test', body: 'Push debug', url: 'https://sendtemps.app/' });
+      const res = await sendWebPush(pushSub, payload, env);
+      const body = await res.text();
+      return new Response(JSON.stringify({ status: res.status, body, vapid_subject: env.VAPID_SUBJECT || 'MISSING' }), { headers: corsHeaders });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message, stack: e.stack }), { headers: corsHeaders });
+    }
+  }
+
   if (pathname === '/checkin' && request.method === 'POST') {
     const { crag_id, crag_name, climbed_date, month, app_score, rock, temp_feel } = await request.json();
     await supabaseRequest(env, 'POST', '/checkins', {

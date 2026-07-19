@@ -2183,36 +2183,32 @@ html[data-theme="dark"] .reason-tag-bestfrom {
 .climbed-here-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
   width: 100%;
-  padding: 11px 14px;
-  margin-top: 8px;
-  background: transparent;
-  border: 1px solid var(--border, #D4D1CA);
+  padding: 12px 16px;
+  margin-top: 16px;
+  background: var(--primary, #2d5a27);
+  border: none;
   border-radius: 10px;
-  color: var(--text-muted, #7A7974);
+  color: #fff;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-  text-align: left;
+  transition: opacity 0.15s;
+  text-align: center;
 }
 
 .climbed-here-btn:hover {
-  background: var(--surface, #F9F8F5);
-  color: var(--primary, #2d5a27);
-  border-color: var(--primary, #2d5a27);
+  opacity: 0.88;
+}
+
+.climbed-here-btn svg {
+  opacity: 0.85;
 }
 
 [data-theme="dark"] .climbed-here-btn {
-  border-color: var(--border, #393836);
-  color: var(--text-muted, #797876);
-}
-
-[data-theme="dark"] .climbed-here-btn:hover {
-  background: var(--surface, #1C1B19);
-  color: #6DAA45;
-  border-color: #6DAA45;
+  background: #437A22;
 }
 
 /* ── Check-in bottom sheet ───────────────────────────────────────────────── */

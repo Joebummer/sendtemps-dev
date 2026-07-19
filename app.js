@@ -647,6 +647,13 @@ function renderSplitRanked(dayRows, destinations) {
       const open = card.dataset.open === 'true';
       card.dataset.open = open ? 'false' : 'true';
       btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+      // Fetch check-in summary on first expand
+      if (!open && !card.dataset.checkinLoaded) {
+        card.dataset.checkinLoaded = 'true';
+        const cragId = card.dataset.id;
+        const summaryEl = card.querySelector('.checkin-summary');
+        if (summaryEl && cragId) fetchCheckinSummary(cragId, summaryEl);
+      }
     });
   });
 
@@ -1328,6 +1335,7 @@ function renderCard(row, isTop, isWeekend) {
           ${renderSunWindow(day.sunWindow, crag.sunOnWall)}
         </div>
         ${renderDaySubCrags(daySubCrags, isToday ? 'today' : isTomorrow ? 'tomorrow' : null)}
+        <div class="checkin-summary" style="display:none"></div>
         <button type="button" class="climbed-here-btn" data-checkin-id="${escapeHtml(crag.id)}" data-checkin-name="${escapeHtml(crag.name)}" data-checkin-score="${headlineScore}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2L8 8H3l4 4-2 7 7-4 7 4-2-7 4-4h-5z"/></svg>
           I climbed here
@@ -1365,6 +1373,27 @@ function renderDestShareButton(destination, tripScore, destDailyScores) {
       <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
     </svg>
   </button>`;
+}
+
+// ─── Check-in summary ──────────────────────────────────────────────────────
+
+const ROCK_LABEL    = { dry: 'rock dry', damp: 'rock damp', wet: 'rock wet' };
+const TEMP_LABEL    = { too_cold: 'conditions cold', good: 'conditions good', too_hot: 'conditions hot' };
+
+async function fetchCheckinSummary(cragId, el) {
+  try {
+    const res = await fetch(`${API_BASE}/checkins/${encodeURIComponent(cragId)}`);
+    const { count, rock, temp } = await res.json();
+    if (!count) { el.remove(); return; }
+    const parts = [];
+    if (rock) parts.push(ROCK_LABEL[rock] || rock);
+    if (temp) parts.push(TEMP_LABEL[temp] || temp);
+    const who = count === 1 ? '1 climbed recently' : `${count} climbed recently`;
+    el.textContent = parts.length ? `${who} · ${parts.join(' · ')}` : who;
+    el.style.display = '';
+  } catch {
+    el.remove();
+  }
 }
 
 // ─── Check-in bottom sheet ───────────────────────────────────────────────────────

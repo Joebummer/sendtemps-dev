@@ -289,7 +289,7 @@ async function handleRequest(request, env) {
     return new Response(null, {
       headers: {
         'Access-Control-Allow-Origin': 'https://sendtemps.app',
-        'Access-Control-Allow-Methods': 'POST, PATCH, DELETE, OPTIONS',
+        'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
       }
     });
@@ -344,6 +344,28 @@ async function handleRequest(request, env) {
     }
 
     return new Response(JSON.stringify({ ok: true, results, pushed: hits.length > 0 }), { headers: corsHeaders });
+  }
+
+  // GET /checkins/:cragId — last 7 days of check-ins for a crag
+  if (pathname.startsWith('/checkins/') && request.method === 'GET') {
+    const cragId = decodeURIComponent(pathname.slice('/checkins/'.length));
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const res = await supabaseRequest(
+      env, 'GET',
+      `/checkins?crag_id=eq.${encodeURIComponent(cragId)}&climbed_date=gte.${since}&select=rock,temp_feel`,
+      null
+    );
+    const rows = await res.json();
+    // Aggregate: most common rock + temp
+    const count = rows.length;
+    const mode = (arr, key) => {
+      const freq = {};
+      arr.forEach(r => { freq[r[key]] = (freq[r[key]] || 0) + 1; });
+      return Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    };
+    const rock = mode(rows, 'rock');
+    const temp = mode(rows, 'temp_feel');
+    return new Response(JSON.stringify({ count, rock, temp }), { headers: corsHeaders });
   }
 
   if (pathname === '/checkin' && request.method === 'POST') {

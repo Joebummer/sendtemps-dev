@@ -2353,3 +2353,16 @@ html[data-theme="dark"] .reason-tag-bestfrom {
 [data-theme="dark"] .checkin-submit {
   background: #437A22;
 }
+
+/* ── Check-in summary line ───────────────────────────────────────────────── */
+.checkin-summary {
+  font-size: 13px;
+  color: var(--text-muted, #7A7974);
+  padding: 9px 0 2px;
+  border-top: 1px solid var(--border, #D4D1CA);
+  margin-top: 12px;
+}
+
+[data-theme="dark"] .checkin-summary {
+  border-color: var(--border, #393836);
+}

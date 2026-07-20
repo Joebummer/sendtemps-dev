@@ -316,11 +316,13 @@ async function handleRedeem(env, url, corsHeaders, ctx) {
     return new Response(JSON.stringify({ ok: false }), { status: 200, headers: corsHeaders });
   }
 
-  // Usage tracking — doesn't block the response, but must be registered with
-  // waitUntil so Cloudflare doesn't kill it right after we return.
+  // For single-use codes (label contains 'Single-use'), deactivate on first redemption.
+  // Multi-use codes (owner, interstate-beta) keep active=true.
+  const isSingleUse = (row.label || '').toLowerCase().includes('single-use');
   const trackUsage = supabaseRequest(env, 'PATCH', `/access_codes?code=eq.${encodeURIComponent(code)}`, {
     redeemed_count: (row.redeemed_count || 0) + 1,
     last_redeemed_at: new Date().toISOString(),
+    ...(isSingleUse ? { active: false } : {}),
   }).catch(() => {});
   if (ctx?.waitUntil) ctx.waitUntil(trackUsage);
   else await trackUsage;

@@ -95,7 +95,7 @@ function visibleDayCount() {
   const t = document.querySelector('[data-theme-toggle]');
   const r = document.documentElement;
   const saved = localStorage.getItem('theme');
-  let d = saved ?? (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
+  let d = saved ?? 'light';
   const apply = () => {
     r.setAttribute('data-theme', d);
     t.innerHTML = d === 'dark'

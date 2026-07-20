@@ -2634,6 +2634,135 @@ function buildShareUrl(cragId, dateStr) {
   return `${base}?${params.toString()}`;
 }
 
+// ── Share image card ────────────────────────────────────────────────────────
+// Draws a 1200×630 branded PNG on an offscreen canvas and returns a File
+// object ready to pass to navigator.share({ files: [...] }).
+async function buildShareImage(row, dateStr) {
+  const { crag, day, score } = row;
+  const W = 1200, H = 630;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  const PARCHMENT  = '#f5f2eb';
+  const GREEN      = '#2d5a27';
+  const CHARCOAL   = '#28251D';
+  const MUTED      = '#7a7670';
+  const BORDER     = '#dedad2';
+
+  // Background
+  ctx.fillStyle = PARCHMENT;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle topo lines (concentric arcs)
+  ctx.save();
+  ctx.strokeStyle = '#d8d4cc';
+  ctx.lineWidth = 1.2;
+  ctx.globalAlpha = 0.45;
+  for (let r = 60; r < 520; r += 42) {
+    ctx.beginPath();
+    ctx.arc(W - 180, H + 60, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Score pill
+  const scoreVal = Math.round(score);
+  const pillW = 110, pillH = 48, pillX = 80, pillY = 80;
+  ctx.fillStyle = GREEN;
+  ctx.beginPath();
+  ctx.roundRect(pillX, pillY, pillW, pillH, 24);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 22px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`${scoreVal}/100`, pillX + pillW / 2, pillY + pillH / 2);
+
+  // Crag name
+  ctx.fillStyle = CHARCOAL;
+  ctx.font = 'bold 72px system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  const maxNameW = W - 160;
+  let nameSize = 72;
+  while (ctx.measureText(crag.name).width > maxNameW && nameSize > 40) {
+    nameSize -= 4;
+    ctx.font = `bold ${nameSize}px system-ui, sans-serif`;
+  }
+  ctx.fillText(crag.name, 80, 220);
+
+  // Date line
+  const dateLabel = (() => {
+    try {
+      const d = new Date(dateStr + 'T00:00:00');
+      return d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
+    } catch { return dateStr; }
+  })();
+  ctx.fillStyle = MUTED;
+  ctx.font = '32px system-ui, sans-serif';
+  ctx.fillText(dateLabel, 80, 272);
+
+  // Divider
+  ctx.strokeStyle = BORDER;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(80, 306); ctx.lineTo(W - 80, 306);
+  ctx.stroke();
+
+  // Stats row — temp, wind, humidity
+  const temp  = day?.tempMax != null  ? `${Math.round(day.tempMax)}°C`  : '—';
+  const wind  = day?.windMax  != null  ? `${Math.round(day.windMax)} km/h` : '—';
+  const rh    = day?.rhMean   != null  ? `${Math.round(day.rhMean)}% RH`  : '—';
+  const stats = [
+    { label: 'TEMP', value: temp },
+    { label: 'WIND', value: wind },
+    { label: 'HUMIDITY', value: rh },
+  ];
+  const colW = (W - 160) / stats.length;
+  stats.forEach(({ label, value }, i) => {
+    const x = 80 + i * colW;
+    ctx.fillStyle = MUTED;
+    ctx.font = '22px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, x, 364);
+    ctx.fillStyle = CHARCOAL;
+    ctx.font = 'bold 40px system-ui, sans-serif';
+    ctx.fillText(value, x, 420);
+  });
+
+  // Region badge
+  if (crag.state) {
+    ctx.fillStyle = '#ede9de';
+    const badgeW = 90, badgeH = 36;
+    ctx.beginPath();
+    ctx.roundRect(80, 476, badgeW, badgeH, 8);
+    ctx.fill();
+    ctx.fillStyle = MUTED;
+    ctx.font = 'bold 18px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(crag.state, 80 + badgeW / 2, 476 + badgeH / 2 + 1);
+    ctx.textAlign = 'left';
+  }
+
+  // SENDTEMPS wordmark — bottom right
+  ctx.fillStyle = GREEN;
+  ctx.font = 'bold 28px system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('SENDTEMPS', W - 80, H - 52);
+  ctx.fillStyle = MUTED;
+  ctx.font = '20px system-ui, sans-serif';
+  ctx.fillText('sendtemps.app', W - 80, H - 24);
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
+      resolve(new File([blob], 'sendtemps-forecast.png', { type: 'image/png' }));
+    }, 'image/png');
+  });
+}
+
 function buildShareText(row, dateStr) {
   const { crag, day, score } = row;
   const dateLabel = (() => {
@@ -2657,23 +2786,32 @@ function shareForecast(cragId) {
   }
 
   const url = buildShareUrl(cragId, dateStr);
-  const text = buildShareText(row, dateStr);
-  const title = `${row.crag.name} forecast — SendTemps`;
+  const text = `Check out the conditions at ${row.crag.name}.`;
+  const title = `${row.crag.name} — SENDTEMPS`;
 
-  // navigator.share is the right path on iOS Safari + Android Chrome.
-  // It throws if the user cancels (NotAllowedError / AbortError) — we swallow
-  // those silently and don't fall back, since the user explicitly dismissed.
-  if (typeof navigator.share === 'function') {
-    navigator.share({ title, text, url })
-      .catch(err => {
-        if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
-        // Genuine failure — try clipboard as a fallback.
-        copyToClipboardWithToast(`${text}\n${url}`);
-      });
-    return;
-  }
+  // Try to generate the image card and include it in the share sheet.
+  // Falls back to text-only if canvas or file sharing isn't supported.
+  const doShare = async () => {
+    let files;
+    try {
+      const img = await buildShareImage(row, dateStr);
+      if (navigator.canShare && navigator.canShare({ files: [img] })) {
+        files = [img];
+      }
+    } catch { /* canvas failed — share text-only */ }
 
-  copyToClipboardWithToast(`${text}\n${url}`);
+    if (typeof navigator.share === 'function') {
+      navigator.share({ title, text, url, ...(files ? { files } : {}) })
+        .catch(err => {
+          if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
+          copyToClipboardWithToast(`${text}\n${url}`);
+        });
+    } else {
+      copyToClipboardWithToast(`${text}\n${url}`);
+    }
+  };
+
+  doShare();
 }
 
 function shareDestination(destination) {

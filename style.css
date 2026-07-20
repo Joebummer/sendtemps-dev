@@ -2436,3 +2436,34 @@ html[data-theme="dark"] .reason-tag-bestfrom {
 [data-theme="dark"] .checkin-back:hover {
   color: #6DAA45;
 }
+
+/* ── TAS trip callout ────────────────────────────────────────────────────── */
+.tas-callout-crags {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.tas-callout-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tas-callout-row.top .tas-callout-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text, #28251D);
+}
+
+.tas-callout-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted, #7A7974);
+}
+
+[data-theme="dark"] .tas-callout-row.top .tas-callout-name {
+  color: var(--text, #CDCCCA);
+}

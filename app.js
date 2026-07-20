@@ -945,6 +945,66 @@ function renderBestWeekendCallout(destinations) {
   `;
 }
 
+// TAS trip callout — top 3 crags for the selected date window
+function renderTASCallout(destinations) {
+  if (!destinations.length) return '';
+
+  // Collect all TAS sub-crags across destinations, ranked by tripScore
+  const tasCrags = [];
+  for (const dest of destinations) {
+    const namedSubs = dest.subCrags.filter(s => s.crag.parentId && s.crag.state === 'TAS');
+    const pool = namedSubs.length ? namedSubs : dest.subCrags.filter(s => s.crag.state === 'TAS');
+    for (const sub of pool) {
+      tasCrags.push(sub);
+    }
+  }
+  if (!tasCrags.length) return '';
+
+  // Sort by tripScore, dedupe by crag id, take top 3
+  tasCrags.sort((a, b) => b.tripScore - a.tripScore);
+  const seen = new Set();
+  const top3 = tasCrags.filter(s => {
+    if (seen.has(s.crag.id)) return false;
+    seen.add(s.crag.id);
+    return true;
+  }).slice(0, 3);
+
+  if (!top3.length) return '';
+
+  const dates = state.tripDates;
+  const startLabel = dates[0] ? new Date(dates[0]).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+  const endLabel   = dates[dates.length - 1] ? new Date(dates[dates.length - 1]).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+  const rangeLabel = startLabel && endLabel && startLabel !== endLabel ? `${startLabel} – ${endLabel}` : startLabel;
+
+  const top = top3[0];
+  const shareText = `Heading to Tasmania? ${top.crag.name} is looking best — scoring ${top.tripScore}/100 on SendTemps. sendtemps.app`;
+
+  return `
+    <div class="best-weekend-callout tas-callout">
+      <div class="best-weekend-inner">
+        <div class="best-weekend-label">Best for your trip</div>
+        <div class="tas-callout-crags">
+          ${top3.map((s, i) => {
+            const band = scoreBand(s.tripScore);
+            return `<div class="tas-callout-row${i === 0 ? ' top' : ''}">
+              <span class="tas-callout-name">${escapeHtml(s.crag.name)}</span>
+              <span class="score-mini ${band.color}">${s.tripScore}</span>
+            </div>`;
+          }).join('')}
+        </div>
+        ${rangeLabel ? `<div class="best-weekend-dates">${escapeHtml(rangeLabel)}</div>` : ''}
+      </div>
+      <button type="button" class="best-weekend-share" data-share-text="${escapeHtml(shareText)}" aria-label="Share Tasmania trip pick">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+        </svg>
+        Share
+      </button>
+    </div>
+  `;
+}
+
 function renderWeekendSection(title, subtitle, destinations, hiddenItems = []) {
   const collapsed = getSectionCollapsed()['weekend'] ?? false;
   return `
@@ -959,7 +1019,11 @@ function renderWeekendSection(title, subtitle, destinations, hiddenItems = []) {
         </button>
         ${renderTripDateRange()}
       </div>
-      ${destinations.length ? renderBestWeekendCallout(destinations) : ''}
+      ${destinations.length
+        ? (state.regionFilter === 'TAS'
+            ? renderTASCallout(destinations)
+            : renderBestWeekendCallout(destinations))
+        : ''}
       <div class="category-list" id="section-list-weekend">
         ${destinations.map((dest, i) => renderDestinationCard(dest, i === 0)).join('')}
       </div>

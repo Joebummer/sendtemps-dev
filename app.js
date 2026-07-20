@@ -23,7 +23,25 @@ const API_BASE = 'https://api.sendtemps.app';
 const TIER_KEY = 'st_tier';
 const TIER_EXPIRES_KEY = 'st_tier_expires';
 
+// Dev-only free-tier preview — lets a Pro device (e.g. the owner's, after
+// redeeming an invite code) see exactly what free users see, without
+// touching the real stored tier. Session-scoped so closing the tab clears
+// it automatically. Toggle via URL: ?freePreview=1 to preview free,
+// ?freePreview=0 (or just closing the tab) to go back to the real tier.
+const FREE_PREVIEW_KEY = 'st_free_preview';
+
+(function freePreviewFromUrl() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('freePreview')) return;
+  if (params.get('freePreview') === '0') sessionStorage.removeItem(FREE_PREVIEW_KEY);
+  else sessionStorage.setItem(FREE_PREVIEW_KEY, '1');
+  params.delete('freePreview');
+  const clean = params.toString();
+  history.replaceState(null, '', location.pathname + (clean ? `?${clean}` : ''));
+})();
+
 function isPro() {
+  if (sessionStorage.getItem(FREE_PREVIEW_KEY) === '1') return false;
   if (localStorage.getItem(TIER_KEY) !== 'pro') return false;
   const exp = localStorage.getItem(TIER_EXPIRES_KEY);
   if (exp && new Date(exp).getTime() < Date.now()) {

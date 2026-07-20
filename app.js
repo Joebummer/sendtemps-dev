@@ -903,9 +903,22 @@ function renderSplitRanked(dayRows, destinations) {
       // Fetch check-in summary on first expand
       if (!open && !card.dataset.checkinLoaded) {
         card.dataset.checkinLoaded = 'true';
-        const cragId = card.dataset.id;
+        const cardId = card.dataset.id;
         const summaryEl = card.querySelector('.checkin-summary');
-        if (summaryEl && cragId) fetchCheckinSummary(cragId, summaryEl);
+        if (summaryEl && cardId) {
+          if (cardId.startsWith('dest-')) {
+            // Destination card — aggregate checkins across all sub-crags
+            const destName = cardId.slice(5);
+            const allRanked = Object.values(state.ranked || {}).flat();
+            const subIds = allRanked
+              .filter(r => r.crag && (r.crag.area === destName || r.crag.destination === destName))
+              .map(r => r.crag.id)
+              .filter((id, i, arr) => arr.indexOf(id) === i);
+            if (subIds.length) fetchCheckinSummaryMulti(subIds, summaryEl);
+          } else {
+            fetchCheckinSummary(cardId, summaryEl);
+          }
+        }
       }
     });
   });
@@ -1500,6 +1513,7 @@ function renderDestinationCard(dest, isTop) {
         })()}
         ${renderArrivalHint(destDailyScores, state.tripDates)}
         ${renderPicksByDay(state.tripDates, bestPerDay)}
+        <div class="checkin-summary dest-checkin-summary" style="display:none"></div>
         <div class="detail-section">
           <div class="section-label">Sub-crags at this destination</div>
           <div class="subcrag-list">
@@ -1761,6 +1775,37 @@ function daysAgoLabel(dateStr) {
   if (diff === 0) return 'today';
   if (diff === 1) return 'yesterday';
   return `${diff} days ago`;
+}
+
+async function fetchCheckinSummaryMulti(cragIds, el) {
+  try {
+    const results = await Promise.all(
+      cragIds.map(id => fetch(`${API_BASE}/checkins/${encodeURIComponent(id)}`).then(r => r.json()).catch(() => null))
+    );
+    // Aggregate across all sub-crags
+    let totalCount = 0, lastDate = null, rockCounts = {}, tempCounts = {};
+    for (const d of results) {
+      if (!d || !d.count) continue;
+      totalCount += d.count;
+      if (!lastDate || (d.lastDate && d.lastDate > lastDate)) lastDate = d.lastDate;
+      if (d.rock) rockCounts[d.rock] = (rockCounts[d.rock] || 0) + d.count;
+      if (d.temp) tempCounts[d.temp] = (tempCounts[d.temp] || 0) + d.count;
+    }
+    if (!totalCount) { el.remove(); return; }
+    // Pick most common rock/temp
+    const rock = Object.keys(rockCounts).sort((a, b) => rockCounts[b] - rockCounts[a])[0];
+    const temp = Object.keys(tempCounts).sort((a, b) => tempCounts[b] - tempCounts[a])[0];
+    const parts = [];
+    if (rock) parts.push(ROCK_LABEL[rock] || rock);
+    if (temp) parts.push(TEMP_LABEL[temp] || temp);
+    const who = totalCount === 1 ? '1 climbed recently' : `${totalCount} climbed recently`;
+    const when = daysAgoLabel(lastDate);
+    const whenStr = when ? ` (last ${when})` : '';
+    el.textContent = parts.length ? `${who}${whenStr} · ${parts.join(' · ')}` : `${who}${whenStr}`;
+    el.style.display = '';
+  } catch {
+    el.remove();
+  }
 }
 
 async function fetchCheckinSummary(cragId, el) {

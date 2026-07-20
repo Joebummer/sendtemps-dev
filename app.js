@@ -85,6 +85,8 @@ const FREE_FORECAST_DAYS = 2;
 
 function visibleDayCount() {
   const total = (state.dates && state.dates.length) || FREE_FORECAST_DAYS;
+  // Shared links bypass the gate for the active date only
+  if (!isPro() && state.sharedLinkActive) return total;
   return isPro() ? total : Math.min(FREE_FORECAST_DAYS, total);
 }
 
@@ -521,6 +523,7 @@ function renderTabs() {
         return;
       }
       state.activeDate = btn.dataset.date;
+      state.sharedLinkActive = false; // user navigated manually — revoke shared bypass
       renderTabs();
       renderDay();
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2627,6 +2630,7 @@ function buildShareUrl(cragId, dateStr) {
   const params = new URLSearchParams();
   params.set('crag', cragId);
   if (dateStr) params.set('date', dateStr);
+  params.set('shared', '1'); // bypass pro gate for shared forecasts
   return `${base}?${params.toString()}`;
 }
 
@@ -2780,12 +2784,16 @@ function applyDeepLinkFromUrl() {
   const dateStr = params.get('date');
   if (!cragId && !dateStr) return;
 
-  // Switch tab if the requested date is in the current rolling window AND
-  // within what this tier can see — otherwise a shared link could be used
-  // to peek at Pro-only days. Free users stay on today; the locked tab is
-  // still visible so they know there's more forecast behind the link.
+  // Switch tab if the requested date is in the current rolling window.
+  // If ?shared=1 is present (link from a Pro user), bypass the tier gate
+  // so free users can see the shared forecast day without hitting the lock.
+  // This only unlocks the specific shared date — not the whole app.
+  const isSharedLink = params.get('shared') === '1';
+  // Mark session as shared so visibleDayCount() opens the gate for this date.
+  // Cleared when the user manually switches tabs (see renderTabs click handler).
+  if (isSharedLink) state.sharedLinkActive = true;
   const dateIdx = dateStr && state.dates ? state.dates.indexOf(dateStr) : -1;
-  const withinTier = dateIdx !== -1 && dateIdx < visibleDayCount();
+  const withinTier = dateIdx !== -1 && (isSharedLink || dateIdx < visibleDayCount());
   if (withinTier && state.activeDate !== dateStr) {
     state.activeDate = dateStr;
     renderTabs();

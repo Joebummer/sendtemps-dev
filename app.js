@@ -2666,12 +2666,22 @@ async function buildShareImage(row, dateStr) {
   }
   ctx.restore();
 
-  // Score pill
+  // Score pill — manual rounded rect for iOS 15 compat (roundRect not available)
   const scoreVal = Math.round(score);
   const pillW = 110, pillH = 48, pillX = 80, pillY = 80;
   ctx.fillStyle = GREEN;
   ctx.beginPath();
-  ctx.roundRect(pillX, pillY, pillW, pillH, 24);
+  const pr = 24;
+  ctx.moveTo(pillX + pr, pillY);
+  ctx.lineTo(pillX + pillW - pr, pillY);
+  ctx.arcTo(pillX + pillW, pillY, pillX + pillW, pillY + pr, pr);
+  ctx.lineTo(pillX + pillW, pillY + pillH - pr);
+  ctx.arcTo(pillX + pillW, pillY + pillH, pillX + pillW - pr, pillY + pillH, pr);
+  ctx.lineTo(pillX + pr, pillY + pillH);
+  ctx.arcTo(pillX, pillY + pillH, pillX, pillY + pillH - pr, pr);
+  ctx.lineTo(pillX, pillY + pr);
+  ctx.arcTo(pillX, pillY, pillX + pr, pillY, pr);
+  ctx.closePath();
   ctx.fill();
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 22px system-ui, sans-serif';
@@ -2731,12 +2741,21 @@ async function buildShareImage(row, dateStr) {
     ctx.fillText(value, x, 420);
   });
 
-  // Region badge
+  // Region badge — manual rounded rect for iOS 15 compat
   if (crag.state) {
     ctx.fillStyle = '#ede9de';
-    const badgeW = 90, badgeH = 36;
+    const badgeW = 90, badgeH = 36, bx = 80, by = 476, br = 8;
     ctx.beginPath();
-    ctx.roundRect(80, 476, badgeW, badgeH, 8);
+    ctx.moveTo(bx + br, by);
+    ctx.lineTo(bx + badgeW - br, by);
+    ctx.arcTo(bx + badgeW, by, bx + badgeW, by + br, br);
+    ctx.lineTo(bx + badgeW, by + badgeH - br);
+    ctx.arcTo(bx + badgeW, by + badgeH, bx + badgeW - br, by + badgeH, br);
+    ctx.lineTo(bx + br, by + badgeH);
+    ctx.arcTo(bx, by + badgeH, bx, by + badgeH - br, br);
+    ctx.lineTo(bx, by + br);
+    ctx.arcTo(bx, by, bx + br, by, br);
+    ctx.closePath();
     ctx.fill();
     ctx.fillStyle = MUTED;
     ctx.font = 'bold 18px system-ui, sans-serif';

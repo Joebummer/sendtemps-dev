@@ -2548,3 +2548,56 @@ html[data-theme="dark"] .reason-tag-bestfrom {
 [data-theme="dark"] .tas-callout-row.top .tas-callout-name {
   color: var(--text, #CDCCCA);
 }
+
+/* ── In-app code redemption ──────────────────────────────────────────────── */
+.redeem-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.redeem-row input {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid var(--border, #D4D1CA);
+  border-radius: 8px;
+  background: var(--surface, #F9F8F5);
+  color: var(--text, #28251D);
+  font-size: 14px;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.redeem-row input:focus {
+  border-color: var(--primary, #2d5a27);
+}
+
+.redeem-row button {
+  padding: 9px 16px;
+  background: var(--primary, #2d5a27);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.redeem-row button:disabled {
+  opacity: 0.6;
+}
+
+.redeem-status {
+  font-size: 13px;
+  margin-top: 6px;
+  min-height: 18px;
+}
+
+[data-theme="dark"] .redeem-row input {
+  background: var(--surface, #1C1B19);
+  border-color: var(--border, #393836);
+  color: var(--text, #CDCCCA);
+}

@@ -62,7 +62,7 @@
       @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 
-    <link rel="stylesheet" href="style.css?v=63.6" />
+    <link rel="stylesheet" href="style.css?v=65.5" />
   </head>
 
   <body>
@@ -98,6 +98,11 @@
         <footer class="footnote">
           <p>Forecast: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>. Conditions are predictions — always check on arrival. Aspect, dry-time and ideal-temp ratings are author's notes, not gospel.</p>
           <p class="updated" id="updated"></p>
+          <div class="redeem-row" id="redeem-row">
+            <input type="text" id="redeem-input" placeholder="Have an access code?" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" />
+            <button type="button" id="redeem-btn">Redeem</button>
+          </div>
+          <p class="redeem-status" id="redeem-status"></p>
         </footer>
       </div>
 
@@ -108,7 +113,7 @@
       </div>
     </main>
 
-    <script type="module" src="app.js?v=65.4"></script>
+    <script type="module" src="app.js?v=65.5"></script>
 
     <!--
       GoatCounter analytics — cookie-free, no banner needed.

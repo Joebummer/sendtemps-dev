@@ -3111,3 +3111,49 @@ if (document.readyState === 'loading') {
 } else {
   initNotifyBtn();
 }
+
+// ─── In-app code redemption ───────────────────────────────────────────────────
+// Lets PWA users redeem access codes without needing a URL bar.
+(function initRedeemRow() {
+  const row    = document.getElementById('redeem-row');
+  const input  = document.getElementById('redeem-input');
+  const btn    = document.getElementById('redeem-btn');
+  const status = document.getElementById('redeem-status');
+  if (!row || !input || !btn || !status) return;
+
+  // Hide the row entirely once Pro is already active
+  if (isPro()) { row.hidden = true; return; }
+
+  btn.addEventListener('click', async () => {
+    const code = input.value.trim().toUpperCase();
+    if (!code) return;
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    status.textContent = '';
+    try {
+      const res  = await fetch(`${API_BASE}/redeem?code=${encodeURIComponent(code)}`);
+      const data = await res.json();
+      if (data.ok) {
+        localStorage.setItem(TIER_KEY, data.tier || 'pro');
+        if (data.expires_at) localStorage.setItem(TIER_EXPIRES_KEY, data.expires_at);
+        else localStorage.removeItem(TIER_EXPIRES_KEY);
+        status.textContent = '✓ Pro unlocked — reloading…';
+        status.style.color = '#2d5a27';
+        setTimeout(() => location.reload(), 1000);
+      } else {
+        status.textContent = 'Code not recognised.';
+        status.style.color = '#A13544';
+        btn.disabled = false;
+        btn.textContent = 'Redeem';
+      }
+    } catch {
+      status.textContent = 'Network error — try again.';
+      status.style.color = '#A13544';
+      btn.disabled = false;
+      btn.textContent = 'Redeem';
+    }
+  });
+
+  // Allow Enter key to submit
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
+})();

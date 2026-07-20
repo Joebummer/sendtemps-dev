@@ -1211,6 +1211,40 @@ html[data-theme="dark"] .reason-tag-bestfrom {
 .subcrag-trip.warning { background: var(--color-warning); }
 .subcrag-trip.error   { background: var(--color-error); }
 
+/* Sub-crags — locked (free-tier) teaser button */
+.subcrag-locked-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-text);
+  -webkit-tap-highlight-color: transparent;
+}
+.subcrag-locked-btn:hover,
+.subcrag-locked-btn:active {
+  background: var(--color-surface-offset);
+}
+.subcrag-locked-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.subcrag-locked-icon {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+}
+.subcrag-locked-text {
+  flex: 1 1 auto;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
 /* Rain timing */
 .rain-list {
   display: flex;

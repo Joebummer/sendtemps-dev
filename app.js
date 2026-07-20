@@ -515,6 +515,7 @@ function renderTabs() {
 function showDayLockPopover(btn) {
   document.getElementById('day-lock-popover')?.remove();
   document.getElementById('notify-popover')?.remove();
+  document.getElementById('subcrag-lock-popover')?.remove();
 
   const pop = document.createElement('div');
   pop.id = 'day-lock-popover';
@@ -533,6 +534,38 @@ function showDayLockPopover(btn) {
   document.body.appendChild(pop);
 
   document.getElementById('day-lock-pop-close').addEventListener('click', () => pop.remove());
+  document.addEventListener('pointerdown', function outside(e) {
+    if (!pop.contains(e.target) && e.target !== btn) {
+      pop.remove();
+      document.removeEventListener('pointerdown', outside);
+    }
+  });
+
+  return pop;
+}
+
+function showSubCragLockPopover(btn) {
+  document.getElementById('subcrag-lock-popover')?.remove();
+  document.getElementById('day-lock-popover')?.remove();
+  document.getElementById('notify-popover')?.remove();
+
+  const pop = document.createElement('div');
+  pop.id = 'subcrag-lock-popover';
+  pop.className = 'pro-popover';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', 'Sub-crag breakdown — Pro');
+  pop.innerHTML = `
+    <p class="notify-pop-title">Sub-crag breakdown — Pro</p>
+    <p class="notify-pop-body">Free shows this area's own score. Pro breaks it down wall-by-wall so you can see which sub-crag has the best conditions today. Got an invite link? Open it once and this unlocks automatically.</p>
+    <button class="notify-pop-close" id="subcrag-lock-pop-close" aria-label="Close">✕</button>
+  `;
+
+  const rect = btn.getBoundingClientRect();
+  pop.style.top = `${rect.bottom + 8 + window.scrollY}px`;
+  pop.style.left = `${rect.left + window.scrollX}px`;
+  document.body.appendChild(pop);
+
+  document.getElementById('subcrag-lock-pop-close').addEventListener('click', () => pop.remove());
   document.addEventListener('pointerdown', function outside(e) {
     if (!pop.contains(e.target) && e.target !== btn) {
       pop.remove();
@@ -628,7 +661,10 @@ function renderDay() {
     .filter(r => !r.crag.parentId)
     .map(r => {
       const subs = subsByParent.get(r.crag.id) || [];
-      if (!subs.length) return { ...r, daySubCrags: subs };
+      // Sub-crag breakdown (and the headline promotion below) is a Pro
+      // feature — free tier sees the parent crag's own score/reasons only,
+      // with no hint of which sub-crag might be scoring higher today.
+      if (!subs.length || !isPro()) return { ...r, daySubCrags: subs };
       // Promote the highest-scoring entry (parent or any sub-crag) to the
       // headline chip so the parent card reflects the best the area offers.
       const best = [r, ...subs].reduce((a, b) => (a.score >= b.score ? a : b));
@@ -982,6 +1018,14 @@ function renderSplitRanked(dayRows, destinations) {
   // Day-trip sub-crag rows (no daily breakdown — just a score chip).
   list.querySelectorAll('.subcrag-row.is-static').forEach(btn => {
     btn.addEventListener('click', (e) => e.stopPropagation());
+  });
+
+  // Locked "Sub-crags — Pro" teaser button (free tier only).
+  list.querySelectorAll('.subcrag-locked-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showSubCragLockPopover(btn);
+    });
   });
 
   // Share buttons — both the icon on the header and the labelled button in
@@ -1574,7 +1618,11 @@ function renderCard(row, isTop, isWeekend) {
           </div>
           ${renderSunWindow(day.sunWindow, crag.sunOnWall)}
         </div>
-        ${renderDaySubCrags(daySubCrags, isToday ? 'today' : isTomorrow ? 'tomorrow' : null)}
+        ${daySubCrags && daySubCrags.length
+          ? (isPro()
+              ? renderDaySubCrags(daySubCrags, isToday ? 'today' : isTomorrow ? 'tomorrow' : null)
+              : renderDaySubCragsLocked(daySubCrags.length))
+          : ''}
         ${renderFavThresholdControl(crag.id)}
         <div class="checkin-summary" style="display:none"></div>
         <button type="button" class="climbed-here-btn" data-checkin-id="${escapeHtml(crag.id)}" data-checkin-name="${escapeHtml(crag.name)}" data-checkin-score="${headlineScore}">
@@ -1801,6 +1849,23 @@ function renderShareExpanderButton(cragId, cragName) {
       <span>Share this forecast</span>
     </button>
   </div>`;
+}
+
+// Free-tier stand-in for the Sub-crags breakdown — visible so free users
+// know the feature exists (matches the pattern used for the Multi-day trip
+// section and locked day tabs), but reveals nothing about individual
+// sub-crag scores. Tapping opens a popover explaining the Pro feature.
+function renderDaySubCragsLocked(count) {
+  return `
+    <div class="detail-section">
+      <div class="section-label">Sub-crags</div>
+      <button type="button" class="subcrag-locked-btn" aria-haspopup="dialog" aria-label="Sub-crag breakdown — Pro feature">
+        <svg class="subcrag-locked-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <span class="subcrag-locked-text">${count} sub-crag${count === 1 ? '' : 's'} here — see which one's best today</span>
+        <span class="pro-inline-lock">Pro</span>
+      </button>
+    </div>
+  `;
 }
 
 function renderDaySubCrags(daySubCrags, mode = null) {
@@ -2786,6 +2851,7 @@ function showNotifyPopover(btn, mode, activeState) {
   // Remove any existing popover
   document.getElementById('notify-popover')?.remove();
   document.getElementById('day-lock-popover')?.remove();
+  document.getElementById('subcrag-lock-popover')?.remove();
 
   const pop = document.createElement('div');
   pop.id = 'notify-popover';

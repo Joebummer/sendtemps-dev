@@ -1265,6 +1265,9 @@ function renderTASCallout(destinations) {
         Share
       </button>
     </div>
+  `;
+}
+
 // Pro-gated version of the Multi-day trip section — keeps the header visible
 // (so free users know the feature exists) but replaces the trip-date controls,
 // best-weekend callout and destination cards with a single locked teaser.

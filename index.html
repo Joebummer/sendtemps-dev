@@ -33,11 +33,34 @@
     <link rel="apple-touch-icon" href="icon-180.png" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 
-    <!-- Fontshare: General Sans (display) + Switzer (body) — both clean, high-legibility sans-serifs -->
+    <!-- Preconnect to external origins used on load -->
+    <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+    <link rel="preconnect" href="https://api.sendtemps.app" />
+    <link rel="preconnect" href="https://api.open-meteo.com" />
+
+    <!-- Fontshare: non-blocking load so fonts never delay first paint -->
     <link
       href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&f[]=switzer@400,500,600,700&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&f[]=switzer@400,500,600,700&display=swap" rel="stylesheet" />
+    </noscript>
+
+    <!-- Inline critical styles: loading screen renders before style.css downloads -->
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root { background: #f7f4ee; color: #28251D; font-family: system-ui, sans-serif; }
+      [data-theme="dark"] { background: #171614; color: #CDCCCA; }
+      #loading { display: flex; flex-direction: column; align-items: center; justify-content: center;
+        min-height: 60vh; gap: 12px; font-size: 15px; color: #7A7974; }
+      #loading[hidden], #content[hidden], #error[hidden] { display: none !important; }
+      .spinner { width: 28px; height: 28px; border: 2.5px solid #D4D1CA;
+        border-top-color: #2d5a27; border-radius: 50%; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
 
     <link rel="stylesheet" href="style.css?v=63.6" />
   </head>
@@ -85,7 +108,7 @@
       </div>
     </main>
 
-    <script type="module" src="app.js?v=65.3"></script>
+    <script type="module" src="app.js?v=65.4"></script>
 
     <!--
       GoatCounter analytics — cookie-free, no banner needed.

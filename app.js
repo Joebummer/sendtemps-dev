@@ -9,7 +9,86 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=53';
+} from './forecast.js?v=56';
+import { CRAGS } from './crags.js?v=33';
+
+const API_BASE = 'https://api.sendtemps.app';
+
+// ---- Free / Pro tier ----
+// There's no account system yet, so Pro access is a lightweight stand-in:
+// a shareable link like sendtemps.app/?code=XXXX redeems a code against the
+// `access_codes` table (via the Worker's GET /redeem) and stores the tier
+// client-side. Everyone else defaults to free. Good enough for sharing with
+// beta testers; swap for a real per-user `is_pro` flag once accounts exist.
+const TIER_KEY = 'st_tier';
+const TIER_EXPIRES_KEY = 'st_tier_expires';
+
+// Dev-only free-tier preview — lets a Pro device (e.g. the owner's, after
+// redeeming an invite code) see exactly what free users see, without
+// touching the real stored tier. Session-scoped so closing the tab clears
+// it automatically. Toggle via URL: ?freePreview=1 to preview free,
+// ?freePreview=0 (or just closing the tab) to go back to the real tier.
+const FREE_PREVIEW_KEY = 'st_free_preview';
+
+(function freePreviewFromUrl() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('freePreview')) return;
+  if (params.get('freePreview') === '0') sessionStorage.removeItem(FREE_PREVIEW_KEY);
+  else sessionStorage.setItem(FREE_PREVIEW_KEY, '1');
+  params.delete('freePreview');
+  const clean = params.toString();
+  history.replaceState(null, '', location.pathname + (clean ? `?${clean}` : ''));
+})();
+
+function isPro() {
+  if (sessionStorage.getItem(FREE_PREVIEW_KEY) === '1') return false;
+  if (localStorage.getItem(TIER_KEY) !== 'pro') return false;
+  const exp = localStorage.getItem(TIER_EXPIRES_KEY);
+  if (exp && new Date(exp).getTime() < Date.now()) {
+    localStorage.removeItem(TIER_KEY);
+    localStorage.removeItem(TIER_EXPIRES_KEY);
+    return false;
+  }
+  return true;
+}
+
+async function redeemCodeFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  if (code) {
+    let data;
+    try {
+      const res = await fetch(`${API_BASE}/redeem?code=${encodeURIComponent(code)}`);
+      data = await res.json();
+      if (data.ok) {
+        localStorage.setItem(TIER_KEY, data.tier || 'pro');
+        if (data.expires_at) localStorage.setItem(TIER_EXPIRES_KEY, data.expires_at);
+        else localStorage.removeItem(TIER_EXPIRES_KEY);
+      }
+    } catch { /* offline on first load — the code param below is preserved so it can retry */ }
+
+    // Only scrub the code out of the URL once we know it either redeemed or
+    // was invalid; on a network failure, leave it so the next load retries.
+    if (typeof data !== 'undefined') {
+      params.delete('code');
+      const clean = params.toString();
+      history.replaceState(null, '', location.pathname + (clean ? `?${clean}` : ''));
+    }
+  }
+}
+
+redeemCodeFromUrl();
+
+// Free tier sees today + tomorrow only; Pro unlocks the full rolling window
+// (currently 7 days, see weekDates() in forecast.js). Locked tabs stay
+// visible but dimmed so free users can see there's more forecast to unlock,
+// rather than the days just disappearing.
+const FREE_FORECAST_DAYS = 2;
+
+function visibleDayCount() {
+  const total = (state.dates && state.dates.length) || FREE_FORECAST_DAYS;
+  return isPro() ? total : Math.min(FREE_FORECAST_DAYS, total);
+}
 
 // ---- Theme toggle ----
 (function () {
@@ -235,6 +314,90 @@ function loadRegionFilter() {
   return _storage.getItem(REGION_FILTER_KEY) || 'ALL';
 }
 
+// Debug helper: visiting ?resetRegion clears the saved region preference so
+// the location-detection flow runs again on this load, as if the app had
+// never been opened on this device/browser before. Not linked from the UI —
+// it's just for testing the detection prompt without wiping all site data.
+// Runs immediately (before `state` is built below) and strips itself from
+// the URL so a refresh doesn't re-trigger it.
+(function resetRegionFromUrl() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('resetRegion')) return;
+  try { _storage.removeItem(REGION_FILTER_KEY); } catch { /* storage blocked */ }
+  params.delete('resetRegion');
+  const clean = params.toString();
+  history.replaceState(null, '', location.pathname + (clean ? `?${clean}` : ''));
+})();
+
+// ---- Region auto-detection (first launch only) ----
+// Fetching every crag nationwide on every load is the biggest single cost in
+// startup time, since the forecast request (and its response) scales with
+// crag count. If someone has never picked a region filter, try to guess their
+// home state from their location so the very first fetch — and every one
+// after it — can be scoped to just that state instead of all five. This only
+// ever runs once: whatever it resolves to (detected, or the fallback) gets
+// saved immediately, so later launches skip straight to the scoped fetch.
+const GEO_TIMEOUT_MS = 5000;
+const REGION_FALLBACK = 'VIC'; // used if location is denied/unavailable/times out
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const toRad = d => d * Math.PI / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Nearest-crag lookup doubles as a nearest-state lookup — no separate
+// geocoding API or state boundary data needed.
+function nearestState(lat, lon) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const crag of CRAGS) {
+    const d = haversineKm(lat, lon, crag.lat, crag.lon);
+    if (d < bestDist) { bestDist = d; best = crag.state; }
+  }
+  return best;
+}
+
+function detectRegionFromLocation() {
+  return new Promise((resolve) => {
+    if (!('geolocation' in navigator)) { resolve(null); return; }
+    let settled = false;
+    const done = (region) => {
+      if (settled) return;
+      settled = true;
+      resolve(region);
+    };
+    const timer = setTimeout(() => done(null), GEO_TIMEOUT_MS);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(timer);
+        done(nearestState(pos.coords.latitude, pos.coords.longitude));
+      },
+      () => {
+        clearTimeout(timer);
+        done(null); // denied or unavailable
+      },
+      { timeout: GEO_TIMEOUT_MS, maximumAge: 3600000 }
+    );
+  });
+}
+
+// Resolves the region to scope the very first fetch to. Respects any
+// existing explicit preference (including 'ALL') without touching it —
+// this only kicks in the first time the app has ever run on this device.
+async function resolveInitialRegion() {
+  const stored = _storage.getItem(REGION_FILTER_KEY);
+  if (stored) return stored;
+  const detected = await detectRegionFromLocation();
+  const region = detected || REGION_FALLBACK;
+  try { _storage.setItem(REGION_FILTER_KEY, region); } catch { /* storage blocked */ }
+  return region;
+}
+
 const TRIP_START_KEY = 'st_tripStart';
 const TRIP_END_KEY   = 'st_tripEnd';
 const SECTION_COLLAPSED_KEY = 'st_sectionCollapsed';
@@ -298,22 +461,34 @@ function renderRegionFilter() {
   `).join('');
   bar.querySelectorAll('.region-pill').forEach(btn => {
     btn.addEventListener('click', () => {
-      state.regionFilter = btn.dataset.region;
+      const nextRegion = btn.dataset.region;
+      if (nextRegion === state.regionFilter) return;
+      // Forecasts are now fetched per-region rather than all-at-once, so
+      // switching regions needs a real (short) re-fetch, not just a
+      // client-side re-render. `refresh()` shows the existing lightweight
+      // "Refreshing…" indicator while it runs.
+      state.regionFilter = nextRegion;
       _storage.setItem(REGION_FILTER_KEY, state.regionFilter);
       renderRegionFilter();
-      renderDay();
+      refresh({ reason: 'region-switch' });
     });
   });
 }
+
+const LOCK_SVG = `<svg class="day-lock-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
 
 function renderTabs() {
   const tabs = document.getElementById('day-tabs');
   const picking = state.pickingTripRange;
   // In range-pick mode, mark start/end/in-range tabs visually.
   const tripSet = new Set(activeTripDates());
+  // Free tier only browses the first N days by date (see FREE_FORECAST_DAYS) —
+  // trip-range picking is a separate feature and isn't restricted here.
+  const limit = visibleDayCount();
 
-  tabs.innerHTML = state.dates.map(date => {
-    const selected = !picking && date === state.activeDate;
+  tabs.innerHTML = state.dates.map((date, idx) => {
+    const locked = !picking && idx >= limit;
+    const selected = !picking && !locked && date === state.activeDate;
     const isStart  = picking && date === state.tripPickStart;
     const isEnd    = picking && date === state.tripEnd && state.tripPickStart;
     const inTrip   = !picking && tripSet.has(date);
@@ -323,12 +498,15 @@ function renderTabs() {
     if (selected) cls += ' selected';
     if (picking && isStart) cls += ' trip-pick-start';
     if (!picking && inTrip) cls += ' in-trip';
+    if (locked) cls += ' day-locked';
     return `
       <button class="${cls}" role="tab"
         aria-selected="${selected}"
+        aria-disabled="${locked}"
         data-date="${date}">
         <span class="day-name">${dayName}</span>
         <span class="day-date">${dateLabel}</span>
+        ${locked ? LOCK_SVG : ''}
         ${!picking && inTrip ? '<span class="trip-dot" aria-hidden="true"></span>' : ''}
       </button>
     `;
@@ -340,12 +518,80 @@ function renderTabs() {
         handleTripRangePick(btn.dataset.date);
         return;
       }
+      if (btn.classList.contains('day-locked')) {
+        showDayLockPopover(btn);
+        return;
+      }
       state.activeDate = btn.dataset.date;
       renderTabs();
       renderDay();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   });
+}
+
+function showDayLockPopover(btn) {
+  document.getElementById('day-lock-popover')?.remove();
+  document.getElementById('notify-popover')?.remove();
+  document.getElementById('subcrag-lock-popover')?.remove();
+
+  const pop = document.createElement('div');
+  pop.id = 'day-lock-popover';
+  pop.className = 'pro-popover';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', 'Full forecast — Pro');
+  pop.innerHTML = `
+    <p class="notify-pop-title">Full week forecast — Pro</p>
+    <p class="notify-pop-body">Free shows today + tomorrow. Pro unlocks the full ${state.dates.length}-day outlook. Got an invite link? Open it once and this unlocks automatically.</p>
+    <button class="notify-pop-close" id="day-lock-pop-close" aria-label="Close">✕</button>
+  `;
+
+  const rect = btn.getBoundingClientRect();
+  pop.style.top = `${rect.bottom + 8 + window.scrollY}px`;
+  pop.style.left = `${rect.left + window.scrollX}px`;
+  document.body.appendChild(pop);
+
+  document.getElementById('day-lock-pop-close').addEventListener('click', () => pop.remove());
+  document.addEventListener('pointerdown', function outside(e) {
+    if (!pop.contains(e.target) && e.target !== btn) {
+      pop.remove();
+      document.removeEventListener('pointerdown', outside);
+    }
+  });
+
+  return pop;
+}
+
+function showSubCragLockPopover(btn) {
+  document.getElementById('subcrag-lock-popover')?.remove();
+  document.getElementById('day-lock-popover')?.remove();
+  document.getElementById('notify-popover')?.remove();
+
+  const pop = document.createElement('div');
+  pop.id = 'subcrag-lock-popover';
+  pop.className = 'pro-popover';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', 'Sub-crag breakdown — Pro');
+  pop.innerHTML = `
+    <p class="notify-pop-title">Sub-crag breakdown — Pro</p>
+    <p class="notify-pop-body">Free shows this area's own score. Pro breaks it down wall-by-wall so you can see which sub-crag has the best conditions today. Got an invite link? Open it once and this unlocks automatically.</p>
+    <button class="notify-pop-close" id="subcrag-lock-pop-close" aria-label="Close">✕</button>
+  `;
+
+  const rect = btn.getBoundingClientRect();
+  pop.style.top = `${rect.bottom + 8 + window.scrollY}px`;
+  pop.style.left = `${rect.left + window.scrollX}px`;
+  document.body.appendChild(pop);
+
+  document.getElementById('subcrag-lock-pop-close').addEventListener('click', () => pop.remove());
+  document.addEventListener('pointerdown', function outside(e) {
+    if (!pop.contains(e.target) && e.target !== btn) {
+      pop.remove();
+      document.removeEventListener('pointerdown', outside);
+    }
+  });
+
+  return pop;
 }
 
 // Handle a tap during trip range-pick mode.
@@ -433,7 +679,10 @@ function renderDay() {
     .filter(r => !r.crag.parentId)
     .map(r => {
       const subs = subsByParent.get(r.crag.id) || [];
-      if (!subs.length) return { ...r, daySubCrags: subs };
+      // Sub-crag breakdown (and the headline promotion below) is a Pro
+      // feature — free tier sees the parent crag's own score/reasons only,
+      // with no hint of which sub-crag might be scoring higher today.
+      if (!subs.length || !isPro()) return { ...r, daySubCrags: subs };
       // Promote the highest-scoring entry (parent or any sub-crag) to the
       // headline chip so the parent card reflects the best the area offers.
       const best = [r, ...subs].reduce((a, b) => (a.score >= b.score ? a : b));
@@ -585,7 +834,9 @@ function renderDaySummary(rows, dayRows, destinations) {
   const dayLine = dayTop
     ? `<strong>Daily crag score:</strong> ${escapeHtml(dayTop.crag.name)} <span class="score-mini ${scoreBand(dayTop.score).color}">${dayTop.score}</span>`
     : `<strong>Daily crag score:</strong> no data`;
-  const wkLine = destTop
+  const wkLine = !isPro()
+    ? `<strong>Weekend away:</strong> <span class="pro-inline-lock">Pro feature</span>`
+    : destTop
     ? `<strong>Weekend away (Fri–Sun):</strong> ${escapeHtml(destTop.destination)} <span class="score-mini ${scoreBand(destTop.tripScore).color}">${destTop.tripScore}</span>`
     : `<strong>Weekend away:</strong> no data`;
 
@@ -622,7 +873,11 @@ function renderSplitRanked(dayRows, destinations) {
   if (dayRows.length || hiddenDay.length) {
     sections.push(renderDaySection('Overview', 'Daily crag score', dayRows, hiddenDay));
   }
-  if (destinations.length || hiddenWeekendDest.length || hiddenWeekendCrag.length) {
+  if (!isPro()) {
+    // Multi-day trip planning is Pro-only — show the section header (so it's
+    // discoverable) but keep the destination cards/trip-date controls locked.
+    sections.push(renderWeekendSectionLocked('Multi-day trip'));
+  } else if (destinations.length || hiddenWeekendDest.length || hiddenWeekendCrag.length) {
     sections.push(renderWeekendSection('Multi-day trip', 'By destination · trip score', destinations, [...hiddenWeekendDest, ...hiddenWeekendCrag]));
   }
 
@@ -781,6 +1036,14 @@ function renderSplitRanked(dayRows, destinations) {
   // Day-trip sub-crag rows (no daily breakdown — just a score chip).
   list.querySelectorAll('.subcrag-row.is-static').forEach(btn => {
     btn.addEventListener('click', (e) => e.stopPropagation());
+  });
+
+  // Locked "Sub-crags — Pro" teaser button (free tier only).
+  list.querySelectorAll('.subcrag-locked-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showSubCragLockPopover(btn);
+    });
   });
 
   // Share buttons — both the icon on the header and the labelled button in
@@ -1002,6 +1265,28 @@ function renderTASCallout(destinations) {
         Share
       </button>
     </div>
+// Pro-gated version of the Multi-day trip section — keeps the header visible
+// (so free users know the feature exists) but replaces the trip-date controls,
+// best-weekend callout and destination cards with a single locked teaser.
+function renderWeekendSectionLocked(title) {
+  const collapsed = getSectionCollapsed()['weekend'] ?? false;
+  return `
+    <section class="category" id="weekend-section" data-section="weekend" data-collapsed="${collapsed}">
+      <div class="weekend-category-header">
+        <button type="button" class="category-header" aria-expanded="${!collapsed}" aria-controls="section-list-weekend">
+          <span class="category-header-label">
+            <h3>${escapeHtml(title)}</h3>
+            <span class="category-sub">By destination</span>
+          </span>
+          ${CHEVRON_SVG}
+        </button>
+      </div>
+      <div class="trip-locked-teaser" id="section-list-weekend">
+        <svg class="trip-locked-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <p class="trip-locked-title">Multi-day trip planning — Pro</p>
+        <p class="trip-locked-body">See which destination has the best conditions across your whole trip, plus pick your own dates. Got an invite link? Open it once and this unlocks automatically.</p>
+      </div>
+    </section>
   `;
 }
 
@@ -1412,7 +1697,11 @@ function renderCard(row, isTop, isWeekend) {
           </div>
           ${renderSunWindow(day.sunWindow, crag.sunOnWall)}
         </div>
-        ${renderDaySubCrags(daySubCrags, isToday ? 'today' : isTomorrow ? 'tomorrow' : null)}
+        ${daySubCrags && daySubCrags.length
+          ? (isPro()
+              ? renderDaySubCrags(daySubCrags, isToday ? 'today' : isTomorrow ? 'tomorrow' : null)
+              : renderDaySubCragsLocked(daySubCrags.length))
+          : ''}
         ${renderFavThresholdControl(crag.id)}
         <div class="checkin-summary" style="display:none"></div>
         <button type="button" class="climbed-here-btn" data-checkin-id="${escapeHtml(crag.id)}" data-checkin-name="${escapeHtml(crag.name)}" data-checkin-score="${headlineScore}">
@@ -1639,6 +1928,23 @@ function renderShareExpanderButton(cragId, cragName) {
       <span>Share this forecast</span>
     </button>
   </div>`;
+}
+
+// Free-tier stand-in for the Sub-crags breakdown — visible so free users
+// know the feature exists (matches the pattern used for the Multi-day trip
+// section and locked day tabs), but reveals nothing about individual
+// sub-crag scores. Tapping opens a popover explaining the Pro feature.
+function renderDaySubCragsLocked(count) {
+  return `
+    <div class="detail-section">
+      <div class="section-label">Sub-crags</div>
+      <button type="button" class="subcrag-locked-btn" aria-haspopup="dialog" aria-label="Sub-crag breakdown — Pro feature">
+        <svg class="subcrag-locked-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <span class="subcrag-locked-text">${count} sub-crag${count === 1 ? '' : 's'} here — see which one's best today</span>
+        <span class="pro-inline-lock">Pro</span>
+      </button>
+    </div>
+  `;
 }
 
 function renderDaySubCrags(daySubCrags, mode = null) {
@@ -2247,7 +2553,7 @@ function activeTripDates() {
 }
 
 async function fetchAndRank() {
-  const forecasts = await fetchAllForecasts();
+  const forecasts = await fetchAllForecasts(state.regionFilter);
   const dates = weekDates();
   const tripDates = activeTripDates();
   const ranked = rankByDay(forecasts, dates);
@@ -2423,8 +2729,13 @@ function applyDeepLinkFromUrl() {
   const dateStr = params.get('date');
   if (!cragId && !dateStr) return;
 
-  // Switch tab if the requested date is in the current rolling window.
-  if (dateStr && state.dates && state.dates.includes(dateStr) && state.activeDate !== dateStr) {
+  // Switch tab if the requested date is in the current rolling window AND
+  // within what this tier can see — otherwise a shared link could be used
+  // to peek at Pro-only days. Free users stay on today; the locked tab is
+  // still visible so they know there's more forecast behind the link.
+  const dateIdx = dateStr && state.dates ? state.dates.indexOf(dateStr) : -1;
+  const withinTier = dateIdx !== -1 && dateIdx < visibleDayCount();
+  if (withinTier && state.activeDate !== dateStr) {
     state.activeDate = dateStr;
     renderTabs();
     renderRegionFilter();
@@ -2515,6 +2826,9 @@ async function init() {
   errorEl.hidden = true;
 
   try {
+    // Resolve the region to fetch before the very first request goes out —
+    // on a brand-new device this may prompt for location permission.
+    state.regionFilter = await resolveInitialRegion();
     const next = await fetchAndRank();
     Object.assign(state, next);
     state.activeDate = state.dates[0];
@@ -2595,7 +2909,6 @@ init();
 // ─── Web Push subscription ────────────────────────────────────────────────────
 
 const VAPID_PUBLIC_KEY = 'BDKj-7s-TEb5dmIoqLJ_pckUVYgkOPULfNtjUJUwLGHBzoYQaLSxQFEZebrW7Biqz-gaEHX9dNBnVXLd2t7p7ko';
-const API_BASE = 'https://api.sendtemps.app';
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -2612,16 +2925,26 @@ function getActiveState() {
   return activePill ? activePill.dataset.region || 'VIC' : 'VIC';
 }
 
-function showNotifyPopover(btn, subscribed, activeState) {
+function showNotifyPopover(btn, mode, activeState) {
+  // mode: 'locked' (free tier) | 'subscribed' | 'unsubscribed'
   // Remove any existing popover
   document.getElementById('notify-popover')?.remove();
+  document.getElementById('day-lock-popover')?.remove();
+  document.getElementById('subcrag-lock-popover')?.remove();
 
   const pop = document.createElement('div');
   pop.id = 'notify-popover';
+  pop.className = 'pro-popover';
   pop.setAttribute('role', 'dialog');
   pop.setAttribute('aria-label', 'Rare window alerts');
 
-  if (subscribed) {
+  if (mode === 'locked') {
+    pop.innerHTML = `
+      <p class="notify-pop-title">Rare window alerts — Pro</p>
+      <p class="notify-pop-body">Push alerts are a Pro feature while SendTemps is in testing. Got an invite link? Open it once and this unlocks automatically.</p>
+      <button class="notify-pop-close" id="notify-pop-close" aria-label="Close">✕</button>
+    `;
+  } else if (mode === 'subscribed') {
     pop.innerHTML = `
       <p class="notify-pop-title">Rare window alerts on</p>
       <p class="notify-pop-body">You'll be notified when an unusually good climbing day is forecast — warmer, drier, or calmer than normal for the season.</p>
@@ -2684,6 +3007,7 @@ async function initNotifyBtn() {
   const reg = await navigator.serviceWorker.ready;
   const existing = await reg.pushManager.getSubscription();
   updateNotifyBtn(!!existing);
+  btn.classList.toggle('notify-locked', !isPro());
 
   // On every load, re-POST the current endpoint so Supabase stays fresh.
   // This handles cases where the service worker updated and the endpoint changed.
@@ -2706,7 +3030,13 @@ async function initNotifyBtn() {
     const reg = await navigator.serviceWorker.ready;
     const existing = await reg.pushManager.getSubscription();
     const activeState = getActiveState();
-    const pop = showNotifyPopover(btn, !!existing, activeState);
+
+    if (!isPro()) {
+      showNotifyPopover(btn, 'locked', activeState);
+      return;
+    }
+
+    const pop = showNotifyPopover(btn, existing ? 'subscribed' : 'unsubscribed', activeState);
 
     // Wire up the action button inside the popover
     if (existing) {
@@ -2742,6 +3072,7 @@ async function initNotifyBtn() {
     } else {
       document.getElementById('notify-sub')?.addEventListener('click', async () => {
         pop.remove();
+        if (!isPro()) return; // safety net — shouldn't be reachable, gated above
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') {
           alert('Notifications are blocked. Enable them in your device settings to receive rare window alerts.');

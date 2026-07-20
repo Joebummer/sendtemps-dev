@@ -4,12 +4,23 @@
 import { CRAGS } from './crags.js?v=33';
 import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 
-const API = 'https://api.open-meteo.com/v1/forecast';
+// Routed through the SendTemps Worker (not Open-Meteo directly) so every
+// client shares one edge-cached response instead of each device/network
+// being subject to Open-Meteo's own per-IP rate limit. See worker/src/index.js
+// GET /forecast.
+const API = 'https://api.sendtemps.app/forecast';
 
-// Fetch one batched request for ALL crags at once — Open-Meteo accepts comma-separated coords.
-export async function fetchAllForecasts() {
-  const lats = CRAGS.map(c => c.lat).join(',');
-  const lons = CRAGS.map(c => c.lon).join(',');
+// Fetch one batched request for the crags in `region` at once — Open-Meteo
+// accepts comma-separated coords. `region` is a state code ('VIC', 'TAS', …)
+// or 'ALL' for every crag nationwide. Scoping to one state cuts the request
+// (and the edge-cached response) down to roughly a fifth of the full payload
+// for most states, which is where most of the load-time cost was coming from.
+export async function fetchAllForecasts(region = 'ALL') {
+  const scoped = region === 'ALL' ? CRAGS : CRAGS.filter(c => c.state === region);
+  // Safety net: never send an empty request (e.g. an unrecognised region code).
+  const targetCrags = scoped.length ? scoped : CRAGS;
+  const lats = targetCrags.map(c => c.lat).join(',');
+  const lons = targetCrags.map(c => c.lon).join(',');
   const params = new URLSearchParams({
     latitude: lats,
     longitude: lons,
@@ -62,7 +73,7 @@ export async function fetchAllForecasts() {
 
   // Map each crag to its forecast object
   const byId = {};
-  CRAGS.forEach((crag, i) => {
+  targetCrags.forEach((crag, i) => {
     const f = list[i];
     if (!f) return;
     // Compute hourly rock-dryness series for the whole hourly window.
@@ -733,35 +744,43 @@ function melbourneHourNow() {
 // isolated single-hour showers.
 function scoreHour(crag, h, rainNeighbours = 0) {
   let s = 100;
+  // Tracks whether any real penalty fired this hour (mirrors scoreDay's
+  // `contributions.some(c => c.delta < 0)` check). Only actual non-zero
+  // deductions count — e.g. a dryness delta that rounds to 0 doesn't.
+  let hasPenalty = false;
+  const penalize = (amount) => {
+    if (amount > 0) { s -= amount; hasPenalty = true; }
+  };
+
   // Rain — actual measured precip takes priority.
   // For probability-only rain, scale the penalty by how many surrounding
   // hours also have elevated probability (sustained = worse than a shower).
-  if (h.precip > 1) s -= 70;
-  else if (h.precip > 0.2) s -= 35;
+  if (h.precip > 1) penalize(70);
+  else if (h.precip > 0.2) penalize(35);
   else if (h.precipProb > 60) {
     // Base -20, +3 per sustained neighbour, capped at -32
-    s -= Math.min(32, 20 + rainNeighbours * 3);
+    penalize(Math.min(32, 20 + rainNeighbours * 3));
   } else if (h.precipProb > 30) {
     // Base -8, +2 per sustained neighbour, capped at -16
-    s -= Math.min(16, 8 + rainNeighbours * 2);
+    penalize(Math.min(16, 8 + rainNeighbours * 2));
   }
 
   // Temperature vs ideal
   const [idealMin, idealMax] = crag.idealTemp;
   if (h.temp < idealMin) {
-    s -= Math.min(25, (idealMin - h.temp) * 2.5);
+    penalize(Math.min(25, (idealMin - h.temp) * 2.5));
   } else if (h.temp > idealMax) {
-    s -= Math.min(35, (h.temp - idealMax) * 3.5);
+    penalize(Math.min(35, (h.temp - idealMax) * 3.5));
   }
 
   // Dryness — penalty up to 35
   if (h.dryness != null && h.dryness < 100) {
-    s -= Math.round(((100 - h.dryness) / 100) * 35);
+    penalize(Math.round(((100 - h.dryness) / 100) * 35));
   }
 
   // Wind
-  if (h.wind > 50) s -= 15;
-  else if (h.wind > 35) s -= 5;
+  if (h.wind > 50) penalize(15);
+  else if (h.wind > 35) penalize(5);
 
   // Humidity does not affect the hourly score (v59.14). It is surfaced as a
   // stat tile + chip on the day card instead — see scoreDay and the UI.
@@ -769,16 +788,21 @@ function scoreHour(crag, h, rainNeighbours = 0) {
   // Sun-on-wall interactions. h.sunOnWall is null for mixed-aspect parents —
   // skip these tweaks rather than guess (children carry the real aspect).
   if (h.sunOnWall === true) {
-    if (h.temp > 24) s -= 8; // sun-baked
-    else if (h.temp < 12) s += 5; // sun-trap
-    else if (h.temp < 18) s += 3;
+    if (h.temp > 24) penalize(8); // sun-baked
+    else if (h.temp < 12) s += 5; // sun-trap (bonus)
+    else if (h.temp < 18) s += 3; // bonus
   } else if (h.sunOnWall === false) {
     // In shade
-    if (h.temp > 24) s += 4; // shade is welcome
-    else if (h.temp < 8) s -= 4; // cold and shaded
+    if (h.temp > 24) s += 4; // shade is welcome (bonus)
+    else if (h.temp < 8) penalize(4); // cold and shaded
   }
 
-  return Math.max(0, Math.min(100, Math.round(s)));
+  // — Penalty integrity cap — same rule as scoreDay(): an hour that took
+  // any real penalty can't claim a perfect 100, even if bonuses clawed it
+  // all the way back there. Keeps hour-by-hour scores honest relative to
+  // the day score, which already applies this same cap.
+  const rawFinal = Math.max(0, Math.min(100, Math.round(s)));
+  return (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
 }
 
 // Find the best climbing window in a tomorrow-hourly array.

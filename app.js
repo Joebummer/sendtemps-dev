@@ -958,8 +958,10 @@ function renderSplitRanked(dayRows, destinations) {
       e.stopPropagation();
       e.preventDefault();
       const parentId = btn.dataset.checkinId;
-      const subCrags = (state.forecasts || [])
-        .filter(r => r.crag.parentId === parentId)
+      // state.forecasts is a map keyed by crag ID — use state.ranked to find sub-crags
+      const allRanked = Object.values(state.ranked || {}).flat();
+      const subCrags = allRanked
+        .filter(r => r.crag && r.crag.parentId === parentId)
         .map(r => ({ id: r.crag.id, name: r.crag.name }))
         .filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
       showCheckinSheet(

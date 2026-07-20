@@ -948,24 +948,28 @@ function renderSplitRanked(dayRows, destinations) {
     btn.addEventListener('pointerdown', e => e.stopPropagation());
   });
 
-  // "I climbed here" check-in — delegated so it works on dynamically rendered detail panels
-  list.addEventListener('click', (e) => {
-    const btn = e.target.closest('.climbed-here-btn');
-    if (!btn) return;
-    e.stopPropagation();
-    e.preventDefault();
-    const parentId = btn.dataset.checkinId;
-    const subCrags = (state.forecasts || [])
-      .filter(r => r.crag.parentId === parentId)
-      .map(r => ({ id: r.crag.id, name: r.crag.name }))
-      .filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
-    showCheckinSheet(
-      parentId,
-      btn.dataset.checkinName,
-      parseInt(btn.dataset.checkinScore, 10) || null,
-      subCrags
-    );
-  });
+  // "I climbed here" — delegated once on the list container.
+  // Guard against duplicate listeners accumulating across renderSplitRanked calls.
+  if (!list.dataset.checkinDelegated) {
+    list.dataset.checkinDelegated = 'true';
+    list.addEventListener('click', (e) => {
+      const btn = e.target.closest('.climbed-here-btn');
+      if (!btn) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const parentId = btn.dataset.checkinId;
+      const subCrags = (state.forecasts || [])
+        .filter(r => r.crag.parentId === parentId)
+        .map(r => ({ id: r.crag.id, name: r.crag.name }))
+        .filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
+      showCheckinSheet(
+        parentId,
+        btn.dataset.checkinName,
+        parseInt(btn.dataset.checkinScore, 10) || null,
+        subCrags
+      );
+    });
+  }
 
   // "N hidden — show" disclosure footer.
   // "Set dates" button — enter trip range-pick mode.

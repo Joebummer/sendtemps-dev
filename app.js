@@ -55,29 +55,27 @@ function isPro() {
 async function redeemCodeFromUrl() {
   const params = new URLSearchParams(location.search);
   const code = params.get('code');
-  if (code) {
-    let data;
-    try {
-      const res = await fetch(`${API_BASE}/redeem?code=${encodeURIComponent(code)}`);
-      data = await res.json();
-      if (data.ok) {
-        localStorage.setItem(TIER_KEY, data.tier || 'pro');
-        if (data.expires_at) localStorage.setItem(TIER_EXPIRES_KEY, data.expires_at);
-        else localStorage.removeItem(TIER_EXPIRES_KEY);
-      }
-    } catch { /* offline on first load — the code param below is preserved so it can retry */ }
+  if (!code) return false;
 
-    // Only scrub the code out of the URL once we know it either redeemed or
-    // was invalid; on a network failure, leave it so the next load retries.
-    if (typeof data !== 'undefined') {
-      params.delete('code');
-      const clean = params.toString();
-      history.replaceState(null, '', location.pathname + (clean ? `?${clean}` : ''));
+  let data;
+  try {
+    const res = await fetch(`${API_BASE}/redeem?code=${encodeURIComponent(code)}`);
+    data = await res.json();
+    if (data.ok) {
+      localStorage.setItem(TIER_KEY, data.tier || 'pro');
+      if (data.expires_at) localStorage.setItem(TIER_EXPIRES_KEY, data.expires_at);
+      else localStorage.removeItem(TIER_EXPIRES_KEY);
     }
-  }
-}
+  } catch { /* offline — leave code in URL so next load retries */ }
 
-redeemCodeFromUrl();
+  if (typeof data !== 'undefined') {
+    params.delete('code');
+    const clean = params.toString();
+    history.replaceState(null, '', location.pathname + (clean ? `?${clean}` : ''));
+  }
+
+  return data?.ok === true;
+}
 
 // Free tier sees today + tomorrow only; Pro unlocks the full rolling window
 // (currently 7 days, see weekDates() in forecast.js). Locked tabs stay
@@ -2907,7 +2905,7 @@ document.addEventListener('visibilitychange', () => {
 // Keep the relative timestamp (“2 min ago”) fresh without re-fetching.
 setInterval(paintUpdated, 30 * 1000);
 
-init();
+(async () => { await redeemCodeFromUrl(); init(); })();
 
 // ─── Web Push subscription ────────────────────────────────────────────────────
 

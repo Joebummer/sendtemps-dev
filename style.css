@@ -762,6 +762,27 @@ html[data-theme="dark"] .reason-tag-bestfrom {
   background: color-mix(in srgb, #f59e0b 18%, transparent);
   color: #fbbf24;
 }
+/* Sentiment tints */
+.reason-tag-pos {
+  background: color-mix(in srgb, #2d5a27 14%, transparent);
+  color: #2d5a27;
+}
+html[data-theme="dark"] .reason-tag-pos {
+  background: color-mix(in srgb, #6DAA45 18%, transparent);
+  color: #6DAA45;
+}
+.reason-tag-neg {
+  background: color-mix(in srgb, #964219 14%, transparent);
+  color: #7a3512;
+}
+html[data-theme="dark"] .reason-tag-neg {
+  background: color-mix(in srgb, #BB653B 18%, transparent);
+  color: #d4835a;
+}
+.reason-tag-neutral {
+  background: var(--color-surface-offset);
+  color: var(--color-text-muted);
+}
 
 /* Rock dryness pill (current condition) */
 .dryness-line {
@@ -1167,6 +1188,24 @@ html[data-theme="dark"] .reason-tag-bestfrom {
   transition: transform 0.18s ease;
 }
 .subcrag-row-wrap[data-open='true'] .subcrag-chev { transform: rotate(180deg); }
+.subcrag-row-wrap[data-subcrag-hidden] { display: none; }
+.subcrag-expand-btn {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: center;
+  margin-top: var(--space-1);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.subcrag-expand-btn:hover {
+  background: var(--color-surface-offset);
+  color: var(--color-text);
+}
 .subcrag-detail {
   border-top: 1px solid var(--color-border);
   padding: var(--space-3);

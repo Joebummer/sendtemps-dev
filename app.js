@@ -1057,6 +1057,18 @@ function renderSplitRanked(dayRows, destinations) {
     btn.addEventListener('click', (e) => e.stopPropagation());
   });
 
+  // Sub-crag expand button — reveals rows beyond the top 3.
+  list.querySelectorAll('.subcrag-expand-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const list = btn.closest('.detail-section').querySelector('.subcrag-list');
+      list.querySelectorAll('[data-subcrag-hidden]').forEach(row => {
+        row.removeAttribute('data-subcrag-hidden');
+      });
+      btn.remove();
+    });
+  });
+
   // Locked "Sub-crags — Pro" teaser button (free tier only).
   list.querySelectorAll('.subcrag-locked-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -1652,10 +1664,10 @@ function renderCard(row, isTop, isWeekend) {
           ? 'reason-tag reason-tag-closed'
           : /^Best from/i.test(r)
             ? 'reason-tag reason-tag-bestfrom'
-            : 'reason-tag';
+            : `reason-tag reason-tag-${reasonSentiment(r)}`;
         return `<span class="${cls}">${escapeHtml(r)}</span>`;
       }).join('')
-    : '<span class="reason-tag">conditions ok</span>';
+    : '<span class="reason-tag reason-tag-neutral">conditions ok</span>';
 
   // Sub-area badge: show parent area if it differs from name
   const showArea = crag.area !== crag.name;
@@ -1776,6 +1788,47 @@ function renderDestShareButton(destination, tripScore, destDailyScores) {
 // ─── Check-in summary ──────────────────────────────────────────────────────
 
 const ROCK_LABEL    = { dry: 'rock dry', damp: 'rock damp', wet: 'rock wet' };
+
+// Sentiment lookup for reason tags — used to apply colour tints.
+// 'pos' = green, 'neg' = amber/red, 'neutral' = default grey.
+// Matched by prefix so dynamic strings (e.g. 'temp ideal (18°C)') work.
+const REASON_SENTIMENT = [
+  // Positive
+  { match: /^temp ideal/i,           s: 'pos' },
+  { match: /^drying wind/i,          s: 'pos' },
+  { match: /^sheltered from wind/i,  s: 'pos' },
+  { match: /^rare window/i,          s: 'pos' },
+  { match: /^dry by climbing time/i, s: 'pos' },
+  { match: /^overnight rain only/i,  s: 'pos' },
+  { match: /^rain after dark only/i, s: 'pos' },
+  { match: /^shaded refuge/i,        s: 'pos' },
+  { match: /^sun-trap wall/i,        s: 'pos' },
+  { match: /^overcast sun-trap/i,    s: 'pos' },
+  // Negative
+  { match: /^cold[ (]/i,             s: 'neg' },
+  { match: /^hot[ (]/i,              s: 'neg' },
+  { match: /^cool stretches/i,       s: 'neg' },
+  { match: /^hot stretches/i,        s: 'neg' },
+  { match: /^rain expected/i,        s: 'neg' },
+  { match: /^showers likely/i,       s: 'neg' },
+  { match: /^\d+% rain chance/i,     s: 'neg' },
+  { match: /^rock soaked/i,          s: 'neg' },
+  { match: /^rock wet/i,             s: 'neg' },
+  { match: /^still drying/i,         s: 'neg' },
+  { match: /^very windy/i,           s: 'neg' },
+  { match: /^sun-baked wall/i,       s: 'neg' },
+  { match: /^sun-baked aspect/i,     s: 'neg' },
+  { match: /^afternoon sun-trap/i,   s: 'neg' },
+  { match: /^cold & shaded/i,        s: 'neg' },
+  { match: /^fully overcast/i,       s: 'neg' },
+  { match: /^overcast/i,             s: 'neg' },
+  { match: /^mostly cloudy/i,        s: 'neg' },
+];
+
+function reasonSentiment(r) {
+  const hit = REASON_SENTIMENT.find(({ match }) => match.test(r));
+  return hit ? hit.s : 'neutral';
+}
 const TEMP_LABEL    = { too_cold: 'conditions cold', good: 'conditions good', too_hot: 'conditions hot' };
 
 function daysAgoLabel(dateStr) {
@@ -2021,7 +2074,8 @@ function renderDaySubCrags(daySubCrags, mode = null) {
   if (!Array.isArray(daySubCrags) || daySubCrags.length === 0) return '';
   // Sort by today's score (highest first) so the best sub-crag is at the top.
   const sorted = [...daySubCrags].sort((a, b) => b.score - a.score);
-  const rows = sorted.map(sub => {
+  const VISIBLE = 3;
+  const rows = sorted.map((sub, idx) => {
     const band = scoreBand(sub.score);
     const safeId = String(sub.crag.id).replace(/[^a-z0-9]+/gi, '-').toLowerCase();
     const reasons = sub.reasons || [];
@@ -2032,7 +2086,7 @@ function renderDaySubCrags(daySubCrags, mode = null) {
       ? allReasons.map(r => {
           const cls = /^Best from/i.test(r) ? 'reason-tag reason-tag-sm reason-tag-bestfrom'
             : /^closed/i.test(r) ? 'reason-tag reason-tag-sm reason-tag-closed'
-            : 'reason-tag reason-tag-sm';
+            : `reason-tag reason-tag-sm reason-tag-${reasonSentiment(r)}`;
           return `<span class="${cls}">${escapeHtml(r)}</span>`;
         }).join('')
       : '';
@@ -2043,7 +2097,7 @@ function renderDaySubCrags(daySubCrags, mode = null) {
 
     const hasDetail = contributions.length > 0 || !!hourlyHtml;
     return `
-      <div class="subcrag-row-wrap" data-open="false">
+      <div class="subcrag-row-wrap" data-open="false"${idx >= VISIBLE ? ' data-subcrag-hidden' : ''}>
         <button type="button" class="subcrag-row${hasDetail ? ' is-expandable' : ' is-static'}"${hasDetail ? ` aria-expanded="false" aria-controls="daysubdetail-${safeId}"` : ' tabindex="-1"'}>
           <span class="subcrag-name">${escapeHtml(sub.crag.name)}</span>
           <span class="subcrag-aspect">${sub.crag.aspect === 'mixed' ? 'mixed aspects' : `${sub.crag.aspect}-facing`}</span>
@@ -2055,10 +2109,18 @@ function renderDaySubCrags(daySubCrags, mode = null) {
       </div>
     `;
   }).join('');
+  const hiddenCount = sorted.length - VISIBLE;
+  const expandBtn = hiddenCount > 0
+    ? `<button type="button" class="subcrag-expand-btn" aria-expanded="false">
+        Show all ${sorted.length} sub-crags
+       </button>`
+    : '';
+
   return `
     <div class="detail-section">
       <div class="section-label">Sub-crags</div>
       <div class="subcrag-list">${rows}</div>
+      ${expandBtn}
     </div>
   `;
 }

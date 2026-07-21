@@ -15,8 +15,6 @@ const SHELL = [
   './',
   './index.html',
   './app.js?v=65.23',
-  './forecast.js?v=56',
-  './crags.js?v=33',
   './style.css?v=65.23',
   './manifest.webmanifest',
   './icon-180.png',

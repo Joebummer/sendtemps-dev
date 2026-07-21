@@ -1664,10 +1664,10 @@ function renderCard(row, isTop, isWeekend) {
           ? 'reason-tag reason-tag-closed'
           : /^Best from/i.test(r)
             ? 'reason-tag reason-tag-bestfrom'
-            : `reason-tag reason-tag-${reasonSentiment(r)}`;
+            : 'reason-tag';
         return `<span class="${cls}">${escapeHtml(r)}</span>`;
       }).join('')
-    : '<span class="reason-tag reason-tag-neutral">conditions ok</span>';
+    : '<span class="reason-tag">conditions ok</span>';
 
   // Sub-area badge: show parent area if it differs from name
   const showArea = crag.area !== crag.name;
@@ -2086,7 +2086,7 @@ function renderDaySubCrags(daySubCrags, mode = null) {
       ? allReasons.map(r => {
           const cls = /^Best from/i.test(r) ? 'reason-tag reason-tag-sm reason-tag-bestfrom'
             : /^closed/i.test(r) ? 'reason-tag reason-tag-sm reason-tag-closed'
-            : `reason-tag reason-tag-sm reason-tag-${reasonSentiment(r)}`;
+            : 'reason-tag reason-tag-sm';
           return `<span class="${cls}">${escapeHtml(r)}</span>`;
         }).join('')
       : '';

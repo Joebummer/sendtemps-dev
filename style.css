@@ -2657,6 +2657,20 @@ html[data-theme="dark"] .reason-tag-neg {
   margin-top: 6px;
   min-height: 18px;
 }
+.contact-line {
+  margin-top: var(--space-4);
+  text-align: center;
+}
+.contact-link {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 2px;
+}
+.contact-link:hover {
+  color: var(--color-text);
+}
 
 [data-theme="dark"] .redeem-row input {
   background: var(--surface, #1C1B19);

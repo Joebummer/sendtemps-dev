@@ -2743,141 +2743,175 @@ function buildShareUrl(cragId, dateStr) {
 // Draws a 1200×630 branded PNG on an offscreen canvas and returns a File
 // object ready to pass to navigator.share({ files: [...] }).
 async function buildShareImage(row, dateStr) {
-  const { crag, day, score } = row;
+  const { crag, day, score, reasons } = row;
   const W = 1200, H = 630;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
   const PARCHMENT  = '#f5f2eb';
+  const SURFACE    = '#eeeade';
   const GREEN      = '#2d5a27';
+  const GREEN_LIGHT = '#e8f0e6';
   const CHARCOAL   = '#28251D';
   const MUTED      = '#7a7670';
   const BORDER     = '#dedad2';
+  const AMBER      = '#d97706';
 
-  // Background
+  // Load DM Sans from Google Fonts for a sharper, branded feel
+  let fontLoaded = false;
+  try {
+    const font400 = new FontFace('DM Sans', 'url(https://fonts.gstatic.com/s/dmsans/v15/rP2Hp2ywxg089UriCZOIHQ.woff2)');
+    const font700 = new FontFace('DM Sans', 'url(https://fonts.gstatic.com/s/dmsans/v15/rP2Cp2ywxg089UriASitCBimCw.woff2)', { weight: '700' });
+    await Promise.all([font400.load(), font700.load()]);
+    document.fonts.add(font400);
+    document.fonts.add(font700);
+    fontLoaded = true;
+  } catch { /* fall back to system-ui */ }
+  const FONT = fontLoaded ? 'DM Sans' : 'system-ui, sans-serif';
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+  }
+
+  // ── Background ──────────────────────────────────────────────────────────
   ctx.fillStyle = PARCHMENT;
   ctx.fillRect(0, 0, W, H);
 
-  // Subtle topo lines (concentric arcs)
+  // Green left accent bar
+  ctx.fillStyle = GREEN;
+  ctx.fillRect(0, 0, 8, H);
+
+  // Topo lines — bottom-right cluster
   ctx.save();
-  ctx.strokeStyle = '#d8d4cc';
-  ctx.lineWidth = 1.2;
-  ctx.globalAlpha = 0.45;
-  for (let r = 60; r < 520; r += 42) {
+  ctx.strokeStyle = '#cbc7be';
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.5;
+  for (let r = 80; r < 600; r += 46) {
     ctx.beginPath();
-    ctx.arc(W - 180, H + 60, r, 0, Math.PI * 2);
+    ctx.arc(W + 40, H + 40, r, 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
 
-  // Score pill — manual rounded rect for iOS 15 compat (roundRect not available)
+  // ── Score pill ───────────────────────────────────────────────────────────
   const scoreVal = Math.round(score);
-  const pillW = 110, pillH = 48, pillX = 80, pillY = 80;
-  ctx.fillStyle = GREEN;
-  ctx.beginPath();
-  const pr = 24;
-  ctx.moveTo(pillX + pr, pillY);
-  ctx.lineTo(pillX + pillW - pr, pillY);
-  ctx.arcTo(pillX + pillW, pillY, pillX + pillW, pillY + pr, pr);
-  ctx.lineTo(pillX + pillW, pillY + pillH - pr);
-  ctx.arcTo(pillX + pillW, pillY + pillH, pillX + pillW - pr, pillY + pillH, pr);
-  ctx.lineTo(pillX + pr, pillY + pillH);
-  ctx.arcTo(pillX, pillY + pillH, pillX, pillY + pillH - pr, pr);
-  ctx.lineTo(pillX, pillY + pr);
-  ctx.arcTo(pillX, pillY, pillX + pr, pillY, pr);
-  ctx.closePath();
+  const band = scoreBand(scoreVal);
+  // Use green for good scores, amber for mid, muted for low
+  const pillColor = scoreVal >= 75 ? GREEN : scoreVal >= 50 ? AMBER : MUTED;
+  const pillW = 130, pillH = 50, pillX = 72, pillY = 72;
+  ctx.fillStyle = pillColor;
+  roundRect(pillX, pillY, pillW, pillH, 25);
   ctx.fill();
   ctx.fillStyle = '#fff';
-  ctx.font = 'bold 22px system-ui, sans-serif';
+  ctx.font = `700 24px '${FONT}'`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(`${scoreVal}/100`, pillX + pillW / 2, pillY + pillH / 2);
+  ctx.fillText(`${scoreVal}/100`, pillX + pillW / 2, pillY + pillH / 2 + 1);
 
-  // Crag name
+  // ── Crag name ────────────────────────────────────────────────────────────
   ctx.fillStyle = CHARCOAL;
-  ctx.font = 'bold 72px system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  const maxNameW = W - 160;
-  let nameSize = 72;
-  while (ctx.measureText(crag.name).width > maxNameW && nameSize > 40) {
+  const maxNameW = W - 180;
+  let nameSize = 76;
+  ctx.font = `700 ${nameSize}px '${FONT}'`;
+  while (ctx.measureText(crag.name).width > maxNameW && nameSize > 38) {
     nameSize -= 4;
-    ctx.font = `bold ${nameSize}px system-ui, sans-serif`;
+    ctx.font = `700 ${nameSize}px '${FONT}'`;
   }
-  ctx.fillText(crag.name, 80, 220);
+  ctx.fillText(crag.name, 72, 216);
 
-  // Date line
+  // ── Date + state ─────────────────────────────────────────────────────────
   const dateLabel = (() => {
     try {
       const d = new Date(dateStr + 'T00:00:00');
       return d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
     } catch { return dateStr; }
   })();
+  const stateBadge = crag.state ? ` · ${crag.state}` : '';
   ctx.fillStyle = MUTED;
-  ctx.font = '32px system-ui, sans-serif';
-  ctx.fillText(dateLabel, 80, 272);
+  ctx.font = `400 30px '${FONT}'`;
+  ctx.fillText(dateLabel + stateBadge, 72, 264);
 
-  // Divider
+  // ── Divider ───────────────────────────────────────────────────────────────
   ctx.strokeStyle = BORDER;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(80, 306); ctx.lineTo(W - 80, 306);
+  ctx.moveTo(72, 296); ctx.lineTo(W - 72, 296);
   ctx.stroke();
 
-  // Stats row — temp, wind, humidity
-  const temp  = day?.tempMax != null  ? `${Math.round(day.tempMax)}°C`  : '—';
-  const wind  = day?.windMax  != null  ? `${Math.round(day.windMax)} km/h` : '—';
-  const rh    = day?.rhMean   != null  ? `${Math.round(day.rhMean)}% RH`  : '—';
+  // ── Stats row — temp / wind / humidity ───────────────────────────────────
+  const temp  = day?.tempMax != null ? `${Math.round(day.tempMax)}°C`     : '—';
+  const wind  = day?.windMax != null ? `${Math.round(day.windMax)} km/h`  : '—';
+  const rh    = day?.rhMean  != null ? `${Math.round(day.rhMean)}%`       : '—';
   const stats = [
-    { label: 'TEMP', value: temp },
-    { label: 'WIND', value: wind },
-    { label: 'HUMIDITY', value: rh },
+    { label: 'TEMP',     value: temp },
+    { label: 'WIND',     value: wind },
+    { label: 'HUMIDITY', value: rh   },
   ];
-  const colW = (W - 160) / stats.length;
+  const colW = (W - 144) / stats.length;
   stats.forEach(({ label, value }, i) => {
-    const x = 80 + i * colW;
+    const x = 72 + i * colW;
     ctx.fillStyle = MUTED;
-    ctx.font = '22px system-ui, sans-serif';
+    ctx.font = `400 20px '${FONT}'`;
     ctx.textAlign = 'left';
-    ctx.fillText(label, x, 364);
+    ctx.letterSpacing = '0.08em';
+    ctx.fillText(label, x, 348);
+    ctx.letterSpacing = '0';
     ctx.fillStyle = CHARCOAL;
-    ctx.font = 'bold 40px system-ui, sans-serif';
-    ctx.fillText(value, x, 420);
+    ctx.font = `700 44px '${FONT}'`;
+    ctx.fillText(value, x, 410);
   });
 
-  // Region badge — manual rounded rect for iOS 15 compat
-  if (crag.state) {
-    ctx.fillStyle = '#ede9de';
-    const badgeW = 90, badgeH = 36, bx = 80, by = 476, br = 8;
-    ctx.beginPath();
-    ctx.moveTo(bx + br, by);
-    ctx.lineTo(bx + badgeW - br, by);
-    ctx.arcTo(bx + badgeW, by, bx + badgeW, by + br, br);
-    ctx.lineTo(bx + badgeW, by + badgeH - br);
-    ctx.arcTo(bx + badgeW, by + badgeH, bx + badgeW - br, by + badgeH, br);
-    ctx.lineTo(bx + br, by + badgeH);
-    ctx.arcTo(bx, by + badgeH, bx, by + badgeH - br, br);
-    ctx.lineTo(bx, by + br);
-    ctx.arcTo(bx, by, bx + br, by, br);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = MUTED;
-    ctx.font = 'bold 18px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(crag.state, 80 + badgeW / 2, 476 + badgeH / 2 + 1);
-    ctx.textAlign = 'left';
+  // ── Reason tags ──────────────────────────────────────────────────────────
+  const tags = (reasons || []).filter(r => !/^closed/i.test(r)).slice(0, 4);
+  if (tags.length) {
+    const TAG_H = 38, TAG_R = 19, TAG_PAD = 18, TAG_GAP = 10;
+    let tx = 72;
+    const ty = 446;
+    ctx.font = `400 20px '${FONT}'`;
+    tags.forEach(tag => {
+      const tw = ctx.measureText(tag).width + TAG_PAD * 2;
+      if (tx + tw > W - 72) return; // don't overflow
+      ctx.fillStyle = SURFACE;
+      roundRect(tx, ty, tw, TAG_H, TAG_R);
+      ctx.fill();
+      ctx.fillStyle = MUTED;
+      ctx.textAlign = 'center';
+      ctx.fillText(tag, tx + tw / 2, ty + TAG_H / 2 + 7);
+      ctx.textAlign = 'left';
+      tx += tw + TAG_GAP;
+    });
   }
 
-  // SENDTEMPS wordmark — bottom right
+  // ── Bottom bar — SENDTEMPS branding ──────────────────────────────────────
+  const barY = H - 80;
+  ctx.fillStyle = SURFACE;
+  ctx.fillRect(0, barY, W, 80);
+
+  // Wordmark left
   ctx.fillStyle = GREEN;
-  ctx.font = 'bold 28px system-ui, sans-serif';
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText('SENDTEMPS', W - 80, H - 52);
+  ctx.font = `700 26px '${FONT}'`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('SENDTEMPS', 72, barY + 40);
+
+  // Tagline + URL right
   ctx.fillStyle = MUTED;
-  ctx.font = '20px system-ui, sans-serif';
-  ctx.fillText('sendtemps.app', W - 80, H - 24);
+  ctx.font = `400 20px '${FONT}'`;
+  ctx.textAlign = 'right';
+  ctx.fillText('Friction forecasts for Australian rock  ·  sendtemps.app', W - 72, barY + 40);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {

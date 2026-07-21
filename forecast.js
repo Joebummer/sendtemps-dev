@@ -1649,13 +1649,13 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   //   • it's meaningfully overcast (>65% mean daytime cloud)
   //   • the wall would geometrically see sun (aspect is concrete, not all-day shade)
   //   • it's a day where sun matters: cool or mild temp, not already raining
-  // Three tiers: mostly overcast (65-80%), heavily overcast (80-90%), socked in (90%+).
+  // Three tiers: mostly overcast (65-80%), heavily overcast (80-90%), fully overcast (90%+).
   if (cloudMean != null && cloudMean > 65 && hasConcreteAspect(crag.aspect) && crag.shade !== 'all-day') {
     const noRain = (day.precipProb ?? 0) < 50;
     const sunMatters = t < 22; // hot days don't need sun callout
     if (noRain && sunMatters) {
       if (cloudMean > 90) {
-        reasons.push('socked in');
+        reasons.push('fully overcast');
         add('sun', 'Overcast', 0, `${Math.round(cloudMean)}% mean daytime cloud cover — wall in full overcast, no useful sun`);
       } else if (cloudMean > 80) {
         reasons.push('overcast');

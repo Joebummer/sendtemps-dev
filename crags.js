@@ -1502,7 +1502,7 @@ export const CRAGS = [
     shade: 'morning',
     driveTime: '4h',
     trip: 'both',
-    state: 'VIC',    notes: 'Lower-elevation granite slabs in the Buckland Valley below the plateau. North-facing \u2014 sun all day, warmer than the plateau. Dries fast. Up to 57m. Useful when the top is socked-in.',
+    state: 'VIC',    notes: 'Lower-elevation granite slabs in the Buckland Valley below the plateau. North-facing \u2014 sun all day, warmer than the plateau. Dries fast. Up to 57m. Useful when the plateau is fully overcast.',
     bestIn: 'cool',
   },
   {

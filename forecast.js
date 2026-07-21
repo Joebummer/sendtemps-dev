@@ -1655,11 +1655,11 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     const sunMatters = t < 22; // hot days don't need sun callout
     if (noRain && sunMatters) {
       if (cloudMean > 90) {
-        reasons.push('overcast');
+        reasons.push('fully overcast');
         add('sun', 'Overcast', 0, `${Math.round(cloudMean)}% mean daytime cloud cover — wall in full overcast, no useful sun`);
       } else if (cloudMean > 80) {
-        reasons.push('cloudy');
-        add('sun', 'Cloudy', 0, `${Math.round(cloudMean)}% mean daytime cloud — heavy cloud suppressing sun on wall`);
+        reasons.push('overcast');
+        add('sun', 'Overcast', 0, `${Math.round(cloudMean)}% mean daytime cloud — heavy cloud suppressing sun on wall`);
       } else {
         reasons.push('mostly cloudy');
         add('sun', 'Mostly cloudy', 0, `${Math.round(cloudMean)}% mean daytime cloud — sun limited, aspect less relevant`);

@@ -708,10 +708,20 @@ main {
 /* Thin colour strip showing hourly score shape across the climbable window.
    Green = good, amber = marginal, red = poor. Shows day shape at a glance
    without needing to expand the card. */
+.condition-band-wrap {
+  margin-top: var(--space-2);
+}
+.condition-band-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  display: block;
+  margin-bottom: 4px;
+}
 .condition-band {
   display: flex;
   gap: 2px;
-  margin-top: var(--space-2);
   height: 8px;
   border-radius: var(--radius-sm);
   overflow: hidden;

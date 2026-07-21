@@ -2260,7 +2260,10 @@ function renderConditionBand(fc, mode) {
       : 'band-error';
     return `<span class="cond-seg ${colorClass}" title="${formatHour12(h.hour)}: ${h.score}"></span>`;
   }).join('');
-  return `<div class="condition-band" aria-hidden="true">${segments}</div>`;
+  return `<div class="condition-band-wrap">
+    <span class="condition-band-label">Rain likelihood</span>
+    <div class="condition-band" aria-hidden="true">${segments}</div>
+  </div>`;
 }
 
 // Renders when the active date tab is today or tomorrow. Each cell covers one

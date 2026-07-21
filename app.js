@@ -1539,8 +1539,9 @@ function renderDestinationCard(dest, isTop) {
         <div class="detail-section">
           <div class="section-label">Sub-crags at this destination</div>
           <div class="subcrag-list">
-            ${namedSubCrags.map(s => renderSubCragRow(s)).join('')}
+            ${namedSubCrags.map((s, idx) => renderSubCragRow(s, idx)).join('')}
           </div>
+          ${namedSubCrags.length > 3 ? `<button type="button" class="subcrag-expand-btn" aria-expanded="false">Show all ${namedSubCrags.length} sub-crags</button>` : ''}
         </div>
       </div>
     </article>
@@ -1608,12 +1609,13 @@ function renderPicksByDay(tripDates, bestPerDay) {
   `;
 }
 
-function renderSubCragRow(sub) {
+function renderSubCragRow(sub, idx = 0) {
   const band = scoreBand(sub.tripScore);
   const safeId = String(sub.crag.id).replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   const hasDaily = Array.isArray(sub.dailyScores) && sub.dailyScores.length > 0;
+  const hiddenAttr = idx >= 3 ? ' data-subcrag-hidden' : '';
   return `
-    <div class="subcrag-row-wrap" data-open="false">
+    <div class="subcrag-row-wrap" data-open="false"${hiddenAttr}>
       <button type="button" class="subcrag-row${hasDaily ? ' is-expandable' : ''}" aria-expanded="false" ${hasDaily ? `aria-controls="subdetail-${safeId}"` : ''}>
         <span class="subcrag-name">${escapeHtml(sub.crag.name)}</span>
         <span class="subcrag-aspect">${sub.crag.aspect === 'mixed' ? 'mixed aspects' : `${sub.crag.aspect}-facing`}</span>

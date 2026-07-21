@@ -9,7 +9,7 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=57';
+} from './forecast.js?v=58';
 import { CRAGS } from './crags.js?v=33';
 
 const API_BASE = 'https://api.sendtemps.app';
@@ -1820,9 +1820,10 @@ const REASON_SENTIMENT = [
   { match: /^sun-baked aspect/i,     s: 'neg' },
   { match: /^afternoon sun-trap/i,   s: 'neg' },
   { match: /^cold & shaded/i,        s: 'neg' },
-  { match: /^fully overcast/i,       s: 'neg' },
   { match: /^overcast/i,             s: 'neg' },
+  { match: /^cloudy/i,               s: 'neg' },
   { match: /^mostly cloudy/i,        s: 'neg' },
+  { match: /^cloud killing/i,        s: 'neg' },
 ];
 
 function reasonSentiment(r) {

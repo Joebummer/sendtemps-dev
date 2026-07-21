@@ -1401,7 +1401,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     const coldMultiplier = t < 8 ? 1.0 : 0.7;
     const pen = Math.round(cloudSeverity * coldMultiplier);
     score -= pen;
-    reasons.push('overcast sun-trap');
+    reasons.push('cloud killing sun-trap');
     add('sun', 'Cloud kills sun-trap', -pen,
       `${Math.round(cloudMean)}% daytime cloud on a N-facing wall — no direct sun, loses its warmth advantage`);
   }
@@ -1655,11 +1655,11 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     const sunMatters = t < 22; // hot days don't need sun callout
     if (noRain && sunMatters) {
       if (cloudMean > 90) {
-        reasons.push('fully overcast');
+        reasons.push('overcast');
         add('sun', 'Overcast', 0, `${Math.round(cloudMean)}% mean daytime cloud cover — wall in full overcast, no useful sun`);
       } else if (cloudMean > 80) {
-        reasons.push('overcast');
-        add('sun', 'Overcast', 0, `${Math.round(cloudMean)}% mean daytime cloud — heavy cloud suppressing sun on wall`);
+        reasons.push('cloudy');
+        add('sun', 'Cloudy', 0, `${Math.round(cloudMean)}% mean daytime cloud — heavy cloud suppressing sun on wall`);
       } else {
         reasons.push('mostly cloudy');
         add('sun', 'Mostly cloudy', 0, `${Math.round(cloudMean)}% mean daytime cloud — sun limited, aspect less relevant`);

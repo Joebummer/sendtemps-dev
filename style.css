@@ -1389,8 +1389,9 @@ html[data-theme="dark"] .reason-tag-neg {
   main { padding: var(--space-4); }
   .crag-header { padding: var(--space-3); }
   .score-pill { width: 48px; height: 48px; font-size: var(--text-base); }
-  .metric-grid { grid-template-columns: repeat(2, 1fr); }
-  .metric-grid .metric:nth-child(5):last-child { grid-column: 1 / -1; }
+  .metric-grid { grid-template-columns: repeat(3, 1fr); }
+  .metric-grid .metric:nth-child(5):last-child { grid-column: auto; }
+  .metric-grid .metric:nth-child(6):last-child { grid-column: auto; }
 }
 
 /* ---- Hide button + hidden-list disclosure ---- */

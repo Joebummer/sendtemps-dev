@@ -1717,6 +1717,7 @@ function renderCard(row, isTop, isWeekend) {
           <div class="metric"><div class="v">${Math.round(day.precipProb || 0)}%</div><div class="l">Rain</div></div>
           <div class="metric"><div class="v">${Math.round(day.wind)}</div><div class="l">Wind km/h</div></div>
           ${renderHumidityTile(day, reasons)}
+          ${day.cloudMean != null ? `<div class="metric"><div class="v">${Math.round(day.cloudMean)}%</div><div class="l">Cloud cover</div></div>` : ''}
         </div>
         <div class="detail-section">
           <div class="section-label">Forecast</div>

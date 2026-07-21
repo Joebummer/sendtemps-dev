@@ -833,8 +833,8 @@ function renderDaySummary(rows, dayRows, destinations) {
   const w = weatherIcon((dayTop || destTop?.bestForToday).day.weatherCode);
 
   const dayLine = dayTop
-    ? `<strong>Daily crag score:</strong> ${escapeHtml(dayTop.crag.name)} <span class="score-mini ${scoreBand(dayTop.score).color}">${dayTop.score}</span>`
-    : `<strong>Daily crag score:</strong> no data`;
+    ? `<strong>Today's pick:</strong> ${escapeHtml(dayTop.crag.name)} <span class="score-mini ${scoreBand(dayTop.score).color}">${dayTop.score}</span>`
+    : `<strong>Today's pick:</strong> no data`;
   const wkLine = !isPro()
     ? `<strong>Weekend away:</strong> <span class="pro-inline-lock">Pro feature</span>`
     : destTop
@@ -872,7 +872,7 @@ function renderSplitRanked(dayRows, destinations) {
   }
 
   if (dayRows.length || hiddenDay.length) {
-    sections.push(renderDaySection('Overview', 'Daily crag score', dayRows, hiddenDay));
+    sections.push(renderDaySection('Daily crag score', '', dayRows, hiddenDay));
   }
   if (!isPro()) {
     // Multi-day trip planning is Pro-only — show the section header (so it's
@@ -2373,7 +2373,7 @@ function renderHourlyStrip(fc, mode = 'tomorrow', dayScore = null) {
       <div class="hourly-legend">
         <span><strong>Time</strong></span>
         <span><strong>☀️</strong> sun on wall</span>
-        <span><strong>↑</strong> wind direction (arrow points where wind is going); gold = onshore, grey = lee. Bars show strength.</span>
+        <span>Gold: into wall · Grey: away from wall · Bars show strength.</span>
         <span><strong>Dryness</strong> 0–100 · <strong>Score</strong> 0–100</span>
       </div>
     </div>
@@ -2483,7 +2483,7 @@ function renderDrynessLine(nowDryness, lastRain, daysAhead = 0) {
   return `
     <div class="dryness-line">
       <span class="dryness-pill ${band.color}" title="${isTomorrow ? 'Rock dryness right now (carries into tomorrow)' : 'Rock dryness right now'} — ${nowDryness}/100">
-        <span class="dryness-dot"></span>${isTomorrow ? 'Going into tomorrow' : 'Rock now'}: ${escapeHtml(band.label)} · ${nowDryness}
+        <span class="dryness-dot"></span>${isTomorrow ? 'Going into tomorrow' : 'Rock now'}: ${escapeHtml(band.label)}
       </span>
       ${rainText}
     </div>
@@ -2515,7 +2515,7 @@ function renderRainTiming(day) {
   }).join('');
   return `
     <div class="detail-section">
-      <div class="section-label">Rain timing</div>
+      <div class="section-label">Today's rain forecast</div>
       <div class="rain-list">${items}</div>
     </div>
   `;

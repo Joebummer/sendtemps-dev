@@ -63,7 +63,7 @@ export const CRAGS = [
     shade: 'none',
     driveTime: '50min',
     trip: 'day',
-    state: 'VIC',    notes: 'Ideal in winter. Veni Vedi Vici is N-facing, sun all day — a genuine sun trap. The Amphitheatre is E-facing, late-afternoon shade, also a sun trap. Conglomerate dries fast in sun and wind.',
+    state: 'VIC',    notes: 'Ideal in winter. Veni Vidi Vici is N-facing, sun all day — a genuine sun trap. The Amphitheatre is E-facing, late-afternoon shade, also a sun trap. Conglomerate dries fast in sun and wind.',
     sunOnWall: 'Most of the day (north-facing)',
     bestIn: 'cool',
   },

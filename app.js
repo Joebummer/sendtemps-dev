@@ -1075,6 +1075,13 @@ function renderSplitRanked(dayRows, destinations) {
     });
   });
 
+  list.querySelectorAll('.save-card-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      saveCardImage(btn.dataset.saveId);
+    });
+  });
+
   list.querySelectorAll('.share-btn:not(.dest-share-btn)').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1981,6 +1988,15 @@ function renderShareExpanderButton(cragId, cragName) {
       </svg>
       <span>Share this forecast</span>
     </button>
+    <button class="save-card-btn" data-save-id="${escapeHtml(cragId)}"
+      aria-label="Save forecast image for ${escapeHtml(cragName)}" title="Save image card">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
+      <span>Save card</span>
+    </button>
   </div>`;
 }
 
@@ -2617,6 +2633,31 @@ async function fetchAndRank() {
 
 // ---- Share a forecast ----
 //
+// saveCardImage — generates branded PNG and downloads it to device
+async function saveCardImage(cragId) {
+  const dateStr = state.activeDate;
+  const rows = state.ranked?.[dateStr] || [];
+  const row = rows.find(r => r.crag.id === cragId);
+  if (!row) { showToast('Nothing to save for this crag on this date.'); return; }
+  const btn = document.querySelector(`.save-card-btn[data-save-id="${CSS.escape(cragId)}"]`);
+  if (btn) { btn.disabled = true; btn.querySelector('span').textContent = 'Saving…'; }
+  try {
+    const file = await buildShareImage(row, dateStr);
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sendtemps-${cragId}-${dateStr}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    if (btn) { btn.querySelector('span').textContent = 'Saved!'; setTimeout(() => { btn.disabled = false; btn.querySelector('span').textContent = 'Save card'; }, 2000); }
+  } catch (err) {
+    console.error('saveCardImage failed', err);
+    if (btn) { btn.disabled = false; btn.querySelector('span').textContent = 'Save card'; }
+  }
+}
+
 // `shareForecast(cragId)` is the entry point. It looks up the active day's row
 // for that crag, builds a one-line text summary + a deep link, and fires the
 // native share sheet via navigator.share when available. Browsers without

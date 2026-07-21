@@ -1708,7 +1708,7 @@ function renderCard(row, isTop, isWeekend) {
           <div class="section-label">Forecast</div>
           <p>${w.icon} ${w.label}. Feels like ${Math.round(day.tFeel || day.tMax)}°C. ${sunHours}h sun expected. ${day.precipSum > 0.2 ? `${day.precipSum.toFixed(1)}mm rain forecast.` : 'No measurable rain.'}${prevDay && prevDay.precipSum > 1 ? ` Yesterday saw ${prevDay.precipSum.toFixed(1)}mm.` : ''}</p>
         </div>
-        ${renderRainTiming(day)}
+        ${renderRainTiming(day, daysAheadOfActive())}
         ${todayStrip}
         ${tomorrowStrip}
         ${renderScoreBreakdown(dayContribs, score)}
@@ -2501,9 +2501,10 @@ function renderHumidityTile(day, reasons) {
   return `<div class="metric" title="Mean relative humidity during climbing hours"><div class="v">${mean}%</div><div class="l">Humidity <span class="metric-sub">· ${sub}</span></div></div>`;
 }
 
-function renderRainTiming(day) {
+function renderRainTiming(day, daysAhead = 0) {
   const windows = day.rainWindows;
   if (!windows || !windows.length) return '';
+  const rainLabel = daysAhead === 0 ? "Today's rain forecast" : daysAhead === 1 ? "Tomorrow's rain forecast" : "Rain forecast";
   const items = windows.map(w => {
     const mmText = w.totalMm >= 0.1 ? `${w.totalMm.toFixed(1)}mm` : '<0.1mm';
     return `
@@ -2515,7 +2516,7 @@ function renderRainTiming(day) {
   }).join('');
   return `
     <div class="detail-section">
-      <div class="section-label">Today's rain forecast</div>
+      <div class="section-label">${rainLabel}</div>
       <div class="rain-list">${items}</div>
     </div>
   `;

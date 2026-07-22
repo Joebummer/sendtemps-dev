@@ -711,12 +711,14 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
   // climbing window, early clean hours shouldn't look deceptively perfect.
   // Compute the peak precipProb across ALL hours in this strip, then apply
   // a proportional shadow penalty to hours that individually look fine.
-  const peakDayProb = Math.max(...out.map(h => h.precipProb ?? 0));
+  const peakDayProb   = Math.max(...out.map(h => h.precipProb ?? 0));
+  const meanDayCloud  = out.length ? out.reduce((s, h) => s + (h.cloud ?? 0), 0) / out.length : 0;
+  const meanDayHumid  = out.length ? out.reduce((s, h) => s + (h.humidity ?? 0), 0) / out.length : 0;
 
   for (let i = 0; i < out.length; i++) {
     const nearby = out.slice(Math.max(0, i - 2), Math.min(out.length, i + 3));
     const rainNeighbours = nearby.filter(n => n !== out[i] && n.precipProb > 30).length;
-    out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb);
+    out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb, meanDayCloud, meanDayHumid);
   }
   return out;
 }
@@ -748,7 +750,7 @@ function melbourneHourNow() {
 // rainNeighbours: count of hours within ±2h that also have precipProb > 30%.
 // Used to scale up the probability penalty for sustained rain windows vs
 // isolated single-hour showers.
-function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0) {
+function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 0, meanDayHumid = 0) {
   let s = 100;
   // Tracks whether any real penalty fired this hour (mirrors scoreDay's
   // `contributions.some(c => c.delta < 0)` check). Only actual non-zero
@@ -779,6 +781,19 @@ function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0) {
     const shadowPen = Math.round(((peakDayProb - 40) / 60) * 12);
     penalize(shadowPen);
   }
+
+  // Day-level cloud cover — mirrors scoreDay's sun-trap and overcast penalties.
+  // Only applied when cloud is consistently heavy across the day (meanDayCloud)
+  // and the wall would normally benefit from sun (concrete aspect, not all-day shade).
+  if (meanDayCloud > 75 && hasConcreteAspect(crag.aspect) && crag.shade !== 'all-day') {
+    const cloudPen = meanDayCloud > 90 ? 8 : meanDayCloud > 82 ? 5 : 3;
+    penalize(cloudPen);
+  }
+
+  // Day-level humidity — mirrors scoreDay's humidity delta.
+  // Moist/muggy air hurts friction across all hours equally.
+  if (meanDayHumid >= 90) penalize(6);
+  else if (meanDayHumid >= 85) penalize(3);
 
   // Temperature vs ideal
   const [idealMin, idealMax] = crag.idealTemp;

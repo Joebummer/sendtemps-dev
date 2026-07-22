@@ -707,10 +707,16 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
   // Pass each hour its rain context: count of hours within ±2h window that
   // also have precipProb > 30%. Sustained rain across the window should
   // penalise each hour more than a single isolated rainy hour.
+  // Day-level rain shadow: if significant rain is forecast somewhere in the
+  // climbing window, early clean hours shouldn't look deceptively perfect.
+  // Compute the peak precipProb across ALL hours in this strip, then apply
+  // a proportional shadow penalty to hours that individually look fine.
+  const peakDayProb = Math.max(...out.map(h => h.precipProb ?? 0));
+
   for (let i = 0; i < out.length; i++) {
     const nearby = out.slice(Math.max(0, i - 2), Math.min(out.length, i + 3));
     const rainNeighbours = nearby.filter(n => n !== out[i] && n.precipProb > 30).length;
-    out[i].score = scoreHour(crag, out[i], rainNeighbours);
+    out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb);
   }
   return out;
 }
@@ -742,7 +748,7 @@ function melbourneHourNow() {
 // rainNeighbours: count of hours within ±2h that also have precipProb > 30%.
 // Used to scale up the probability penalty for sustained rain windows vs
 // isolated single-hour showers.
-function scoreHour(crag, h, rainNeighbours = 0) {
+function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0) {
   let s = 100;
   // Tracks whether any real penalty fired this hour (mirrors scoreDay's
   // `contributions.some(c => c.delta < 0)` check). Only actual non-zero
@@ -763,6 +769,15 @@ function scoreHour(crag, h, rainNeighbours = 0) {
   } else if (h.precipProb > 30) {
     // Base -8, +2 per sustained neighbour, capped at -16
     penalize(Math.min(16, 8 + rainNeighbours * 2));
+  }
+
+  // Day-level rain shadow — applied only to hours that individually look clean
+  // (precipProb ≤ 30%) but the day as a whole has significant rain risk.
+  // Penalty: 0 at peakDayProb ≤ 40%, scaling to -12 at peakDayProb = 100%.
+  // This prevents pre-rain hours from showing 99 when a 60%+ day is incoming.
+  if (h.precipProb <= 30 && peakDayProb > 40) {
+    const shadowPen = Math.round(((peakDayProb - 40) / 60) * 12);
+    penalize(shadowPen);
   }
 
   // Temperature vs ideal

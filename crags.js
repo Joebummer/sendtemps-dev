@@ -1239,7 +1239,7 @@ export const CRAGS = [
     aspect: 'N',
     rockType: 'sandstone',
     dryRating: 4,
-    idealTemp: [4, 16],
+    idealTemp: [8, 20],
     shade: 'none',
     driveTime: '3h45',
     trip: 'both',

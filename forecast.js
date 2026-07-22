@@ -783,17 +783,24 @@ function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 
   }
 
   // Day-level cloud cover — mirrors scoreDay's sun-trap and overcast penalties.
-  // Only applied when cloud is consistently heavy across the day (meanDayCloud)
-  // and the wall would normally benefit from sun (concrete aspect, not all-day shade).
-  if (meanDayCloud > 75 && hasConcreteAspect(crag.aspect) && crag.shade !== 'all-day') {
-    const cloudPen = meanDayCloud > 90 ? 8 : meanDayCloud > 82 ? 5 : 3;
-    penalize(cloudPen);
+  // Threshold lowered to 65% so moderate persistent cloud is captured.
+  // Penalty scaled more aggressively to match scoreDay's holistic view.
+  if (meanDayCloud > 65) {
+    const cloudPen = meanDayCloud > 90 ? 14
+      : meanDayCloud > 80 ? 10
+      : meanDayCloud > 70 ? 7
+      : 4; // 65-70%
+    // Extra penalty if wall relies on sun (concrete aspect, not all-day shade)
+    const aspectMult = (hasConcreteAspect(crag.aspect) && crag.shade !== 'all-day') ? 1.0 : 0.6;
+    penalize(Math.round(cloudPen * aspectMult));
   }
 
   // Day-level humidity — mirrors scoreDay's humidity delta.
   // Moist/muggy air hurts friction; crisp/dry air boosts it.
-  if (meanDayHumid >= 90) penalize(6);
-  else if (meanDayHumid >= 85) penalize(3);
+  // Thresholds lowered slightly to lean pessimistic.
+  if (meanDayHumid >= 88) penalize(6);
+  else if (meanDayHumid >= 80) penalize(3);
+  else if (meanDayHumid >= 72) penalize(1);
   else if (meanDayHumid < 50) s += 3;  // crisp air
   else if (meanDayHumid < 60) s += 2;  // dry air
 

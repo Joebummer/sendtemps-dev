@@ -15,6 +15,8 @@ const SHELL = [
   './',
   './index.html',
   './app.js?v=65.40',
+  './forecast.js?v=63',
+  './crags.js?v=34',
   './style.css?v=65.24',
   './manifest.webmanifest',
   './icon-180.png',
@@ -120,7 +122,13 @@ self.addEventListener('fetch', (event) => {
     }
 
     event.respondWith((async () => {
-      const cached = await caches.match(req);
+      // For versioned assets (?v=N), only check the shell cache — not the
+      // runtime cache. This prevents stale old-versioned files cached in
+      // RUNTIME_CACHE_STABLE from masking newly deployed versions.
+      const isVersioned = url.search.includes('v=');
+      const cached = isVersioned
+        ? await caches.open(CACHE).then(c => c.match(req))
+        : await caches.match(req);
       const fetchPromise = fetch(req).then((res) => {
         if (res && res.ok) {
           caches.open(CACHE).then((cache) => cache.put(req, res.clone())).catch(() => {});

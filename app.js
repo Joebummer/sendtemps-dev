@@ -134,7 +134,7 @@ let _swReloading = false;
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      const reg = await navigator.serviceWorker.register('./sw.js');
+      const reg = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
 
       // If a waiting worker was already present when we loaded (e.g. previous
       // tab installed it but never reloaded), show the banner immediately.

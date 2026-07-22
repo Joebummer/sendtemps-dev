@@ -791,9 +791,11 @@ function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 
   }
 
   // Day-level humidity — mirrors scoreDay's humidity delta.
-  // Moist/muggy air hurts friction across all hours equally.
+  // Moist/muggy air hurts friction; crisp/dry air boosts it.
   if (meanDayHumid >= 90) penalize(6);
   else if (meanDayHumid >= 85) penalize(3);
+  else if (meanDayHumid < 50) s += 3;  // crisp air
+  else if (meanDayHumid < 60) s += 2;  // dry air
 
   // Temperature vs ideal
   const [idealMin, idealMax] = crag.idealTemp;
@@ -808,12 +810,15 @@ function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 
     penalize(Math.round(((100 - h.dryness) / 100) * 35));
   }
 
-  // Wind
-  if (h.wind > 50) penalize(15);
-  else if (h.wind > 35) penalize(5);
-
-  // Humidity does not affect the hourly score (v59.14). It is surfaced as a
-  // stat tile + chip on the day card instead — see scoreDay and the UI.
+  // Wind — mirrors scoreDay's direction-vs-aspect multiplier.
+  // h.windExposure is already computed per-hour in buildDayHourly.
+  const windMult = h.windExposure === 'onshore' ? 1.3
+    : h.windExposure === 'lee' ? 0.8
+    : 1.0;
+  if (h.wind > 50) penalize(Math.round(15 * windMult));
+  else if (h.wind > 35) penalize(Math.round(5 * windMult));
+  // Lee penalty — wall sheltered means slower drying; apply a small drag.
+  else if (h.windExposure === 'lee' && h.wind > 15) penalize(2);
 
   // Sun-on-wall interactions. h.sunOnWall is null for mixed-aspect parents —
   // skip these tweaks rather than guess (children carry the real aspect).

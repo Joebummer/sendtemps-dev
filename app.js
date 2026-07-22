@@ -2262,7 +2262,7 @@ function renderConditionBand(fc, mode) {
     return `<span class="cond-seg ${colorClass}" title="${formatHour12(h.hour)}: ${h.score}"></span>`;
   }).join('');
   return `<div class="condition-band-wrap">
-    <span class="condition-band-label">Rain likelihood</span>
+    <span class="condition-band-label">Hourly rain likelihood</span>
     <div class="condition-band" aria-hidden="true">${segments}</div>
   </div>`;
 }

@@ -1736,7 +1736,11 @@ function renderCard(row, isTop, isWeekend) {
           <div class="attribute-row">
             <span class="attribute"><strong>${crag.aspect}</strong>-facing</span>
             <span class="attribute">Shade: <strong>${crag.shade}</strong></span>
-            <span class="attribute">Ideal <strong>${crag.idealTemp[0]}–${crag.idealTemp[1]}°C</strong></span>
+            <span class="attribute">Ideal <strong>${(() => {
+              const subs = (CRAGS || []).filter(c => c.parentId === crag.id && c.idealTemp);
+              const divergent = subs.some(s => Math.abs(s.idealTemp[0] - crag.idealTemp[0]) >= 4 || Math.abs(s.idealTemp[1] - crag.idealTemp[1]) >= 4);
+              return divergent ? 'varies by wall' : `${crag.idealTemp[0]}–${crag.idealTemp[1]}°C`;
+            })()}</strong></span>
             <span class="attribute">Dries <strong>${dryLabel(crag.dryRating)}</strong></span>
             <span class="attribute"><strong>${escapeHtml(crag.rockType)}</strong></span>
           </div>

@@ -3910,6 +3910,7 @@ export const CRAGS = [
     dryRating: 4,
     idealTemp: [12, 26],
     shade: 'morning',
+    compact: true,
     driveTime: '1h30',
     baseCity: 'Brisbane',
     trip: 'both',

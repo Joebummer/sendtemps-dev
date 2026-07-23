@@ -1624,7 +1624,6 @@ function renderPicksByDay(tripDates, bestPerDay) {
 }
 
 function renderSubCragRow(sub, idx = 0) {
-  const band = scoreBand(sub.tripScore);
   const safeId = String(sub.crag.id).replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   const hasDaily = Array.isArray(sub.dailyScores) && sub.dailyScores.length > 0;
   const hiddenAttr = idx >= 3 ? ' data-subcrag-hidden' : '';
@@ -1633,7 +1632,6 @@ function renderSubCragRow(sub, idx = 0) {
       <button type="button" class="subcrag-row${hasDaily ? ' is-expandable' : ''}" aria-expanded="false" ${hasDaily ? `aria-controls="subdetail-${safeId}"` : ''}>
         <span class="subcrag-name">${escapeHtml(sub.crag.name)}</span>
         <span class="subcrag-aspect">${sub.crag.aspect === 'mixed' ? 'mixed aspects' : `${sub.crag.aspect}-facing`}</span>
-        <span class="subcrag-trip ${band.color}">${sub.tripScore} trip</span>
         ${hasDaily ? `<svg class="subcrag-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>` : ''}
       </button>
       ${hasDaily ? `<div class="subcrag-detail" id="subdetail-${safeId}" role="region" hidden>${renderSubCragDailyBreakdown(sub.dailyScores)}</div>` : ''}

@@ -14,7 +14,7 @@ const CACHE = 'sendtemps-v65-40';
 const SHELL = [
   './',
   './index.html',
-  './app.js?v=65.44',
+  './app.js?v=65.45',
   './forecast.js?v=63',
   './crags.js?v=34',
   './style.css?v=65.24',

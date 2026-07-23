@@ -337,7 +337,7 @@ function loadRegionFilter() {
 // after it — can be scoped to just that state instead of all five. This only
 // ever runs once: whatever it resolves to (detected, or the fallback) gets
 // saved immediately, so later launches skip straight to the scoped fetch.
-const GEO_TIMEOUT_MS = 5000;
+const GEO_TIMEOUT_MS = 2000; // Reduced from 5s — don't block initial load on slow GPS
 const REGION_FALLBACK = 'VIC'; // used if location is denied/unavailable/times out
 
 function haversineKm(lat1, lon1, lat2, lon2) {
@@ -3249,19 +3249,35 @@ async function init() {
 }
 
 // Silent refresh — preserves activeDate and any expanded card; never shows full loader.
+// Uses stale-while-revalidate: re-renders immediately from cached state so the UI
+// feels instant, then fetches fresh data in the background and re-renders if changed.
 async function refresh({ reason } = {}) {
   if (state.refreshing) return;
   if (!state.forecasts) { return init(); } // safety: no baseline yet
   state.refreshing = true;
   paintUpdated();
+
+  // Stale-while-revalidate: render current state immediately so UI feels instant.
+  const prevActive = state.activeDate;
+  const expandedIds = Array.from(document.querySelectorAll('article.crag-card[data-open="true"]'))
+    .map(c => c.dataset.id)
+    .filter(Boolean);
+  renderTabs();
+  renderRegionFilter();
+  renderDay();
+  // Re-open any cards that were expanded before the refresh.
+  expandedIds.forEach(id => {
+    const card = document.querySelector(`article.crag-card[data-id="${CSS.escape(id)}"]`);
+    if (card) card.dataset.open = 'true';
+  });
+
   try {
     const next = await fetchAndRank();
-    // Keep activeDate if it still exists in the new rolling window; otherwise fall back to today.
-    const prevActive = state.activeDate;
+    // Keep activeDate if it still exists in the new rolling window.
     Object.assign(state, next);
     state.activeDate = next.dates.includes(prevActive) ? prevActive : next.dates[0];
     state.lastUpdated = Date.now();
-    // Remember which cards were expanded so the refresh doesn't collapse them.
+    // Re-render with fresh data.
     const expandedIds = Array.from(document.querySelectorAll('article.crag-card[data-open="true"]'))
       .map(c => c.dataset.id)
       .filter(Boolean);

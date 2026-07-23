@@ -3278,14 +3278,14 @@ async function refresh({ reason } = {}) {
     state.activeDate = next.dates.includes(prevActive) ? prevActive : next.dates[0];
     state.lastUpdated = Date.now();
     // Re-render with fresh data.
-    const expandedIds = Array.from(document.querySelectorAll('article.crag-card[data-open="true"]'))
+    const freshExpandedIds = Array.from(document.querySelectorAll('article.crag-card[data-open="true"]'))
       .map(c => c.dataset.id)
       .filter(Boolean);
     renderTabs();
     renderRegionFilter();
     renderDay();
-    if (expandedIds.length) {
-      expandedIds.forEach(id => {
+    if (freshExpandedIds.length) {
+      freshExpandedIds.forEach(id => {
         const el = document.querySelector(`article.crag-card[data-id="${CSS.escape(id)}"]`);
         if (el && el.dataset.open !== 'true') el.querySelector('.crag-header')?.click();
       });

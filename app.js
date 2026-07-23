@@ -789,6 +789,20 @@ function groupByDestination(weekendRows) {
       .map(date => group.bestPerDay[date])
       .filter(Boolean);
 
+    // Recompute tripScore from destDailyScores so the headline number is
+    // consistent with the Fri/Sat/Sun breakdown cells (best wall per day),
+    // not the raw parent-crag scoreDay which can diverge significantly.
+    if (group.destDailyScores.length) {
+      const ds = group.destDailyScores.map(d => d.score);
+      const dsMin  = Math.min(...ds);
+      const dsMean = ds.reduce((a, b) => a + b, 0) / ds.length;
+      const dsSorted = [...ds].sort((a, b) => a - b);
+      const dsMedian = dsSorted.length % 2
+        ? dsSorted[(dsSorted.length - 1) / 2]
+        : (dsSorted[dsSorted.length / 2 - 1] + dsSorted[dsSorted.length / 2]) / 2;
+      group.tripScore = Math.max(0, Math.min(100, Math.round(0.5 * dsMin + 0.3 * dsMean + 0.2 * dsMedian)));
+    }
+
     // Count climbable walls (score >= 60) per trip date for the breakdown cells.
     group.wallsPerDay = {};
     for (const date of tripDates) {

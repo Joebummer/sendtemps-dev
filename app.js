@@ -1500,7 +1500,7 @@ function renderArrivalHint(destDailyScores, tripDates) {
 }
 
 function renderDestinationCard(dest, isTop) {
-  const { destination, drive, tripScore, subCrags, bestForToday, bestPerDay, destDailyScores, wallsPerDay = {} } = dest;
+  const { destination, drive, tripScore, subCrags, bestForToday, bestPerDay, destDailyScores, wallsPerDay = {}, compact = false } = dest;
   const band = scoreBand(tripScore);
   const w = weatherIcon(bestForToday.day.weatherCode);
   const todayBand = scoreBand(bestForToday.score);
@@ -1556,7 +1556,7 @@ function renderDestinationCard(dest, isTop) {
         <div class="detail-section">
           <div class="section-label">Sub-crags at this destination</div>
           <div class="subcrag-list">
-            ${namedSubCrags.map((s, idx) => renderSubCragRow(s, idx, state.activeDate, group.compact)).join('')}
+            ${namedSubCrags.map((s, idx) => renderSubCragRow(s, idx, state.activeDate, compact)).join('')}
           </div>
           ${namedSubCrags.length > 3 ? `<button type="button" class="subcrag-expand-btn" aria-expanded="false">Show all ${namedSubCrags.length} sub-crags</button>` : ''}
         </div>

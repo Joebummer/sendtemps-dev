@@ -4045,6 +4045,7 @@ export const CRAGS = [
     dryRating: 5,
     idealTemp: [14, 28],
     shade: 'afternoon',
+    compact: true,
     driveTime: '1h30',
     baseCity: 'Brisbane',
     trip: 'day',

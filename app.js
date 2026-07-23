@@ -10,7 +10,7 @@ import {
   scoreBand,
   drynessBand,
 } from './forecast.js?v=63';
-import { CRAGS } from './crags.js?v=34';
+import { CRAGS } from './crags.js?v=35';
 
 const API_BASE = 'https://api.sendtemps.app';
 
@@ -449,6 +449,7 @@ function renderRegionFilter() {
     { value: 'VIC', label: 'Victoria' },
     { value: 'TAS', label: 'Tasmania' },
     { value: 'NSW', label: 'NSW' },
+    { value: 'QLD', label: 'QLD' },
     { value: 'SA', label: 'SA' },
     { value: 'WA', label: 'WA' },
   ];

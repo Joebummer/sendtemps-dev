@@ -2398,7 +2398,14 @@ function renderHourlyStrip(fc, mode = 'tomorrow', dayScore = null) {
   const highlightEnd   = goodAllDay ? bw.runEnd   : (bw ? bw.end   : null);
 
   // ---- Hour cells ----
-  const cells = hours.map(h => {
+  // Apply a daily score ceiling: hourly scores can't exceed the daily score
+  // by more than 5pts. scoreDay is holistic (drying time, sustained cloud,
+  // climate anomaly) and should anchor the hourly strip from above.
+  const ceiledHours = dayScore != null
+    ? hours.map(h => ({ ...h, score: Math.min(h.score, dayScore + 5) }))
+    : hours;
+
+  const cells = ceiledHours.map(h => {
     const band = scoreBand(h.score);
     const w = weatherIcon(h.weatherCode);
     const dryClass = h.dryness == null

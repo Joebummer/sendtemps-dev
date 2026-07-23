@@ -751,7 +751,10 @@ function groupByDestination(weekendRows) {
     // Collapse Grampians sub-regions into one destination for the card UI.
     const destKey = dest.startsWith('Grampians') ? 'Grampians' : dest;
     if (!map.has(destKey)) {
-      map.set(destKey, { destination: destKey, drive: row.crag.driveTime, subCrags: [] });
+      // Pull compact flag from the parent crag definition.
+      // row.crag.parentId points directly to the parent entry.
+      const parentCrag = (typeof CRAGS !== 'undefined' ? CRAGS : []).find(c => c.id === row.crag.parentId);
+      map.set(destKey, { destination: destKey, drive: row.crag.driveTime, subCrags: [], compact: !!(parentCrag?.compact) });
     }
     map.get(destKey).subCrags.push(row);
   }
@@ -1553,7 +1556,7 @@ function renderDestinationCard(dest, isTop) {
         <div class="detail-section">
           <div class="section-label">Sub-crags at this destination</div>
           <div class="subcrag-list">
-            ${namedSubCrags.map((s, idx) => renderSubCragRow(s, idx, state.activeDate)).join('')}
+            ${namedSubCrags.map((s, idx) => renderSubCragRow(s, idx, state.activeDate, group.compact)).join('')}
           </div>
           ${namedSubCrags.length > 3 ? `<button type="button" class="subcrag-expand-btn" aria-expanded="false">Show all ${namedSubCrags.length} sub-crags</button>` : ''}
         </div>
@@ -1623,20 +1626,24 @@ function renderPicksByDay(tripDates, bestPerDay) {
   `;
 }
 
-function renderSubCragRow(sub, idx = 0, activeDate = null) {
+function renderSubCragRow(sub, idx = 0, activeDate = null, compact = false) {
   const safeId = String(sub.crag.id).replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   const hasDaily = Array.isArray(sub.dailyScores) && sub.dailyScores.length > 0;
   const hiddenAttr = idx >= 3 ? ' data-subcrag-hidden' : '';
-  // Show the selected day's score if an activeDate is provided
+  // Compact areas: show the selected day's score (you move between walls each day).
+  // Spread areas: show the sub-crag trip score (you commit to one wall for the trip).
   const dayEntry = activeDate && hasDaily ? sub.dailyScores.find(d => d.date === activeDate) : null;
-  const dayScore = dayEntry ? dayEntry.score : null;
-  const dayBand  = dayScore != null ? scoreBand(dayScore) : null;
+  const displayScore = compact
+    ? (dayEntry ? dayEntry.score : null)
+    : (sub.tripScore ?? null);
+  const displayBand = displayScore != null ? scoreBand(displayScore) : null;
+  const displayLabel = compact ? '' : ' trip';
   return `
     <div class="subcrag-row-wrap" data-open="false"${hiddenAttr}>
       <button type="button" class="subcrag-row${hasDaily ? ' is-expandable' : ''}" aria-expanded="false" ${hasDaily ? `aria-controls="subdetail-${safeId}"` : ''}>
         <span class="subcrag-name">${escapeHtml(sub.crag.name)}</span>
         <span class="subcrag-aspect">${sub.crag.aspect === 'mixed' ? 'mixed aspects' : `${sub.crag.aspect}-facing`}</span>
-        ${dayScore != null ? `<span class="subcrag-day-score score-mini ${dayBand.color}">${dayScore}</span>` : ''}
+        ${displayScore != null ? `<span class="subcrag-day-score score-mini ${displayBand.color}">${displayScore}${displayLabel}</span>` : ''}
         ${hasDaily ? `<svg class="subcrag-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>` : ''}
       </button>
       ${hasDaily ? `<div class="subcrag-detail" id="subdetail-${safeId}" role="region" hidden>${renderSubCragDailyBreakdown(sub.dailyScores)}</div>` : ''}

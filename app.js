@@ -1477,7 +1477,7 @@ function renderArrivalHint(destDailyScores, tripDates) {
   if (scores.length >= 3) {
     // Multi-day: advise on arrival timing based on first-day quality.
     if (firstScore >= 65) {
-      hint = `Arrive ${dayName(firstDate)} – it's shaping up as a strong day for cimbing (${firstScore}/100).`;
+      hint = `Arrive ${dayName(firstDate)} – it's shaping up as a strong day for climbing (${firstScore}/100).`;
     } else if (firstScore < 45 && secondScore > firstScore + 15) {
       hint = `${dayName(firstDate)} is the weakest day (${firstScore}/100) — ${dayName(secondDate)} morning arrival works fine. ${dayName(best.date)} is the standout (${best.score}/100).`;
     } else {

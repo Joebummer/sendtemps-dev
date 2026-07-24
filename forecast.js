@@ -1,7 +1,7 @@
 // Open-Meteo forecast fetching + scoring
 // API: https://open-meteo.com/en/docs — free, no key, CORS-enabled
 
-import { CRAGS } from './crags.js?v=33';
+import { CRAGS } from './crags.js?v=38';
 import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 
 // Routed through the SendTemps Worker (not Open-Meteo directly) so every
@@ -517,7 +517,15 @@ function computeDrynessSeries(crag, hourly) {
     else if (t < 8) tempFactor = 0.7;
     else if (t > 25) tempFactor = 1.25;
 
-    const dryRate = baseRate * sunFactor * windFactor * humFactor * tempFactor;
+    // Nighttime suppression — between 8pm and 7am, drying is much slower:
+    // no solar contribution, dew formation, condensation on cold rock all
+    // counteract evaporation. Halve the effective drying rate at night.
+    // This prevents overnight rain from drying too quickly before 8am scores.
+    const hour = parseInt((hourly.time[i] || '').slice(11, 13), 10);
+    const isNight = !isNaN(hour) && (hour >= 20 || hour < 7);
+    const nightFactor = isNight ? 0.5 : 1.0;
+
+    const dryRate = baseRate * sunFactor * windFactor * humFactor * tempFactor * nightFactor;
     // Exponential decay toward zero across one hour.
     wetness = wetness * Math.exp(-dryRate);
     if (wetness < 0.001) wetness = 0;
@@ -681,6 +689,7 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
       hour,
       isoHour: t,
       temp: hourly.temperature_2m?.[i] ?? null,
+      apparentTemp: hourly.apparent_temperature?.[i] ?? hourly.temperature_2m?.[i] ?? null,
       wind: hourly.windspeed_10m?.[i] ?? null,
       windDir: hourly.winddirection_10m?.[i] ?? null,
       windGust: hourly.windgusts_10m?.[i] ?? null,
@@ -804,12 +813,14 @@ function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 
   else if (meanDayHumid < 50) s += 3;  // crisp air
   else if (meanDayHumid < 60) s += 2;  // dry air
 
-  // Temperature vs ideal
+  // Temperature vs ideal — use apparent (feels-like) temperature so wind chill
+  // and humidity are factored in. Falls back to air temp if apparentTemp missing.
   const [idealMin, idealMax] = crag.idealTemp;
-  if (h.temp < idealMin) {
-    penalize(Math.min(25, (idealMin - h.temp) * 2.5));
-  } else if (h.temp > idealMax) {
-    penalize(Math.min(35, (h.temp - idealMax) * 3.5));
+  const tFeel = h.apparentTemp ?? h.temp;
+  if (tFeel < idealMin) {
+    penalize(Math.min(25, (idealMin - tFeel) * 2.5));
+  } else if (tFeel > idealMax) {
+    penalize(Math.min(35, (tFeel - idealMax) * 3.5));
   }
 
   // Dryness — penalty up to 35
@@ -827,16 +838,16 @@ function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 
   // Lee penalty — wall sheltered means slower drying; apply a small drag.
   else if (h.windExposure === 'lee' && h.wind > 15) penalize(2);
 
-  // Sun-on-wall interactions. h.sunOnWall is null for mixed-aspect parents —
-  // skip these tweaks rather than guess (children carry the real aspect).
+  // Sun-on-wall interactions — use apparent temp for the threshold checks
+  // so a cold-feeling 20°C day (windy, humid) doesn't falsely claim a sun bonus.
   if (h.sunOnWall === true) {
-    if (h.temp > 24) penalize(8); // sun-baked
-    else if (h.temp < 12) s += 5; // sun-trap (bonus)
-    else if (h.temp < 18) s += 3; // bonus
+    if (tFeel > 24) penalize(8); // sun-baked
+    else if (tFeel < 12) s += 5; // sun-trap (bonus)
+    else if (tFeel < 18) s += 3; // bonus
   } else if (h.sunOnWall === false) {
     // In shade
-    if (h.temp > 24) s += 4; // shade is welcome (bonus)
-    else if (h.temp < 8) penalize(4); // cold and shaded
+    if (tFeel > 24) s += 4; // shade is welcome (bonus)
+    else if (tFeel < 8) penalize(4); // cold and shaded
   }
 
   // — Penalty integrity cap — same rule as scoreDay(): an hour that took
@@ -1560,14 +1571,36 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   } else {
     rainDetail = `${effectiveSum.toFixed(1)}mm forecast · ${Math.round(peakProb)}% peak chance (${Math.round(effectiveProb)}% avg across climbing hours)`;
   }
+  // Precipitation concentration: 10mm in 1 hour is far worse than 10mm spread
+  // across 8 hours. We scale the rain penalty by how concentrated the rain is.
+  // concentrationMult: 1.0 (rain spread across many hours) → 1.4 (all in 1–2h)
+  // precipHours is the total hours with measurable rain from the daily API.
+  // We cap at the climbable window length so a 1am cloudburst doesn't inflate it.
+  const climbSpanHours = cutoffH - startH; // e.g. 8–20 = 12h
+  const rawPrecipHours = day.precipHours ?? climbSpanHours; // fallback = spread
+  // Only count precip hours that fall inside the climbing window (approx).
+  // We don't have hourly breakdown here, so use the climbable rain sum as a
+  // fraction of the daily total to prorate the precip hours.
+  const dailyTotal = day.precipSum || effectiveSum || 0.01;
+  const climbFrac = dailyTotal > 0 ? Math.min(1, effectiveSum / dailyTotal) : 1;
+  const climbPrecipHours = Math.max(0.5, rawPrecipHours * climbFrac);
+  // mm per rain hour — higher = more concentrated = worse
+  const mmPerHour = effectiveSum / climbPrecipHours;
+  // concentrationMult: 1.0 at ≤1 mm/h (light drizzle spread), up to 1.4 at ≥5 mm/h
+  const concentrationMult = effectiveSum > 0.2
+    ? Math.min(1.4, 1.0 + (mmPerHour - 1) * 0.1)
+    : 1.0;
+
   if (effectiveSum > 5) {
-    score -= 60;
+    const pen = Math.round(60 * concentrationMult);
+    score -= pen;
     reasons.push('rain expected');
-    add('precip', 'Rain forecast', -60, rainDetail);
+    add('precip', 'Rain forecast', -pen, rainDetail);
   } else if (effectiveSum > 1) {
-    score -= 30;
+    const pen = Math.round(30 * concentrationMult);
+    score -= pen;
     reasons.push('showers likely');
-    add('precip', 'Showers likely', -30, rainDetail);
+    add('precip', 'Showers likely', -pen, rainDetail);
   } else if (effectiveProb > 60) {
     score -= 20;
     reasons.push(`${Math.round(peakProb)}% rain chance`);

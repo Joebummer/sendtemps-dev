@@ -7,15 +7,15 @@
 //
 // Cache name is bumped per release so old shells get evicted on activate.
 
-const CACHE = 'sendtemps-v65-55';
+const CACHE = 'sendtemps-v65-56';
 
 // Static shell — paths are app-relative so this works under the
 // /sendtemps/ GitHub Pages prefix as well as a custom-domain root.
 const SHELL = [
   './',
   './index.html',
-  './app.js?v=65.55',
-  './forecast.js?v=63',
+  './app.js?v=65.56',
+  './forecast.js?v=64',
   './crags.js?v=38',
   './style.css?v=65.24',
   './manifest.webmanifest',

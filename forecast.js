@@ -175,21 +175,47 @@ export async function fetchAllForecasts(region = 'ALL') {
 // Drying half-life in hours when conditions are average (no sun, light wind,
 // 60% humidity, mild temp). Sandstone is much slower than granite.
 const DRY_HALFLIFE_HRS = {
-  granite: 6,
-  quartzite: 10,
-  trachyte: 12,
-  conglomerate: 14,
-  sandstone: 24,
+  granite:     6,   // very fast — low absorption, sheds water quickly
+  rhyolite:    7,   // similar to granite, slightly more textured surface retention
+  basalt:      8,   // dense, low porosity but surface stays damp longer than granite
+  dolerite:    9,   // intrusive basalt-family; slower than surface volcanics
+  quartzite:   10,  // low porosity but smooth faces retain thin water film longer
+  marble:      11,  // dense, polished; drains fast but seeps through joints
+  trachyte:    12,  // intermediate volcanic; moderate absorption
+  conglomerate:14,  // variable — matrix dries slower than clasts
+  limestone:   20,  // porous, seeps; can weep for days after heavy rain
+  sandstone:   24,  // most absorbent; holds moisture deepest
 };
 
 // How much rain (mm) it takes to push the rock fully saturated.
 // Sandstone soaks a lot; granite very little.
 const SATURATION_MM = {
-  granite: 3,
-  quartzite: 5,
-  trachyte: 6,
-  conglomerate: 7,
-  sandstone: 10,
+  granite:     3,
+  rhyolite:    3,
+  basalt:      4,
+  dolerite:    4,
+  quartzite:   5,
+  marble:      5,
+  trachyte:    6,
+  conglomerate:7,
+  limestone:   9,   // absorbs deeply; seepage extends well past saturation point
+  sandstone:   10,
+};
+
+// Nighttime drying suppression factor by rock type.
+// Dense, low-porosity rocks (granite, rhyolite) lose very little to condensation
+// at night; porous rocks (sandstone, limestone) re-wet significantly via dew.
+const NIGHT_DRY_FACTOR = {
+  granite:     0.75, // barely re-wets — still dries a little even overnight
+  rhyolite:    0.70,
+  basalt:      0.65,
+  dolerite:    0.60,
+  quartzite:   0.60,
+  marble:      0.55,
+  trachyte:    0.50, // default (was uniform for all types)
+  conglomerate:0.45,
+  limestone:   0.35, // seeps and re-wets significantly at night
+  sandstone:   0.30, // most affected by dew and overnight humidity
 };
 
 // Average wind direction + speed during climbing hours (8am–6pm) for a given
@@ -536,13 +562,14 @@ function computeDrynessSeries(crag, hourly) {
     else if (t < 8) tempFactor = 0.7;
     else if (t > 25) tempFactor = 1.25;
 
-    // Nighttime suppression — between 8pm and 7am, drying is much slower:
+    // Nighttime suppression — between 8pm and 7am, drying slows significantly:
     // no solar contribution, dew formation, condensation on cold rock all
-    // counteract evaporation. Halve the effective drying rate at night.
-    // This prevents overnight rain from drying too quickly before 8am scores.
+    // counteract evaporation. Factor is rock-type aware: dense non-porous rocks
+    // (granite, rhyolite) barely re-wet at night; porous rocks (sandstone,
+    // limestone) can re-wet substantially via dew and seepage.
     const hour = parseInt((hourly.time[i] || '').slice(11, 13), 10);
     const isNight = !isNaN(hour) && (hour >= 20 || hour < 7);
-    const nightFactor = isNight ? 0.5 : 1.0;
+    const nightFactor = isNight ? (NIGHT_DRY_FACTOR[crag.rockType] ?? 0.50) : 1.0;
 
     const dryRate = baseRate * sunFactor * windFactor * humFactor * tempFactor * nightFactor;
     // Exponential decay toward zero across one hour.

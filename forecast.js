@@ -1,7 +1,7 @@
 // Open-Meteo forecast fetching + scoring
 // API: https://open-meteo.com/en/docs — free, no key, CORS-enabled
 
-import { CRAGS } from './crags.js?v=38';
+import { CRAGS } from './crags.js?v=39';
 import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 
 // Routed through the SendTemps Worker (not Open-Meteo directly) so every
@@ -183,6 +183,7 @@ const DRY_HALFLIFE_HRS = {
   marble:      11,  // dense, polished; drains fast but seeps through joints
   trachyte:    12,  // intermediate volcanic; moderate absorption
   conglomerate:14,  // variable — matrix dries slower than clasts
+  tuff:        18,  // volcanic ash-derived, highly porous — absorbs and holds water
   limestone:   20,  // porous, seeps; can weep for days after heavy rain
   sandstone:   24,  // most absorbent; holds moisture deepest
 };
@@ -198,6 +199,7 @@ const SATURATION_MM = {
   marble:      5,
   trachyte:    6,
   conglomerate:7,
+  tuff:        8,   // porous volcanic ash rock — soaks up rain quickly
   limestone:   9,   // absorbs deeply; seepage extends well past saturation point
   sandstone:   10,
 };
@@ -214,6 +216,7 @@ const NIGHT_DRY_FACTOR = {
   marble:      0.55,
   trachyte:    0.50, // default (was uniform for all types)
   conglomerate:0.45,
+  tuff:        0.40, // porous — re-wets via dew and residual seepage overnight
   limestone:   0.35, // seeps and re-wets significantly at night
   sandstone:   0.30, // most affected by dew and overnight humidity
 };

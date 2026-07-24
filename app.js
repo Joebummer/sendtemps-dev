@@ -3246,7 +3246,8 @@ async function init() {
     loading.hidden = true;
     content.hidden = true;
     errorEl.hidden = false;
-    errorMsg.textContent = err.message || 'Network error';
+    const stack = err.stack ? '\n' + err.stack.split('\n').slice(1, 3).join('\n') : '';
+    errorMsg.textContent = (err.message || 'Network error') + stack;
   }
 }
 

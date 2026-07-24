@@ -3258,19 +3258,23 @@ async function refresh({ reason } = {}) {
   state.refreshing = true;
   paintUpdated();
 
-  // Stale-while-revalidate: render current state immediately so UI feels instant.
   const prevActive = state.activeDate;
   const expandedIds = Array.from(document.querySelectorAll('article.crag-card[data-open="true"]'))
     .map(c => c.dataset.id)
     .filter(Boolean);
-  renderTabs();
-  renderRegionFilter();
-  renderDay();
-  // Re-open any cards that were expanded before the refresh.
-  expandedIds.forEach(id => {
-    const card = document.querySelector(`article.crag-card[data-id="${CSS.escape(id)}"]`);
-    if (card) card.dataset.open = 'true';
-  });
+
+  // Stale-while-revalidate: render current state immediately so UI feels instant.
+  // Skip for region switches — stale data from the old region is misleading.
+  const skipStale = reason === 'region-switch';
+  if (!skipStale) {
+    renderTabs();
+    renderRegionFilter();
+    renderDay();
+    expandedIds.forEach(id => {
+      const card = document.querySelector(`article.crag-card[data-id="${CSS.escape(id)}"]`);
+      if (card) card.dataset.open = 'true';
+    });
+  }
 
   try {
     const next = await fetchAndRank();

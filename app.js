@@ -1729,7 +1729,7 @@ function renderCard(row, isTop, isWeekend) {
           ${renderDrynessLine(nowDryness, lastRain, daysAheadOfActive())}
           <div class="reasons">${reasonsHtml}</div>
           ${seasonalContext ? `<div class="seasonal-context">${escapeHtml(seasonalContext)}</div>` : ''}
-          ${fc ? renderConditionBand(fc, isToday ? 'today' : isTomorrow ? 'tomorrow' : null) : ''
+          ${fc ? renderConditionBand(fc, isToday ? 'today' : isTomorrow ? 'tomorrow' : null) : ''}
         </div>
         <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M6 9l6 6 6-6"/>

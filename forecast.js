@@ -91,6 +91,15 @@ export async function fetchAllForecasts(region = 'ALL') {
     const tomorrowBestWindow = bestWindow(tomorrowHourly);
     // Last 4 days of daily precipitation totals for the sparkline.
     const pastPrecip = extractPastDailyPrecip(f.hourly, todayMel, 4);
+    // Elevation lapse rate correction.
+    // Open-Meteo's 2m temperature is model-derived and can run 2–4°C warm
+    // at high-elevation crags. We apply a standard environmental lapse rate
+    // of 6.5°C/1000m above a 400m reference (below that the model is adequate).
+    // Only applied when crag.elevation is set and > 400m.
+    // This corrects tMax, tFeel, and climbTemps.meanApparent before scoring.
+    const _elev = crag.elevation ?? 0;
+    const _lapseCorrection = _elev > 400 ? -((_elev - 400) / 1000) * 6.5 : 0;
+
     byId[crag.id] = {
       crag,
       hourly: f.hourly,
@@ -104,15 +113,6 @@ export async function fetchAllForecasts(region = 'ALL') {
       tomorrowDate: tomorrowMel,
       tomorrowHourly,
       tomorrowBestWindow,
-      // Elevation lapse rate correction.
-      // Open-Meteo's 2m temperature is model-derived and can run 2–4°C warm
-      // at high-elevation crags. We apply a standard environmental lapse rate
-      // of 6.5°C/1000m above a 400m reference (below that the model is adequate).
-      // Only applied when crag.elevation is set and > 400m.
-      // This corrects tMax, tFeel, and climbTemps.meanApparent before scoring.
-      const _elev = crag.elevation ?? 0;
-      const _lapseCorrection = _elev > 400 ? -((_elev - 400) / 1000) * 6.5 : 0;
-
       days: f.daily.time.map((date, di) => {
         const _climbTempsRaw = computeClimbTemps(crag, f.hourly, date);
         // Apply lapse rate correction to climbTemps means if elevation warrants it.

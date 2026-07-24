@@ -703,6 +703,12 @@ main {
   flex-wrap: wrap;
   gap: var(--space-1);
 }
+.seasonal-context {
+  font-size: 10px;
+  color: var(--color-text-faint);
+  margin-top: 3px;
+  letter-spacing: 0.01em;
+}
 
 /* ---- Rec 3: Condition band ---- */
 /* Thin colour strip showing hourly score shape across the climbable window.

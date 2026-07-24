@@ -9,7 +9,7 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=64';
+} from './forecast.js?v=65';
 import { CRAGS } from './crags.js?v=38';
 
 const API_BASE = 'https://api.sendtemps.app';
@@ -1671,7 +1671,7 @@ function renderSubCragDailyBreakdown(dailyScores) {
 }
 
 function renderCard(row, isTop, isWeekend) {
-  const { crag, day, score, reasons, prevDay, tripScore, dailyScores, daySubCrags, bestSubCragName, nowDryness, lastRain } = row;
+  const { crag, day, score, reasons, prevDay, tripScore, dailyScores, daySubCrags, bestSubCragName, nowDryness, lastRain, seasonalContext } = row;
   // We stash the row id on the share button via data-share-id so the
   // click handler (bound after render) can look up the row by crag.id
   // without re-deriving headlines or carrying closures through innerHTML.
@@ -1728,7 +1728,8 @@ function renderCard(row, isTop, isWeekend) {
           ${bestSubCragName ? `<div class="day-score-note">Best: <strong>${escapeHtml(bestSubCragName)}</strong></div>` : ''}
           ${renderDrynessLine(nowDryness, lastRain, daysAheadOfActive())}
           <div class="reasons">${reasonsHtml}</div>
-          ${fc ? renderConditionBand(fc, isToday ? 'today' : isTomorrow ? 'tomorrow' : null) : ''}
+          ${seasonalContext ? `<div class="seasonal-context">${escapeHtml(seasonalContext)}</div>` : ''}
+          ${fc ? renderConditionBand(fc, isToday ? 'today' : isTomorrow ? 'tomorrow' : null) : ''
         </div>
         <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M6 9l6 6 6-6"/>

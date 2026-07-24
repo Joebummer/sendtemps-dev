@@ -104,11 +104,29 @@ export async function fetchAllForecasts(region = 'ALL') {
       tomorrowDate: tomorrowMel,
       tomorrowHourly,
       tomorrowBestWindow,
-      days: f.daily.time.map((date, di) => ({
+      // Elevation lapse rate correction.
+      // Open-Meteo's 2m temperature is model-derived and can run 2–4°C warm
+      // at high-elevation crags. We apply a standard environmental lapse rate
+      // of 6.5°C/1000m above a 400m reference (below that the model is adequate).
+      // Only applied when crag.elevation is set and > 400m.
+      // This corrects tMax, tFeel, and climbTemps.meanApparent before scoring.
+      const _elev = crag.elevation ?? 0;
+      const _lapseCorrection = _elev > 400 ? -((_elev - 400) / 1000) * 6.5 : 0;
+
+      days: f.daily.time.map((date, di) => {
+        const _climbTempsRaw = computeClimbTemps(crag, f.hourly, date);
+        // Apply lapse rate correction to climbTemps means if elevation warrants it.
+        const _climbTemps = _lapseCorrection !== 0 ? {
+          ..._climbTempsRaw,
+          meanTemp:     _climbTempsRaw.meanTemp     != null ? _climbTempsRaw.meanTemp     + _lapseCorrection : null,
+          meanApparent: _climbTempsRaw.meanApparent != null ? _climbTempsRaw.meanApparent + _lapseCorrection : null,
+          maxApparent:  _climbTempsRaw.maxApparent  != null ? _climbTempsRaw.maxApparent  + _lapseCorrection : null,
+        } : _climbTempsRaw;
+        return ({
         date,
-        tMax: f.daily.temperature_2m_max[di],
-        tMin: f.daily.temperature_2m_min[di],
-        tFeel: f.daily.apparent_temperature_max[di],
+        tMax:  (f.daily.temperature_2m_max[di]     ?? 0) + _lapseCorrection,
+        tMin:  (f.daily.temperature_2m_min[di]     ?? 0) + _lapseCorrection,
+        tFeel: (f.daily.apparent_temperature_max[di] ?? 0) + _lapseCorrection,
         precipSum: f.daily.precipitation_sum[di],
         precipProb: f.daily.precipitation_probability_max[di],
         precipHours: f.daily.precipitation_hours[di],
@@ -120,10 +138,9 @@ export async function fetchAllForecasts(region = 'ALL') {
         // aspect labels). scoreDay uses these for the heat/cold/sunshine maths.
         ...computeSolarExposure(crag, f.hourly, date),
         sunWindow: computeSunWindow(crag, f.hourly, date),
-        // Temperature distribution across the climbing window. Lets scoreDay
-        // weight the temp penalty by what fraction of the day is actually in
-        // the comfort band, not just whether the peak hour clips inside it.
-        climbTemps: computeClimbTemps(crag, f.hourly, date),
+        // Temperature distribution across the climbing window — lapse-corrected
+        // for high-elevation crags (see _climbTemps above).
+        climbTemps: _climbTemps,
         // Humidity distribution across the climbing window. Lets scoreDay
         // apply a per-crag-tuned penalty when the rock spends real hours in
         // greasy/damp territory — weighted by rockType-driven dryRating.
@@ -137,7 +154,9 @@ export async function fetchAllForecasts(region = 'ALL') {
         morningDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 8),
         afternoonDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 14),
         dayDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 11), // mid-day single value
-      })),
+        elevCorrection: _lapseCorrection !== 0 ? Math.round(_lapseCorrection * 10) / 10 : null,
+      });
+      }),
     };
   });
   return byId;
@@ -1673,27 +1692,32 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     : day.windExposure === 'lee' ? 0.8
     : 1.0;
 
-  if (day.wind > 50) {
+  // Use daytime mean wind (windAvg) for penalty thresholds — the daily max
+  // (day.wind) includes overnight gusts and brief spikes that don't represent
+  // the actual climbing experience. Fall back to day.wind if windAvg unavailable.
+  const climbingWind = day.windAvg ?? day.wind;
+
+  if (climbingWind > 50) {
     const penalty = Math.round(15 * windPenaltyMult); // 12 lee / 15 parallel / 20 onshore
     score -= penalty;
     reasons.push('very windy');
-    add('wind', 'Wind', -penalty, `${Math.round(day.wind)} km/h ${dirLabel} — very windy${exposureNote}`);
-  } else if (day.wind > 35) {
+    add('wind', 'Wind', -penalty, `${Math.round(climbingWind)} km/h avg ${dirLabel} — very windy${exposureNote}`);
+  } else if (climbingWind > 35) {
     const penalty = Math.round(5 * windPenaltyMult); // 4 lee / 5 parallel / 7 onshore
     score -= penalty;
-    add('wind', 'Wind', -penalty, `${Math.round(day.wind)} km/h ${dirLabel} — gusty${exposureNote}`);
-  } else if (day.wind > 15 && day.wind < 30 && prevWasWetDuringDay) {
+    add('wind', 'Wind', -penalty, `${Math.round(climbingWind)} km/h avg ${dirLabel} — gusty${exposureNote}`);
+  } else if (climbingWind > 15 && climbingWind < 30 && prevWasWetDuringDay) {
     // Only credit a drying wind if the wall is actually exposed to it.
     // A wall in the lee doesn't benefit, even if the regional wind is brisk.
     if (day.windExposure === 'lee') {
-      add('wind', 'Sheltered from wind', -2, `${Math.round(day.wind)} km/h ${dirLabel} — wall sits in the lee, rock dries slower`);
+      add('wind', 'Sheltered from wind', -2, `${Math.round(climbingWind)} km/h avg ${dirLabel} — wall sits in the lee, rock dries slower`);
       score -= 2;
       reasons.push('sheltered from wind');
     } else {
       const bonus = day.windExposure === 'onshore' ? 6 : 4;
       score += bonus;
       reasons.push('drying wind');
-      add('wind', 'Drying wind', +bonus, `${Math.round(day.wind)} km/h ${dirLabel}${exposureNote} — helps the rock dry`);
+      add('wind', 'Drying wind', +bonus, `${Math.round(climbingWind)} km/h avg ${dirLabel}${exposureNote} — helps the rock dry`);
     }
   }
 
@@ -1827,10 +1851,41 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   const otherReasons = reasons.filter(r => !penaltyReasons.includes(r));
   const surfacedReasons = [...new Set([...penaltyReasons, ...otherReasons])].slice(0, 3);
 
+  // — Seasonal context label —
+  // Compares finalScore against a rough expected score for this month at this
+  // crag, derived from the climate anomaly signals already computed.
+  // Shows 'above average for Jul' / 'typical for Jul' / 'below average for Jul'
+  // so users can interpret a 72 in winter differently to a 72 in spring.
+  let seasonalContext = null;
+  if (_norm) {
+    // Estimate a baseline score for an 'average' day this month:
+    // - Start at 80 (no rain, wind near norm, temp near ideal)
+    // - Subtract expected temp penalty based on norm tMax vs crag ideal
+    const [sIdealMin, sIdealMax] = crag.idealTemp;
+    const normT = normTMax ?? sIdealMin;
+    let baselineScore = 80;
+    if (normT < sIdealMin) baselineScore -= Math.min(20, (sIdealMin - normT) * 2);
+    else if (normT > sIdealMax) baselineScore -= Math.min(30, (normT - sIdealMax) * 3);
+    // Adjust for typical humidity
+    if (normRh != null) {
+      if (normRh > 85) baselineScore -= 6;
+      else if (normRh > 75) baselineScore -= 3;
+      else if (normRh < 55) baselineScore += 3;
+    }
+    const diff = finalScore - baselineScore;
+    const monthLabel = _month; // e.g. 'Jul'
+    if (diff >= 10) seasonalContext = `above average for ${monthLabel}`;
+    else if (diff >= 4) seasonalContext = `good for ${monthLabel}`;
+    else if (diff >= -4) seasonalContext = `typical for ${monthLabel}`;
+    else if (diff >= -10) seasonalContext = `below average for ${monthLabel}`;
+    else seasonalContext = `poor for ${monthLabel}`;
+  }
+
   return {
     score: finalScore,
     reasons: surfacedReasons,
     contributions,
+    seasonalContext,
   };
 }
 
@@ -1846,7 +1901,7 @@ export function rankByDay(forecasts, dayDates) {
       const day = fc.days[dayIdx];
       const prevDay = dayIdx > 0 ? fc.days[dayIdx - 1] : null;
       const nextDay = dayIdx + 1 < fc.days.length ? fc.days[dayIdx + 1] : null;
-      const { score, reasons, contributions } = scoreDay(fc.crag, day, prevDay, nextDay);
+      const { score, reasons, contributions, seasonalContext } = scoreDay(fc.crag, day, prevDay, nextDay);
       rows.push({
         crag: fc.crag,
         day,
@@ -1854,6 +1909,7 @@ export function rankByDay(forecasts, dayDates) {
         score,
         reasons,
         contributions,
+        seasonalContext,
         nowDryness: fc.nowDryness,
         lastRain: fc.lastRain,
         pastPrecip: fc.pastPrecip,

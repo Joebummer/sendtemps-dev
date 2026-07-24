@@ -1,7 +1,7 @@
 {
-  "name": "SendTemps — Australian Climbing Forecast",
+  "name": "SendTemps – Friction forecasts for Australian rock",
   "short_name": "SendTemps",
-  "description": "Climbing conditions forecast across Australia — score and rank crags by weather",
+  "description": "Climbing conditions forecast across Australia – score and rank crags by weather",
   "start_url": "https://sendtemps.app/",
   "display": "standalone",
   "background_color": "#2d5a27",

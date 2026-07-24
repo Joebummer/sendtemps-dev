@@ -7,15 +7,15 @@
     <meta name="theme-color" content="#f7f4ee" media="(prefers-color-scheme: light)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="SENDTEMPS" />
+    <meta name="apple-mobile-web-app-title" content="SendTemps" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="description" content="Real-time climbing weather forecasts for Australian crags. Score and rank conditions at Mt Arapiles, the Grampians, Blue Mountains, Nowra, Freycinet, and more. VIC, NSW, TAS, SA, and WA." />
+    <meta name="description" content="Real-time climbing weather forecasts for Australian crags. Score and rank conditions at Mt Arapiles, the Grampians, Blue Mountains, Nowra, Freycinet, and more. VIC, NSW, TAS, SA, QLD and WA." />
     <meta name="keywords" content="climbing weather Australia, Mt Arapiles weather, Grampians climbing forecast, Blue Mountains climbing conditions, Nowra climbing weather, Freycinet climbing, rock climbing forecast Australia, crag conditions, sport climbing weather, trad climbing forecast" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://sendtemps.app/" />
 
     <!-- Open Graph -->
-    <meta property="og:title" content="SENDTEMPS — Friction forecasts for Australian rock" />
+    <meta property="og:title" content="SendTemps – Friction forecasts for Australian rock" />
     <meta property="og:description" content="Real-time friction forecasts for Australian climbing crags. Score and rank conditions at Arapiles, the Grampians, Blue Mountains, Nowra, Freycinet and more." />
     <meta property="og:image" content="https://sendtemps.app/og-image.png" />
     <meta property="og:image:width" content="1200" />
@@ -26,11 +26,11 @@
 
     <!-- Twitter/X card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="SENDTEMPS — Friction forecasts for Australian rock" />
+    <meta name="twitter:title" content="SendTemps – Friction forecasts for Australian rock" />
     <meta name="twitter:description" content="Real-time friction forecasts for Australian climbing crags. Score and rank conditions at Arapiles, the Grampians, Blue Mountains, Nowra, Freycinet and more." />
     <meta name="twitter:image" content="https://sendtemps.app/og-image.png" />
 
-    <title>SENDTEMPS — Friction forecasts for Australian rock</title>
+    <title>SendTemps – Friction forecasts for Australian rock</title>
 
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="icon-180.png" />
@@ -76,10 +76,10 @@
           <path d="M5 26 L13 13 L16 16.5 L19 13 L27 26 Z" fill="#f5f2eb"/>
           <path d="M11 12 A6 6 0 0 1 21 12" fill="none" stroke="#f5f2eb" stroke-width="1.6" stroke-linecap="round"/>
         </svg>
-        <h1>SENDTEMPS</h1>
+        <h1>SendTemps</h1>
       </div>
       <div class="topbar-actions">
-        <button class="notify-toggle" id="notify-btn" aria-label="Enable rare window alerts" title="Rare window alerts"></button>
+        <button class="notify-toggle" id="notify-btn" aria-label="Turn on rare window alerts" title="Rare window alerts"></button>
         <button class="theme-toggle" data-theme-toggle aria-label="Toggle dark mode"></button>
       </div>
     </header>
@@ -87,7 +87,7 @@
     <main id="app">
       <div class="loading" id="loading">
         <div class="spinner"></div>
-        <p>Reading the wind…</p>
+        <p>Reading the sky…</p>
       </div>
 
       <div id="content" hidden>
@@ -100,26 +100,26 @@
         <section class="ranked-list" id="ranked-list"></section>
 
         <footer class="footnote">
-          <p>Forecast: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>. Conditions are predictions — always check on arrival. Aspect, dry-time and ideal-temp ratings are author's notes, not gospel.</p>
+          <p>Forecast: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>. Conditions are predictions. Aspect, dry-time and ideal-temp ratings are author's notes, not gospel.</p>
           <p class="updated" id="updated"></p>
           <div class="redeem-row" id="redeem-row">
-            <input type="text" id="redeem-input" placeholder="Have an access code?" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" />
+            <input type="text" id="redeem-input" placeholder="Have a code?" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" />
             <button type="button" id="redeem-btn">Redeem</button>
           </div>
           <p class="redeem-status" id="redeem-status"></p>
-          <p class="contact-line"><a href="mailto:hello@sendtemps.app?subject=Crag%20suggestion" class="contact-link">Suggest a crag</a></p>
+          <p class="contact-line"><a href="mailto:hello@sendtemps.app?subject=Crag%20suggestion" class="contact-link">Suggest a crag or correction</a></p>
           <p class="contact-line"><a href="mailto:hello@sendtemps.app" class="contact-link">hello@sendtemps.app</a></p>
         </footer>
       </div>
 
       <div class="error" id="error" hidden>
-        <h2>Couldn't fetch forecast</h2>
+        <h2>Sorry, couldn't fetch forecast</h2>
         <p id="error-message"></p>
         <button id="retry">Retry</button>
       </div>
     </main>
 
-    <script type="module" src="app.js?v=65.62"></script>
+    <script type="module" src="app.js?v=65.63"></script>
 
     <!--
       GoatCounter analytics — cookie-free, no banner needed.

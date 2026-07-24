@@ -9,7 +9,7 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=68';
+} from './forecast.js?v=69';
 import { CRAGS } from './crags.js?v=39';
 
 const API_BASE = 'https://api.sendtemps.app';
@@ -194,7 +194,7 @@ function showUpdateBanner() {
     </svg>
     <div class="update-banner-text">
       <strong>New version available</strong>
-      <span>Refresh to get the latest forecast features.</span>
+      <span>Refresh to get the latest forecast features</span>
     </div>
     <button class="update-banner-reload" type="button">Reload</button>
     <button class="update-banner-dismiss" type="button" aria-label="Dismiss">×</button>
@@ -541,9 +541,9 @@ function showDayLockPopover(btn) {
   pop.id = 'day-lock-popover';
   pop.className = 'pro-popover';
   pop.setAttribute('role', 'dialog');
-  pop.setAttribute('aria-label', 'Full forecast — Pro');
+  pop.setAttribute('aria-label', 'Full forecast – Pro feature');
   pop.innerHTML = `
-    <p class="notify-pop-title">Full week forecast — Pro</p>
+    <p class="notify-pop-title">Full week forecast – Pro feature</p>
     <p class="notify-pop-body">Free shows today + tomorrow. Pro unlocks the full ${state.dates.length}-day outlook. Got an invite link? Open it once and this unlocks automatically.</p>
     <button class="notify-pop-close" id="day-lock-pop-close" aria-label="Close">✕</button>
   `;
@@ -573,10 +573,10 @@ function showSubCragLockPopover(btn) {
   pop.id = 'subcrag-lock-popover';
   pop.className = 'pro-popover';
   pop.setAttribute('role', 'dialog');
-  pop.setAttribute('aria-label', 'Sub-crag breakdown — Pro');
+  pop.setAttribute('aria-label', 'Sub-crag breakdown – Pro feature');
   pop.innerHTML = `
-    <p class="notify-pop-title">Sub-crag breakdown — Pro</p>
-    <p class="notify-pop-body">Free shows this area's own score. Pro breaks it down wall-by-wall so you can see which sub-crag has the best conditions today. Got an invite link? Open it once and this unlocks automatically.</p>
+    <p class="notify-pop-title">Sub-crag breakdown – Pro feature</p>
+    <p class="notify-pop-body">Free shows this area's score. Pro breaks it down wall-by-wall so you can see which sub-crag has the best conditions today.</p>
     <button class="notify-pop-close" id="subcrag-lock-pop-close" aria-label="Close">✕</button>
   `;
 
@@ -1046,7 +1046,7 @@ function renderSplitRanked(dayRows, destinations) {
       const ul = wrap.querySelector('.hidden-list');
       if (ul) ul.hidden = open;
       const action = btn.querySelector('.hidden-footer-action');
-      if (action) action.textContent = open ? 'show' : 'hide';
+      if (action) action.textContent = open ? 'Show' : 'Hide';
     });
   });
 
@@ -1215,7 +1215,7 @@ function renderTripDateRange() {
         <span class="trip-date-range-count">${dayCount}</span>
       </div>
       <div class="trip-date-range-actions">
-        ${showClear ? `<button class="trip-clear-btn" id="trip-clear-btn" aria-label="Reset to default weekend">Clear</button>` : ''}
+        ${showClear ? `<button class="trip-clear-btn" id="trip-clear-btn" aria-label="Reset to coming weekend">Clear</button>` : ''}
         <button class="trip-set-dates-btn" id="trip-set-dates-btn" aria-label="Change trip dates">Set dates</button>
       </div>
     </div>
@@ -1240,12 +1240,12 @@ function renderBestWeekendCallout(destinations) {
   const endLabel   = dates[dates.length - 1] ? new Date(dates[dates.length - 1]).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
   const rangeLabel = startLabel && endLabel && startLabel !== endLabel ? `${startLabel} – ${endLabel}` : startLabel;
 
-  const shareText = `${top.destination} looks like the best weekend destination — scoring ${score}/100 on SendTemps. ${reasonLine}. sendtemps.app`;
+  const shareText = `${top.destination} looks like the best weekend destination – scoring ${score}/100 on SendTemps. ${reasonLine}. Download sendtemps.app`;
 
   return `
     <div class="best-weekend-callout">
       <div class="best-weekend-inner">
-        <div class="best-weekend-label">Best this weekend</div>
+        <div class="best-weekend-label">Best pick this weekend</div>
         <div class="best-weekend-destination">${escapeHtml(top.destination)}</div>
         <div class="best-weekend-meta">
           <span class="score-mini ${band.color}">${score}</span>
@@ -1342,8 +1342,8 @@ function renderWeekendSectionLocked(title) {
       </div>
       <div class="trip-locked-teaser" id="section-list-weekend">
         <svg class="trip-locked-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-        <p class="trip-locked-title">Multi-day trip planning — Pro</p>
-        <p class="trip-locked-body">See which destination has the best conditions across your whole trip, plus pick your own dates. Got an invite link? Open it once and this unlocks automatically.</p>
+        <p class="trip-locked-title">Multi-day trip planning – Pro</p>
+        <p class="trip-locked-body">See which destination has the best conditions across your whole trip, plus pick your own dates.</p>
       </div>
     </section>
   `;
@@ -1441,7 +1441,7 @@ function renderHiddenFooter(items) {
     <div class="hidden-footer" data-open="false">
       <button type="button" class="hidden-footer-toggle" aria-expanded="false">
         <span>${n} hidden</span>
-        <span class="hidden-footer-action">show</span>
+        <span class="hidden-footer-action">Show</span>
       </button>
       <ul class="hidden-list" hidden>${rows}</ul>
     </div>
@@ -1477,15 +1477,15 @@ function renderArrivalHint(destDailyScores, tripDates) {
   if (scores.length >= 3) {
     // Multi-day: advise on arrival timing based on first-day quality.
     if (firstScore >= 65) {
-      hint = `Arrive ${dayName(firstDate)} — it's shaping up as a strong day (${firstScore}/100).`;
+      hint = `Arrive ${dayName(firstDate)} – it's shaping up as a strong day for cimbing (${firstScore}/100).`;
     } else if (firstScore < 45 && secondScore > firstScore + 15) {
       hint = `${dayName(firstDate)} is the weakest day (${firstScore}/100) — ${dayName(secondDate)} morning arrival works fine. ${dayName(best.date)} is the standout (${best.score}/100).`;
     } else {
-      hint = `${dayName(best.date)} is the standout day (${best.score}/100). ${firstScore < 55 ? `Consider arriving ${dayName(secondDate)} if the first day is marginal.` : ''}`.trim();
+      hint = `${dayName(best.date)} is the standout (${best.score}/100). ${firstScore < 55 ? `Consider arriving ${dayName(secondDate)} if the first day is marginal.` : ''}`.trim();
     }
   } else if (scores.length === 2) {
     if (spread <= 10) {
-      hint = `Both days look similar — ${best.score}/100 best.`;
+      hint = `Both days look similar – ${best.score}/100 best.`;
     } else {
       hint = `${dayName(best.date)} is the stronger day (${best.score}/100 vs ${worst.score}/100).`;
     }
@@ -1511,7 +1511,7 @@ function renderDestinationCard(dest, isTop) {
   // crag cards where the wall aspect is unambiguous, not on destination summaries.
   const reasonsHtml = (bestForToday.reasons && bestForToday.reasons.length
     ? bestForToday.reasons
-    : ['conditions ok']
+    : ['conditions okay']
   ).map(r => {
     const cls = /^closed/i.test(r) ? 'reason-tag reason-tag-closed' : 'reason-tag';
     return `<span class="${cls}">${escapeHtml(r)}</span>`;
@@ -1529,7 +1529,7 @@ function renderDestinationCard(dest, isTop) {
       <button class="crag-header" aria-expanded="false" aria-controls="detail-dest-${safeDest}">
         <div class="score-pill ${band.color}" aria-label="Trip score ${tripScore} out of 100">
           ${tripScore}
-          <span class="score-pill-sub">trip</span>
+          <span class="score-pill-sub">Trip</span>
         </div>
         <div class="crag-info">
           <h3>${escapeHtml(destination)}</h3>
@@ -1694,7 +1694,7 @@ function renderCard(row, isTop, isWeekend) {
             : 'reason-tag';
         return `<span class="${cls}">${escapeHtml(r)}</span>`;
       }).join('')
-    : '<span class="reason-tag">conditions ok</span>';
+    : '<span class="reason-tag">conditions okay</span>';
 
   // Sub-area badge: show parent area if it differs from name
   const showArea = crag.area !== crag.name;
@@ -1747,7 +1747,7 @@ function renderCard(row, isTop, isWeekend) {
         </div>
         <div class="detail-section">
           <div class="section-label">Forecast</div>
-          <p>${w.icon} ${w.label}. Feels like ${Math.round(day.tFeel || day.tMax)}°C. ${sunHours}h sun expected. ${day.precipSum > 0.2 ? `${day.precipSum.toFixed(1)}mm rain forecast.` : 'No measurable rain.'}${prevDay && prevDay.precipSum > 1 ? ` Yesterday saw ${prevDay.precipSum.toFixed(1)}mm.` : ''}</p>
+          <p>${w.icon} ${w.label}. Feels like ${Math.round(day.tFeel || day.tMax)}°C. ${sunHours}h of sun expected. ${day.precipSum > 0.2 ? `${day.precipSum.toFixed(1)}mm rain forecast.` : 'No measurable rain.'}${prevDay && prevDay.precipSum > 1 ? ` Yesterday's rain was ${prevDay.precipSum.toFixed(1)}mm.` : ''}</p>
         </div>
         ${renderRainTiming(day, daysAheadOfActive())}
         ${todayStrip}
@@ -1758,7 +1758,7 @@ function renderCard(row, isTop, isWeekend) {
           <p>${escapeHtml(crag.notes)}</p>
         </div>
         <div class="detail-section">
-          <div class="section-label">Aspect & character</div>
+          <div class="section-label">Aspect and character</div>
           <div class="attribute-row">
             <span class="attribute"><strong>${crag.aspect}</strong>-facing</span>
             <span class="attribute">Shade: <strong>${crag.shade}</strong></span>
@@ -2019,11 +2019,11 @@ function showCheckinSheet(cragId, cragName, appScore, subCrags = []) {
             temp_feel: selections.temp,
           }),
         });
-        submitBtn.textContent = 'Thanks — logged!';
+        submitBtn.textContent = 'Thanks – logged!';
         setTimeout(() => closeCheckinSheet(), 1200);
       } catch {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Failed — try again';
+        submitBtn.textContent = 'Failed – try again';
       }
     });
   }
@@ -2095,7 +2095,7 @@ function renderDaySubCragsLocked(count) {
   return `
     <div class="detail-section">
       <div class="section-label">Sub-crags</div>
-      <button type="button" class="subcrag-locked-btn" aria-haspopup="dialog" aria-label="Sub-crag breakdown — Pro feature">
+      <button type="button" class="subcrag-locked-btn" aria-haspopup="dialog" aria-label="Sub-crag breakdown – Pro feature">
         <svg class="subcrag-locked-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
         <span class="subcrag-locked-text">${count} sub-crag${count === 1 ? '' : 's'} here — see which one's best today</span>
         <span class="pro-inline-lock">Pro</span>
@@ -2165,35 +2165,35 @@ function renderDaySubCrags(daySubCrags, mode = null) {
 const CATEGORY_METHODOLOGY = {
   temp: {
     label: 'Temperature',
-    blurb: 'Each crag has an ideal temperature band (cool granite climbs better at 8–18°C, warm sandstone wants 12–22°C, and so on). The forecast "feels-like" temp is compared to that band; inside it earns a small bonus, outside it loses points proportional to how far off it is.',
+    blurb: 'Each crag has an ideal temperature band (cool granite climbs better at 8–18°C, warm sandstone wants 12–22°C). The forecast \'feels-like\' temp is compared to that ideal; if inside it earns a small bonus, if outside it loses points.',
   },
   aspect: {
-    label: 'Aspect & sun',
-    blurb: 'Match between the crag\'s aspect (which way the wall faces) and the day. On hot days a shaded wall (south-facing in the southern hemisphere) earns points; on cold days a sunny wall (north-facing) wins. Computed against the day\'s temperature, not a static rule.',
+    label: 'Aspect and sun',
+    blurb: 'Match between the crag\'s aspect and the conditions. On hot days a shaded wall earns points; on cold days a sunny wall wins. Calculated against the day\'s temperature, not a static rule.',
   },
   bestIn: {
     label: 'Best season',
-    blurb: 'A small editorial bonus or penalty based on each crag\'s notes — e.g. Mt Buffalo "best in summer," Mt Alexander "closed Nov–Mar nesting." Tied to the season, not the day.',
+    blurb: 'A small bonus or penalty based on each crag\'s notes – "best in summer," "closed Nov–Mar for peregrine nesting." Tied to the season, not the day.',
   },
   precip: {
     label: 'Rain',
-    blurb: 'Heaviest weight in the model. Penalties stack for rain probability, accumulated mm during climbable hours (9am–6pm), and direct precipitation. A wet day can drop 40+ points on its own.',
+    blurb: 'The biggest factor in scoring. Penalties stack for rain probability, accumulated mm during climbable hours, and direct precipitation. A wet day can drop 40+ points on its own.',
   },
   dryness: {
     label: 'Rock dryness',
-    blurb: 'Rolling estimate of how dry the rock surface is, based on the last 4 days of rain and an exponential decay tuned per rock type — granite dries in ~6h, sandstone takes ~24h. Damp rock loses points; bone-dry adds a small bonus.',
+    blurb: 'Rolling estimate of how dry the rock surface is, based on the last 4 days of rain and the rock type – granite dries in ~6h, sandstone takes ~24h. Damp rock loses points; bone-dry adds a small bonus.',
   },
   wind: {
     label: 'Wind',
-    blurb: 'Penalty for high wind, scaled by exposure: an onshore wall takes the full hit, a lee wall is barely affected. Uses the higher of mean wind and 70% of gusts so a gusty 25 km/h day doesn\'t look calm.',
+    blurb: 'Penalty for high wind, scaled by exposure: wind blowing into the wall takes the full hit, wind blowing away from the wall barely affects score. Uses the higher of mean wind and 70% of gusts so a gusty 25 km/h day doesn\'t look calm.',
   },
   sun: {
     label: 'Sun hours on wall',
-    blurb: 'True solar geometry: for each climbable hour we compute the sun\'s position and ask "does it actually hit this wall given its aspect?" Hours of sun add to a warm-day penalty or a cold-day bonus.',
+    blurb: 'Real-time solar geometry: for each climbable hour we compute the sun\'s position to determine if it hits the wall. Hours of direct sun add to a warm-day penalty or a cold-day bonus.',
   },
   closure: {
     label: 'Closure',
-    blurb: 'Hard penalty when a crag is closed (raptor nesting, fire restrictions, indigenous heritage). Surfaces as a red "closed" pill so it can\'t be missed.',
+    blurb: 'Hard penalty when a crag is closed (raptor nesting, fire restrictions, Indigenous heritage). Surfaces as a red \'closed\' pill so it can\'t be missed.',
   },
 };
 
@@ -2261,7 +2261,7 @@ function renderScoreBreakdown(contributions, finalScore) {
       <p class="breakdown-note">${checkNote}</p>
       <details class="breakdown-methodology">
         <summary>How scoring works</summary>
-        <p>Every crag starts at 100. Each factor below adds or removes points based on that crag\'s aspect, rock type, and ideal conditions — the score is fully transparent, no machine learning. Tap any <strong>?</strong> above to see how a single factor is computed.</p>
+        <p>Every crag starts at 100. Each factor below adds or removes points based on that crag\'s aspect, rock type, and ideal conditions – the score is fully transparent. Tap any <strong>?</strong> above to see how a single factor is calculated.</p>
         <ul class="methodology-list">
           ${Object.entries(CATEGORY_METHODOLOGY).map(([cat, m]) => `<li><span class="methodology-icon" aria-hidden="true">${iconFor(cat)}</span><span><strong>${escapeHtml(m.label)}.</strong> ${escapeHtml(m.blurb)}</span></li>`).join('')}
         </ul>
@@ -2375,7 +2375,7 @@ function renderHourlyStrip(fc, mode = 'tomorrow', dayScore = null) {
     } else if (windowActive) {
       const band = scoreBand(avg);
       callout = `
-        <div class="best-window-callout ${band.color}" title="You are currently in the best window">
+        <div class="best-window-callout ${band.color}" title="You're currently in the best window">
           <div class="best-window-directive">Good now${rainHint}</div>
           <div class="best-window-sub">Window closes ${formatHour12(bw.end)} · avg ${avg}</div>
         </div>
@@ -2443,7 +2443,7 @@ function renderHourlyStrip(fc, mode = 'tomorrow', dayScore = null) {
       ? `<span class="hour-sun lit" title="Sun on the wall (alt ${h.sunAlt}°)">☀️</span>`
       : h.sunOnWall === false
         ? `<span class="hour-sun shade" title="Wall in shade">○</span>`
-        : `<span class="hour-sun unknown" title="Multi-aspect area — check sub-crags">–</span>`;
+        : `<span class="hour-sun unknown" title="Multi-aspect area – check sub-crags">–</span>`;
     const windArrow = h.windDir != null
       ? `<span class="hour-wind wind-${h.windExposure || 'parallel'}" title="${Math.round(h.wind)} km/h ${compassFromDeg(h.windDir)} · ${h.windExposure || 'parallel'}" style="transform: rotate(${(h.windDir + 180) % 360}deg)">↑</span>`
       : '<span class="hour-wind"></span>';
@@ -2604,7 +2604,7 @@ function renderHumidityTile(day, reasons) {
   // always agree. Labels: 'muggy', 'moist air', 'crisp air', 'dry air', 'comfortable'.
   const HUMID_LABELS = new Set(['muggy', 'moist air', 'crisp air', 'dry air', 'comfortable']);
   const sub = (reasons || []).find(r => HUMID_LABELS.has(r)) ?? `${mean}%`;
-  return `<div class="metric" title="Mean relative humidity during climbing hours"><div class="v">${mean}%</div><div class="l">Humidity <span class="metric-sub">· ${sub}</span></div></div>`;
+  return `<div class="metric" title="Relative humidity during climbing hours"><div class="v">${mean}%</div><div class="l">Humidity <span class="metric-sub">· ${sub}</span></div></div>`;
 }
 
 function renderRainTiming(day, daysAhead = 0) {
@@ -2948,7 +2948,7 @@ async function buildShareImage(row, dateStr) {
   ctx.font = `700 26px '${FONT}'`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText('SENDTEMPS', 72, barY + 40);
+  ctx.fillText('SendTemps', 72, barY + 40);
 
   // Tagline + URL right
   ctx.fillStyle = MUTED;
@@ -2988,7 +2988,7 @@ function shareForecast(cragId) {
 
   const url = buildShareUrl(cragId, dateStr);
   const text = `Check out the conditions at ${row.crag.name}.`;
-  const title = `${row.crag.name} — SENDTEMPS`;
+  const title = `${row.crag.name} – SendTemps`;
 
   // Try to generate the image card and include it in the share sheet.
   // Falls back to text-only if canvas or file sharing isn't supported.
@@ -3042,11 +3042,11 @@ function shareDestination(destination) {
     `${destination} · ${dateRange}`,
     `Trip score ${tripScore}/100`,
     dayLines,
-    'via SendTemps',
+    'via SendTemps. Download at sendtemps.app',
   ].filter(Boolean).join('\n');
 
   const url = `${location.origin}${location.pathname}`;
-  const title = `${destination} trip forecast — SendTemps`;
+  const title = `${destination} trip forecast – SendTemps`;
 
   if (typeof navigator.share === 'function') {
     navigator.share({ title, text, url })
@@ -3197,9 +3197,9 @@ function maybeShowIosInstallHint() {
     </svg>
     <div class="ios-install-hint-text">
       <strong>Install SendTemps</strong>
-      <span>Tap Share <span aria-hidden="true">↑</span> then <em>Add to Home Screen</em>.</span>
+      <span>Tap Share <span aria-hidden="true">↑</span> then <em>add to Home Screen</em>.</span>
     </div>
-    <button class="ios-install-hint-dismiss" type="button" aria-label="Dismiss install hint">×</button>
+    <button class="ios-install-hint-dismiss" type="button" aria-label="Close install hint">×</button>
   `;
 
   banner.querySelector('.ios-install-hint-dismiss').addEventListener('click', () => {
@@ -3359,14 +3359,14 @@ function showNotifyPopover(btn, mode, activeState) {
 
   if (mode === 'locked') {
     pop.innerHTML = `
-      <p class="notify-pop-title">Rare window alerts — Pro</p>
-      <p class="notify-pop-body">Push alerts are a Pro feature while SendTemps is in testing. Got an invite link? Open it once and this unlocks automatically.</p>
+      <p class="notify-pop-title">Rare window alerts – Pro feature</p>
+      <p class="notify-pop-body">Push alerts are a Pro feature while SendTemps is in testing.</p>
       <button class="notify-pop-close" id="notify-pop-close" aria-label="Close">✕</button>
     `;
   } else if (mode === 'subscribed') {
     pop.innerHTML = `
       <p class="notify-pop-title">Rare window alerts on</p>
-      <p class="notify-pop-body">You'll be notified when an unusually good climbing day is forecast — warmer, drier, or calmer than normal for the season.</p>
+      <p class="notify-pop-body">You'll be notified when an unusually good climbing day is forecast – warmer, drier, or calmer than normal for the season.</p>
       <button class="notify-pop-action notify-pop-test" id="notify-test">Send test push</button>
       <button class="notify-pop-action notify-pop-off" id="notify-unsub">Turn off alerts</button>
       <button class="notify-pop-close" id="notify-pop-close" aria-label="Close">✕</button>
@@ -3402,11 +3402,11 @@ function updateNotifyBtn(subscribed) {
   const btn = document.getElementById('notify-btn');
   if (!btn) return;
   if (subscribed) {
-    btn.setAttribute('aria-label', 'Rare window alerts — on');
+    btn.setAttribute('aria-label', 'Rare window alerts – on');
     btn.classList.add('notify-active');
     btn.innerHTML = BELL_SVG_ON;
   } else {
-    btn.setAttribute('aria-label', 'Rare window alerts — tap to enable');
+    btn.setAttribute('aria-label', 'Rare window alerts – tap to enable');
     btn.classList.remove('notify-active');
     btn.innerHTML = BELL_SVG_OFF;
   }
@@ -3474,7 +3474,7 @@ async function initNotifyBtn() {
             setTimeout(() => { if (testBtn) { testBtn.textContent = 'Send test push'; testBtn.disabled = false; } }, 3000);
           }
         } catch {
-          if (testBtn) { testBtn.textContent = 'Failed — try again'; testBtn.disabled = false; }
+          if (testBtn) { testBtn.textContent = 'Failed – try again'; testBtn.disabled = false; }
         }
       });
 
@@ -3566,7 +3566,7 @@ if (document.readyState === 'loading') {
         btn.textContent = 'Redeem';
       }
     } catch {
-      status.textContent = 'Network error — try again.';
+      status.textContent = 'Network error – try again.';
       status.style.color = '#A13544';
       btn.disabled = false;
       btn.textContent = 'Redeem';

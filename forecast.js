@@ -1904,11 +1904,11 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     }
     const diff = finalScore - baselineScore;
     const monthLabel = _month; // e.g. 'Jul'
-    if (diff >= 10) seasonalContext = `above average for ${monthLabel}`;
-    else if (diff >= 4) seasonalContext = `good for ${monthLabel}`;
-    else if (diff >= -4) seasonalContext = `typical for ${monthLabel}`;
-    else if (diff >= -10) seasonalContext = `below average for ${monthLabel}`;
-    else seasonalContext = `poor for ${monthLabel}`;
+    if (diff >= 10) seasonalContext = `Above average for ${monthLabel}`;
+    else if (diff >= 4) seasonalContext = `Good for ${monthLabel}`;
+    else if (diff >= -4) seasonalContext = `Typical for ${monthLabel}`;
+    else if (diff >= -10) seasonalContext = `Below average for ${monthLabel}`;
+    else seasonalContext = `Poor for ${monthLabel}`;
   }
 
   return {

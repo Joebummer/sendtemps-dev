@@ -1837,6 +1837,8 @@ const REASON_SENTIMENT = [
   { match: /^shaded refuge/i,        s: 'pos' },
   { match: /^sun-trap wall/i,        s: 'pos' },
   { match: /^overcast sun-trap/i,    s: 'pos' },
+  { match: /^crisp air/i,            s: 'pos' },
+  { match: /^dry air/i,              s: 'pos' },
   // Negative
   { match: /^cold[ (]/i,             s: 'neg' },
   { match: /^hot[ (]/i,              s: 'neg' },
@@ -1856,7 +1858,10 @@ const REASON_SENTIMENT = [
   { match: /^overcast/i,             s: 'neg' },
   { match: /^cloudy/i,               s: 'neg' },
   { match: /^mostly cloudy/i,        s: 'neg' },
+  { match: /^fully overcast/i,       s: 'neg' },
   { match: /^cloud killing/i,        s: 'neg' },
+  { match: /^muggy/i,                s: 'neg' },
+  { match: /^moist air/i,            s: 'neg' },
 ];
 
 function reasonSentiment(r) {

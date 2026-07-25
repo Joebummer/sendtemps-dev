@@ -1683,7 +1683,13 @@ function renderCard(row, isTop, isWeekend) {
 
   const sunHours = Math.round((day.sunshine || 0) / 3600);
 
-  const bfTag = bestFromTag(day.sunWindow, day.tMax, crag.aspect);
+  // Suppress "Best from X" on crags with multiple sub-crags — the parent's
+  // own aspect doesn't represent all the walls underneath it, so a single
+  // sun-window callout would be misleading here. Individual sub-crag rows
+  // (renderDaySubCrags) still show their own tag since each wall's aspect
+  // there is unambiguous.
+  const hasSubCrags = Array.isArray(daySubCrags) && daySubCrags.length > 0;
+  const bfTag = hasSubCrags ? null : bestFromTag(day.sunWindow, day.tMax, crag.aspect);
   const allReasons = bfTag ? [bfTag, ...reasons] : reasons;
   const reasonsHtml = allReasons.length
     ? allReasons.map(r => {

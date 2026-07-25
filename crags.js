@@ -123,8 +123,8 @@ export const CRAGS = [
     shade: 'afternoon',
     driveTime: '1h45',
     trip: 'both',
-    state: 'VIC',    notes: 'Dramatic exposed peak with multi-pitch trad on a south-east face — Northern Buttress Direct and Wells of Sadness are the classics. South-facing aspect stays shaded most of the day, making it one of the best hot-summer-day options near Melbourne. Committing position; weather rolls in fast. Slower to dry than The Balcony.',
-    sunOnWall: 'Brief morning only (SE aspect)',
+    state: 'VIC',    notes: 'Dramatic exposed peak with multi-pitch trad on an east face — Northern Buttress Direct and Wells of Sadness are the classics. East-facing aspect stays shaded most of the day, making it one of the best hot-summer-day options near Melbourne. Committing position; weather rolls in fast. Slower to dry than The Balcony.',
+    sunOnWall: 'Brief morning only (E aspect)',
     bestIn: 'mild',
   },
   {
@@ -217,7 +217,7 @@ export const CRAGS = [
     shade: 'afternoon',
     driveTime: '1h',
     trip: 'day',
-    state: 'VIC',    notes: 'Stand-alone monolith with the steepest sport routes in the park — Edging Bets, A Question of Ethics, Silver Knight. SE-facing main wall: morning sun then shade by midday. Granite dries within hours.',
+    state: 'VIC',    notes: 'Stand-alone monolith with the steepest sport routes in the park — Edging Bets, A Question of Ethics, Silver Knight. NW-facing main wall: morning sun then shade by midday. Granite dries within hours.',
     bestIn: 'mild',
   },
   {
@@ -235,7 +235,7 @@ export const CRAGS = [
     shade: 'none',
     driveTime: '1h',
     trip: 'day',
-    state: 'VIC',    notes: 'Lesser-trafficked walls with a mix of slabs and short faces. West-facing — afternoon sun, cooler mornings. Good when Gravel Pit is busy or wet.',
+    state: 'VIC',    notes: 'Lesser-trafficked walls with a mix of slabs and short faces. North-facing — sun most of the day. Good when Gravel Pit is busy or wet.',
     bestIn: 'cool',
   },
   {
@@ -369,7 +369,7 @@ export const CRAGS = [
     shade: 'afternoon',
     driveTime: '1h30',
     trip: 'day',
-    state: 'VIC',    notes: 'Roadside boulders and short walls on the western flank. North-facing — sun all day, ideal in cooler months. Dries within hours.',
+    state: 'VIC',    notes: 'Roadside boulders and short walls on the western flank. East-facing — morning sun, shaded by afternoon. Dries within hours.',
     bestIn: 'cool',
     closedAll: true,
     closureReason: 'fire damage',

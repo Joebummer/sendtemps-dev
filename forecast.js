@@ -1,7 +1,7 @@
 // Open-Meteo forecast fetching + scoring
 // API: https://open-meteo.com/en/docs — free, no key, CORS-enabled
 
-import { CRAGS } from './crags.js?v=40';
+import { CRAGS } from './crags.js?v=41';
 import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 
 // Routed through the SendTemps Worker (not Open-Meteo directly) so every

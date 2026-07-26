@@ -2965,7 +2965,7 @@ async function buildShareImage(row, dateStr) {
   ctx.fillStyle = MUTED;
   ctx.font = `400 20px '${FONT}'`;
   ctx.textAlign = 'right';
-  ctx.fillText('Friction forecasts for Australian rock  ·  sendtemps.app', W - 72, barY + 40);
+  ctx.fillText('Friction forecasts for Australian climbers  ·  sendtemps.app', W - 72, barY + 40);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {

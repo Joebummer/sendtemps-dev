@@ -1,7 +1,4 @@
 import {
-  fetchAllForecasts,
-  rankByDay,
-  rankWeekendTrip,
   weekendDates,
   weekDates,
   formatDate,
@@ -13,6 +10,13 @@ import {
 import { CRAGS } from './crags.js?v=41';
 
 const API_BASE = 'https://api.sendtemps.app';
+
+// Lookup used to rehydrate the scored endpoint's `cragId` references back
+// into full crag objects (the wire format hoists crag metadata into a single
+// `crags` dict to avoid repeating ~400 bytes per crag on every date row, but
+// the rest of the UI still expects `row.crag.id` / `row.crag.name` etc.
+// directly on each row).
+const CRAGS_BY_ID = new Map(CRAGS.map(c => [c.id, c]));
 
 // ---- Free / Pro tier ----
 // There's no account system yet, so Pro access is a lightweight stand-in:
@@ -598,7 +602,7 @@ function showSubCragLockPopover(btn) {
 
 // Handle a tap during trip range-pick mode.
 // First tap = set start. Second tap = set end (or swap if earlier than start).
-function handleTripRangePick(date) {
+async function handleTripRangePick(date) {
   if (!state.tripPickStart) {
     // First tap: store start candidate, wait for second tap.
     state.tripPickStart = date;
@@ -622,10 +626,15 @@ function handleTripRangePick(date) {
   state.tripPickStart = null;
   // Recompute trip ranking and re-render.
   state.tripDates = activeTripDates();
-  const weekendTrip = rankWeekendTrip(state.forecasts, state.tripDates);
-  state.weekendTrip = weekendTrip;
   renderTabs();
   hideTripRangePrompt();
+  renderDay();
+  try {
+    state.weekendTrip = await fetchWeekendTrip(state.tripDates);
+  } catch (err) {
+    console.error('Failed to fetch weekend trip ranking', err);
+    showToast('Could not update trip ranking — check your connection.');
+  }
   renderDay();
 }
 
@@ -1023,15 +1032,20 @@ function renderSplitRanked(dayRows, destinations) {
   // "Clear" button — reset to the default weekend range.
   const clearBtn = list.querySelector('#trip-clear-btn');
   if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
+    clearBtn.addEventListener('click', async () => {
       _storage.removeItem(TRIP_START_KEY);
       _storage.removeItem(TRIP_END_KEY);
       const def = defaultTripDates();
       state.tripStart = def[0] || null;
       state.tripEnd   = def[def.length - 1] || null;
       state.tripDates = activeTripDates();
-      const weekendTrip = rankWeekendTrip(state.forecasts, state.tripDates);
-      state.weekendTrip = weekendTrip;
+      renderDay();
+      try {
+        state.weekendTrip = await fetchWeekendTrip(state.tripDates);
+      } catch (err) {
+        console.error('Failed to fetch weekend trip ranking', err);
+        showToast('Could not update trip ranking — check your connection.');
+      }
       renderDay();
     });
   }
@@ -2740,12 +2754,85 @@ function activeTripDates() {
   return result.length ? result : weekendDates().slice(0, 7);
 }
 
+// Fetches a fresh weekendTrip ranking for an arbitrary trip date range from
+// the scored endpoint. Used when the user manually (re)picks a trip range —
+// scoring now lives server-side, so this can no longer be recomputed locally
+// from cached state.forecasts the way rankWeekendTrip() used to do it.
+async function fetchWeekendTrip(tripDates) {
+  if (!Array.isArray(tripDates) || tripDates.length === 0) return [];
+  const params = new URLSearchParams({
+    region: state.regionFilter,
+    tripStart: tripDates[0],
+    tripEnd: tripDates[tripDates.length - 1],
+  });
+  const res = await fetch(`${API_BASE}/forecast/scored?${params.toString()}`);
+  if (!res.ok) throw new Error(`Forecast service error (${res.status})`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return (data.weekendTrip || []).map(entry => rehydrateRow(entry, data.crags));
+}
+
+// Rehydrates one scored-endpoint row (which carries `cragId` instead of a
+// full crag object) back into the shape the rest of the UI expects: the
+// same row with `crag` set to the full object looked up from CRAGS_BY_ID,
+// plus todayHourly/tomorrowHourly/etc. merged in for the crags that have them.
+function rehydrateRow(row, cragsDict) {
+  const { cragId, ...rest } = row;
+  const crag = cragsDict[cragId] || CRAGS_BY_ID.get(cragId);
+  return { crag, ...rest };
+}
+
+// Phase 2: scoring now runs server-side (Cloudflare Worker) instead of in
+// the browser. This keeps one scoring implementation shared between the web
+// app and the future native app, and moves the ~400ms/region CPU cost off
+// client devices. This function fetches the pre-scored payload and adapts
+// it back into the exact shape the rest of app.js already expects
+// ({forecasts, dates, tripDates, ranked, weekendTrip}), so no other call
+// site needs to change.
 async function fetchAndRank() {
-  const forecasts = await fetchAllForecasts(state.regionFilter);
-  const dates = weekDates();
-  const tripDates = activeTripDates();
-  const ranked = rankByDay(forecasts, dates);
-  const weekendTrip = rankWeekendTrip(forecasts, tripDates);
+  const params = new URLSearchParams({ region: state.regionFilter });
+  if (state.tripStart && state.tripEnd) {
+    params.set('tripStart', state.tripStart);
+    params.set('tripEnd', state.tripEnd);
+  }
+  const res = await fetch(`${API_BASE}/forecast/scored?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(`Forecast service error (${res.status})`);
+  }
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+
+  const { dates, tripDates, crags, byDate, weekendTrip: weekendTripIn, today } = data;
+
+  // Reconstruct `ranked`: { [date]: [{ crag, score, reasons, day, prevDay, ... }] }
+  const ranked = {};
+  for (const date of dates) {
+    ranked[date] = (byDate[date] || []).map(row => rehydrateRow(row, crags));
+  }
+
+  // Reconstruct `weekendTrip`: [{ crag, tripScore, dailyScores, ... }]
+  const weekendTrip = (weekendTripIn || []).map(entry => rehydrateRow(entry, crags));
+
+  // Reconstruct `forecasts`: { [cragId]: { crag, todayDate, tomorrowDate,
+  // todayHourly, tomorrowHourly, todayBestWindow, tomorrowBestWindow,
+  // nowDryness, lastRain, pastPrecip } }
+  // todayDate/tomorrowDate are the same for every crag (Melbourne-local
+  // "today"/"tomorrow"), which is exactly dates[0]/dates[1] since the
+  // server builds `dates` with the same weekDates() the client used to call
+  // directly. Note: the full `hourly` (raw Open-Meteo) and `days` arrays
+  // that the old client-side fetchAllForecasts attached are no longer sent —
+  // nothing in app.js reads them directly (only todayHourly/tomorrowHourly
+  // and the fields above are used downstream), so this is a safe reduction.
+  const forecasts = {};
+  for (const cragId in crags) {
+    forecasts[cragId] = {
+      crag: crags[cragId],
+      todayDate: dates[0],
+      tomorrowDate: dates[1],
+      ...(today?.[cragId] || {}),
+    };
+  }
+
   return { forecasts, dates, tripDates, ranked, weekendTrip };
 }
 

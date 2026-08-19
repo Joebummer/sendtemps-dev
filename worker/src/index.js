@@ -396,7 +396,15 @@ const SCORED_CACHE_TTL = 900; // 15 minutes — matches FORECAST_CACHE_TTL
 // elsewhere references it by `cragId` instead of embedding it. Everything
 // else (score, reasons, contributions, day breakdowns, weekend dailyScores)
 // is kept as-is since the UI reads all of it.
-function normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip) {
+//
+// `forecasts` (fetchAllForecasts' raw per-crag output) is also passed in so
+// we can surface todayHourly/tomorrowHourly/todayBestWindow/tomorrowBestWindow
+// — these power the web app's hourly condition strip on the today/tomorrow
+// tabs and are already computed inside fetchAllForecasts at no extra CPU
+// cost, but rankByDay/rankWeekendTrip don't carry them through. Hoisted the
+// same way as crags: one `today` dict keyed by cragId instead of repeating
+// per date row.
+function normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip, forecasts) {
   const crags = {};
   const rememberCrag = (crag) => {
     if (!crag || crags[crag.id]) return;
@@ -419,7 +427,22 @@ function normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip) 
     return { cragId: crag.id, ...rest };
   });
 
-  return { region, dates, tripDates, crags, byDate, weekendTrip: weekendTripOut };
+  const today = {};
+  for (const cragId in forecasts) {
+    if (!crags[cragId]) continue; // only include crags actually referenced in this region's output
+    const f = forecasts[cragId];
+    today[cragId] = {
+      todayHourly: f.todayHourly,
+      todayBestWindow: f.todayBestWindow,
+      tomorrowHourly: f.tomorrowHourly,
+      tomorrowBestWindow: f.tomorrowBestWindow,
+      nowDryness: f.nowDryness,
+      lastRain: f.lastRain,
+      pastPrecip: f.pastPrecip,
+    };
+  }
+
+  return { region, dates, tripDates, crags, byDate, weekendTrip: weekendTripOut, today };
 }
 
 async function handleScoredForecast(request, url, corsHeaders, ctx) {
@@ -457,7 +480,7 @@ async function handleScoredForecast(request, url, corsHeaders, ctx) {
     const ranked = rankByDay(forecasts, dates);
     const weekendTrip = rankWeekendTrip(forecasts, tripDates);
 
-    const body = JSON.stringify(normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip));
+    const body = JSON.stringify(normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip, forecasts));
     const response = new Response(body, {
       status: 200,
       headers: {

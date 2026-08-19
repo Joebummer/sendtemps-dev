@@ -1,10 +1,23 @@
 # lib/ — copied scoring modules
 
 `forecast.js`, `climateBaseline.js`, and `crags.js` in this directory are
-**verbatim copies** of the same-named files at the repo root, with one
-intentional change: the `crags.js` import in `forecast.js` has its
-`?v=41` cache-busting query string stripped (Workers ES module resolution
-doesn't support query strings in import specifiers).
+**verbatim copies** of the same-named files at the repo root, with two
+intentional changes in `forecast.js`:
+
+1. The `crags.js` import has its `?v=41` cache-busting query string
+   stripped (Workers ES module resolution doesn't support query strings
+   in import specifiers).
+2. The `API` constant points directly at `https://api.open-meteo.com/v1/forecast`
+   instead of `https://api.sendtemps.app/forecast` (the Worker's own public
+   proxy). The browser copy routes through the Worker's proxy so every
+   client shares one edge-cached response instead of hitting Open-Meteo's
+   per-IP rate limit directly. This copy runs *inside* the Worker (for
+   `GET /forecast/scored`), so pointing it at its own public hostname means
+   the Worker calling itself over the public internet on every request —
+   which returned Cloudflare error 522 in testing. `handleScoredForecast()`
+   in `index.js` provides its own edge cache on top, so rate-limit
+   protection is preserved, just applied at the `/forecast/scored` layer
+   instead of at the Open-Meteo-call layer.
 
 ## Why copies instead of a shared package
 
@@ -23,10 +36,11 @@ cp forecast.js worker/src/lib/forecast.js
 cp climateBaseline.js worker/src/lib/climateBaseline.js
 cp crags.js worker/src/lib/crags.js
 sed -i "s|from './crags.js?v=[0-9]*'|from './crags.js'|" worker/src/lib/forecast.js
+sed -i "s|const API = 'https://api.sendtemps.app/forecast';|const API = 'https://api.open-meteo.com/v1/forecast';|" worker/src/lib/forecast.js
 ```
 
-Then diff against the root files to confirm the only difference is the
-import line, and redeploy the Worker.
+Then diff against the root files to confirm the only differences are the
+import line and the `API` constant, and redeploy the Worker.
 
 **Why this matters:** `GET /forecast/scored` (used by the iOS app, and
 eventually the web app) runs this exact code server-side. If these copies

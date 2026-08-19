@@ -4,11 +4,19 @@
 import { CRAGS } from './crags.js';
 import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 
-// Routed through the SendTemps Worker (not Open-Meteo directly) so every
-// client shares one edge-cached response instead of each device/network
-// being subject to Open-Meteo's own per-IP rate limit. See worker/src/index.js
-// GET /forecast.
-const API = 'https://api.sendtemps.app/forecast';
+// NOTE (worker copy — intentional diff from the root forecast.js, see
+// lib/README.md): the browser copy of this file points API at the
+// SendTemps Worker's own /forecast proxy so every client shares one
+// edge-cached response instead of hitting Open-Meteo's per-IP rate limit
+// directly. This copy runs *inside* the Worker itself (server-side, for
+// GET /forecast/scored), so routing through its own public hostname would
+// mean the Worker calling itself over the public internet on every request
+// — which hit Cloudflare error 522 in testing (self-referencing subrequests
+// are unreliable). Call Open-Meteo directly instead; handleScoredForecast()
+// in index.js provides its own edge caching on top, so the rate-limit
+// protection this proxy exists for is still in place — just applied at the
+// /forecast/scored layer instead of at the Open-Meteo-call layer.
+const API = 'https://api.open-meteo.com/v1/forecast';
 
 // Fetch one batched request for the crags in `region` at once — Open-Meteo
 // accepts comma-separated coords. `region` is a state code ('VIC', 'TAS', …)

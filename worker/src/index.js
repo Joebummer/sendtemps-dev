@@ -1,5 +1,9 @@
 /**
  * SendTemps API Worker
+ * - GET /forecast/scored — full server-side scoring pipeline (fetchAllForecasts +
+ *     rankByDay + rankWeekendTrip from lib/forecast.js, ported verbatim from the
+ *     web app). Single source of truth for scoring — used by the iOS app and,
+ *     eventually, the web app too. See lib/README.md for sync process.
  * - POST /subscribe   — saves a Web Push subscription to Supabase
  * - PATCH /subscribe  — updates favourites + thresholds for an existing subscription
  * - DELETE /subscribe — removes a subscription (unsubscribe)
@@ -7,6 +11,8 @@
  *     1. Checks VIC crags for rare windows (state-wide alert)
  *     2. Checks each subscriber's favourited crags against their score threshold
  */
+
+import { fetchAllForecasts, rankByDay, rankWeekendTrip, weekDates, weekendDates } from './lib/forecast.js';
 
 // ─── VAPID helpers (Web Push without npm) ────────────────────────────────────
 
@@ -379,6 +385,100 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
   return response;
 }
 
+// ─── Scored forecast (server-side scoring pipeline) ──────────────────────────
+
+const SCORED_CACHE_TTL = 900; // 15 minutes — matches FORECAST_CACHE_TTL
+
+// Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw
+// functions repeat the full crag object on every date's row (a crag with a
+// 7-day forecast sends its ~400-byte crag object 7 times over). This hoists
+// each crag to a single `crags` dictionary keyed by id, and every row/entry
+// elsewhere references it by `cragId` instead of embedding it. Everything
+// else (score, reasons, contributions, day breakdowns, weekend dailyScores)
+// is kept as-is since the UI reads all of it.
+function normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip) {
+  const crags = {};
+  const rememberCrag = (crag) => {
+    if (!crag || crags[crag.id]) return;
+    crags[crag.id] = crag;
+  };
+
+  const byDate = {};
+  for (const date of dates) {
+    const rows = ranked[date] || [];
+    byDate[date] = rows.map((row) => {
+      rememberCrag(row.crag);
+      const { crag, ...rest } = row;
+      return { cragId: crag.id, ...rest };
+    });
+  }
+
+  const weekendTripOut = weekendTrip.map((entry) => {
+    rememberCrag(entry.crag);
+    const { crag, ...rest } = entry;
+    return { cragId: crag.id, ...rest };
+  });
+
+  return { region, dates, tripDates, crags, byDate, weekendTrip: weekendTripOut };
+}
+
+async function handleScoredForecast(request, url, corsHeaders, ctx) {
+  const region = (url.searchParams.get('region') || 'ALL').toUpperCase();
+  const tripStart = url.searchParams.get('tripStart') || null;
+  const tripEnd = url.searchParams.get('tripEnd') || null;
+
+  const cache = caches.default;
+  // Cache key includes region + trip range so different trip windows don't
+  // collide, but excludes anything time-sensitive beyond that — the pipeline
+  // itself is deterministic for a given region/tripRange within the same
+  // ~15 min window (weekDates()/weekendDates() are computed fresh each call
+  // but only change once a day).
+  const cacheKey = new Request(url.toString(), { method: 'GET' });
+
+  const cached = await cache.match(cacheKey);
+  if (cached) {
+    const res = new Response(cached.body, cached);
+    for (const [k, v] of Object.entries(corsHeaders)) res.headers.set(k, v);
+    res.headers.set('X-SendTemps-Cache', 'HIT');
+    return res;
+  }
+
+  try {
+    const forecasts = await fetchAllForecasts(region);
+    const dates = weekDates();
+    const tripDates = (() => {
+      if (!tripStart || !tripEnd) return weekendDates().slice(0, 7);
+      const idxStart = dates.indexOf(tripStart);
+      const idxEnd = dates.indexOf(tripEnd);
+      if (idxStart === -1 || idxEnd === -1) return weekendDates().slice(0, 7);
+      return dates.slice(Math.min(idxStart, idxEnd), Math.max(idxStart, idxEnd) + 1);
+    })();
+
+    const ranked = rankByDay(forecasts, dates);
+    const weekendTrip = rankWeekendTrip(forecasts, tripDates);
+
+    const body = JSON.stringify(normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip));
+    const response = new Response(body, {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        'Cache-Control': `public, max-age=${SCORED_CACHE_TTL}`,
+        'X-SendTemps-Cache': 'MISS',
+      },
+    });
+
+    if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, response.clone()));
+    else await cache.put(cacheKey, response.clone());
+
+    return response;
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message || 'scoring failed' }), {
+      status: 502,
+      headers: corsHeaders,
+    });
+  }
+}
+
 // ─── Request handler ──────────────────────────────────────────────────────────
 
 async function handleRequest(request, env, ctx) {
@@ -411,6 +511,15 @@ async function handleRequest(request, env, ctx) {
   // fetched from Cloudflare's own IPs instead of the client's.
   if (pathname === '/forecast' && request.method === 'GET') {
     return handleForecastProxy(request, url, corsHeaders, ctx);
+  }
+
+  // GET /forecast/scored?region=VIC — full server-side scoring pipeline.
+  // Runs the exact same fetchAllForecasts + rankByDay + rankWeekendTrip
+  // pipeline the web app runs client-side (lib/forecast.js is a verbatim
+  // copy — see lib/README.md), so both platforms get identical scores from
+  // one implementation. Edge-cached per region same as /forecast.
+  if (pathname === '/forecast/scored' && request.method === 'GET') {
+    return handleScoredForecast(request, url, corsHeaders, ctx);
   }
 
   // GET /redeem?code=XXXX — validates a beta-access code against the

@@ -6,4 +6,13 @@ compatibility_flags = ["nodejs_compat"]
 [triggers]
 crons = ["0 21 * * *"]
 
+# Requires Workers Paid ($5/mo min) — GET /forecast/scored measured at
+# ~400ms CPU time for a full-state request (VIC: 81 crags x 8 days), which
+# is well over the Workers Free plan's hard 10ms-per-request cap (that cap
+# cannot be raised on Free, only on Paid). Paid's default is 30s and this
+# limit can go up to 300000 (5 min) if ever needed. 500ms gives ~1250x
+# headroom over the current measured cost.
+[limits]
+cpu_ms = 500
+
 # Deployed via GitHub Actions

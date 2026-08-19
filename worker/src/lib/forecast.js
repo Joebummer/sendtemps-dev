@@ -18,6 +18,12 @@ import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 // /forecast/scored layer instead of at the Open-Meteo-call layer.
 const API = 'https://api.open-meteo.com/v1/forecast';
 
+// 3-letter month abbreviations matching the keys used in CLIMATE_PROFILES
+// (climateBaseline.js). Deliberately NOT derived from Intl/toLocaleString —
+// see the note at the scoreDay() call site below. Kept identical to the
+// root forecast.js copy (not an intentional diff).
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 // Fetch one batched request for the crags in `region` at once — Open-Meteo
 // accepts comma-separated coords. `region` is a state code ('VIC', 'TAS', …)
 // or 'ALL' for every crag nationwide. Scoping to one state cuts the request
@@ -698,15 +704,25 @@ function melbourneHourToDate(isoLocal) {
   return new Date(naiveUtc.getTime() - offsetMin * 60000);
 }
 
+// Hoisted to module scope (v60 perf fix) — this used to be constructed fresh
+// inside melbourneOffsetMinutes() on every call. Constructing an
+// Intl.DateTimeFormat is expensive (~65µs), and melbourneHourToDate() (which
+// calls this) runs once per hourly timestep inside computeSunWindow() and
+// computeSolarExposure() — up to ~24 × 8 × 81 = ~15,500 calls for a full VIC
+// request. That alone measured at ~2.5s of CPU time, the dominant cost
+// behind the Cloudflare error 1102 (CPU limit exceeded) on
+// GET /forecast/scored. The Intl.DateTimeFormat options never change, so a
+// single reused instance is safe and ~14x faster per call.
+const _melbourneOffsetFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Australia/Melbourne',
+  hour: '2-digit', hour12: false,
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  minute: '2-digit',
+});
+
 function melbourneOffsetMinutes(date) {
   // Compute the timezone offset of Australia/Melbourne at this instant.
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Australia/Melbourne',
-    hour: '2-digit', hour12: false,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    minute: '2-digit',
-  });
-  const parts = fmt.formatToParts(date);
+  const parts = _melbourneOffsetFmt.formatToParts(date);
   const get = (t) => parts.find(p => p.type === t)?.value;
   let h = parseInt(get('hour'), 10);
   if (h === 24) h = 0;
@@ -801,11 +817,14 @@ function buildTodayHourly(crag, hourly, drynessSeries, todayDate) {
   return buildDayHourly(crag, hourly, drynessSeries, todayDate, fromHour, 19);
 }
 
+// Hoisted (v60 perf) — same reasoning as _melbourneOffsetFmt above.
+const _melbourneHourFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Australia/Melbourne', hour: '2-digit', hour12: false,
+});
+
 // Current hour-of-day in Melbourne local time, as an integer 0–23.
 function melbourneHourNow() {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Australia/Melbourne', hour: '2-digit', hour12: false,
-  }).formatToParts(new Date());
+  const parts = _melbourneHourFmt.formatToParts(new Date());
   const h = parts.find(p => p.type === 'hour')?.value ?? '0';
   return parseInt(h, 10) % 24;
 }
@@ -1030,13 +1049,15 @@ function stringToHourDiff(a, b) {
   return (da - db) / 3600000;
 }
 
+// Hoisted (v60 perf) — same reasoning as _melbourneOffsetFmt above.
+const _melbourneIsoHourFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Australia/Melbourne',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', hour12: false,
+});
+
 function melbourneIsoHour(when) {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Australia/Melbourne',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  });
-  const parts = fmt.formatToParts(when);
+  const parts = _melbourneIsoHourFmt.formatToParts(when);
   const get = (t) => parts.find(p => p.type === t)?.value;
   let hour = get('hour');
   if (hour === '24') hour = '00';
@@ -1302,7 +1323,18 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // — Climate baseline lookup (v59.17) —
   // Resolve the monthly climate normals for this crag so downstream blocks
   // can contextualise conditions against what’s typical here in this month.
-  const _month = new Date(day.date + 'T12:00:00').toLocaleString('en-AU', { month: 'short' });
+  //
+  // Perf + correctness (v60) — this is THE fix for Cloudflare error 1102
+  // (CPU time limit exceeded) on GET /forecast/scored: toLocaleString/Intl
+  // formatting costs ~0.15ms per call, and scoreDay() runs once per
+  // crag-per-day (e.g. 81 crags × 8 days = 648 calls for VIC alone), which
+  // measured at ~102ms of the ~112ms total CPU time for a VIC request —
+  // ~11x over the Workers Free plan's 10ms-per-request CPU cap. A plain
+  // array lookup does the same job in <0.5ms total. This also happens to
+  // fix a real bug: en-AU/en-GB CLDR abbreviates September as "Sept", which
+  // never matched the "Sep" key in CLIMATE_PROFILES, so every September
+  // climate-normal lookup was silently returning null before this fix.
+  const _month = MONTH_SHORT[new Date(day.date + 'T12:00:00').getMonth()];
   const _profileKey = CRAG_TO_PROFILE[crag.id];
   const _profile = _profileKey ? CLIMATE_PROFILES[_profileKey] : null;
   const _norm = _profile?.monthly?.[_month] ?? null;

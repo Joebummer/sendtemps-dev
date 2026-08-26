@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#1a1815" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7f4ee" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SendTemps" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="description" content="Real-time climbing weather forecasts for Australian crags. Score and rank conditions at Mt Arapiles, the Grampians, Blue Mountains, Nowra, Freycinet, and more. VIC, NSW, TAS, SA, QLD and WA." />
+    <meta name="keywords" content="climbing weather Australia, Mt Arapiles weather, Grampians climbing forecast, Blue Mountains climbing conditions, Nowra climbing weather, Freycinet climbing, rock climbing forecast Australia, crag conditions, sport climbing weather, trad climbing forecast" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="canonical" href="https://sendtemps.app/webapp/" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="SendTemps – Friction forecasts for Australian climbers" />
+    <meta property="og:description" content="Real-time friction forecasts for Australian climbing crags. Score and rank conditions at Arapiles, the Grampians, Blue Mountains, Nowra, Freycinet and more." />
+    <meta property="og:image" content="https://sendtemps.app/webapp/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="https://sendtemps.app/webapp/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SendTemps" />
+
+    <!-- Twitter/X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SendTemps – Friction forecasts for Australian climbers" />
+    <meta name="twitter:description" content="Real-time friction forecasts for Australian climbing crags. Score and rank conditions at Arapiles, the Grampians, Blue Mountains, Nowra, Freycinet and more." />
+    <meta name="twitter:image" content="https://sendtemps.app/webapp/og-image.png" />
+
+    <title>SendTemps – Friction forecasts for Australian climbers</title>
+
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icon-180.png" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+
+    <!-- Preconnect to external origins used on load -->
+    <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+    <link rel="preconnect" href="https://api.sendtemps.app" />
+    <link rel="preconnect" href="https://api.open-meteo.com" />
+
+    <!-- Fontshare: non-blocking load so fonts never delay first paint -->
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&f[]=switzer@400,500,600,700&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&f[]=switzer@400,500,600,700&display=swap" rel="stylesheet" />
+    </noscript>
+
+    <!-- Inline critical styles: loading screen renders before style.css downloads -->
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root { background: #f7f4ee; color: #28251D; font-family: system-ui, sans-serif; }
+      [data-theme="dark"] { background: #171614; color: #CDCCCA; }
+      #loading { display: flex; flex-direction: column; align-items: center; justify-content: center;
+        min-height: 60vh; gap: 12px; font-size: 15px; color: #7A7974; }
+      #loading[hidden], #content[hidden], #error[hidden] { display: none !important; }
+      .spinner { width: 28px; height: 28px; border: 2.5px solid #D4D1CA;
+        border-top-color: #2d5a27; border-radius: 50%; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+
+    <link rel="stylesheet" href="style.css?v=65.25" />
+  </head>
+
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="6" fill="#2d5a27"/>
+          <path d="M5 26 L13 13 L16 16.5 L19 13 L27 26 Z" fill="#f5f2eb"/>
+          <path d="M11 12 A6 6 0 0 1 21 12" fill="none" stroke="#f5f2eb" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <h1>SendTemps</h1>
+      </div>
+      <div class="topbar-actions">
+        <button class="notify-toggle" id="notify-btn" aria-label="Turn on rare window alerts" title="Rare window alerts"></button>
+        <button class="theme-toggle" data-theme-toggle aria-label="Toggle dark mode"></button>
+      </div>
+    </header>
+
+    <main id="app">
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Stop guessing – Start sending</p>
+      </div>
+
+      <div id="content" hidden>
+        <section class="weekend-tabs" id="day-tabs" role="tablist" aria-label="Forecast day"></section>
+
+        <section class="region-filter-bar" id="region-filter" aria-label="State filter"></section>
+
+        <section class="day-summary" id="day-summary" aria-live="polite"></section>
+
+        <section class="ranked-list" id="ranked-list"></section>
+
+        <footer class="footnote">
+          <p>Forecast: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>. Conditions are predictions. Aspect, dry-time and ideal-temp ratings are author's notes, not gospel.</p>
+          <p class="updated" id="updated"></p>
+          <div class="redeem-row" id="redeem-row">
+            <input type="text" id="redeem-input" placeholder="Have a code?" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" />
+            <button type="button" id="redeem-btn">Redeem</button>
+          </div>
+          <p class="redeem-status" id="redeem-status"></p>
+          <p class="contact-line"><a href="mailto:hello@sendtemps.app?subject=Crag%20suggestion" class="contact-link">Suggest a crag or correction</a></p>
+          <p class="contact-line"><a href="mailto:hello@sendtemps.app" class="contact-link">hello@sendtemps.app</a></p>
+        </footer>
+      </div>
+
+      <div class="error" id="error" hidden>
+        <h2>Sorry, couldn't fetch forecast</h2>
+        <p id="error-message"></p>
+        <button id="retry">Retry</button>
+      </div>
+    </main>
+
+    <script type="module" src="app.js?v=65.67"></script>
+
+    <!--
+      GoatCounter analytics — cookie-free, no banner needed.
+      Tracks pageviews + screen size + referrer; no personal data.
+      Dashboard: https://sendtemps.goatcounter.com
+    -->
+    <script
+      data-goatcounter="https://sendtemps.goatcounter.com/count"
+      async
+      src="//gc.zgo.at/count.js"
+    ></script>
+    <script>
+      // Fire a custom event the first time the page loads so we can split
+      // "installed PWA" usage from regular browser visits in GoatCounter.
+      // display-mode: standalone is set when launched from the iOS home
+      // screen or Android "Add to home screen". navigator.standalone is
+      // the older iOS Safari flag. Either one means installed PWA.
+      window.addEventListener('load', function () {
+        var isStandalone = window.matchMedia('(display-mode: standalone)').matches
+          || window.navigator.standalone === true;
+        if (!isStandalone) return;
+        // Wait a tick for count.js to finish loading, then log the event.
+        var ping = function () {
+          if (typeof window.goatcounter === 'undefined' || !window.goatcounter.count) {
+            return setTimeout(ping, 200);
+          }
+          window.goatcounter.count({
+            path: 'pwa-launch',
+            title: 'PWA launch',
+            event: true,
+          });
+        };
+        ping();
+      });
+    </script>
+  </body>
+</html>

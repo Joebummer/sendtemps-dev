@@ -42,14 +42,23 @@
     <link rel="preconnect" href="https://api.open-meteo.com" />
 
     <!-- Fontshare: non-blocking load so fonts never delay first paint -->
+    <!-- Split into separate requests per family: Fontshare's API silently
+         drops one family when two are combined in a single f[] request. -->
     <link
-      href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&f[]=switzer@400,500,600,700&display=swap"
+      href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap"
       rel="stylesheet"
       media="print"
       onload="this.media='all'"
     />
     <noscript>
-      <link href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&f[]=switzer@400,500,600,700&display=swap" rel="stylesheet" />
+      <link href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap" rel="stylesheet" />
+      <link href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap" rel="stylesheet" />
     </noscript>
 
     <!-- Inline critical styles: loading screen renders before style.css downloads -->

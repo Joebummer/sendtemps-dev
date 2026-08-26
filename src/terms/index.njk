@@ -1,0 +1,10 @@
+---
+layout: legal.njk
+permalink: /terms/
+eleventyComputed:
+  title: "{{ legal.terms.title }}"
+  seo_title: "{{ legal.terms.seo_title }}"
+  seo_description: "{{ legal.terms.seo_description }}"
+  effective_date: "{{ legal.terms.effective_date }}"
+---
+{{ legal.terms.content | safe }}

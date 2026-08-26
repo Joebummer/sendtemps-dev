@@ -1,0 +1,17 @@
+{
+  "name": "sendtemps-11ty",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@11ty/eleventy": "^3.1.6",
+    "gray-matter": "^4.0.3",
+    "markdown-it": "^15.0.0"
+  }
+}

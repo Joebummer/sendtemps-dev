@@ -1,0 +1,10 @@
+---
+layout: legal.njk
+permalink: /privacy/
+eleventyComputed:
+  title: "{{ legal.privacy.title }}"
+  seo_title: "{{ legal.privacy.seo_title }}"
+  seo_description: "{{ legal.privacy.seo_description }}"
+  effective_date: "{{ legal.privacy.effective_date }}"
+---
+{{ legal.privacy.content | safe }}

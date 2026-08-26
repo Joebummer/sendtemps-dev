@@ -2,6 +2,8 @@ node_modules/
 *.log
 .DS_Store
 data.db
+_site/
+.cache/
 
 # wide_browse work artifacts
 aspect_schema.json

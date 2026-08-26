@@ -1,0 +1,104 @@
+seo:
+  title: "SendTemps – Friction forecasts for Australian climbers"
+  description: "Real-time friction forecasts for Australian climbing crags. Score and rank conditions at Mt Arapiles, the Grampians, Blue Mountains, Nowra, Freycinet and more."
+
+hero:
+  eyebrow: "SendTemps"
+  title: "Friction Forecasts for Australian Climbers"
+  subtitle: "SendTemps gives you an at-a-glance ranking of Australian crag conditions, so you can find the best climbing destination and start sending."
+  cta_primary_label: "Find your forecast"
+  cta_secondary_label: "See coverage"
+  proof_points:
+    - "200+ crags"
+    - "6 states"
+    - "Day-by-day and multi-day trip forecasts"
+
+problem:
+  tag: "The problem"
+  heading: "Your weather app only tells part of the story"
+  body_1: "Generic weather apps give you temperature and rain forecasts. SendTemps considers all the other elements that impact how the rock actually feels – wall aspect, relative humidity, wind strength and direction, rock type, drying time, cloud cover, and sun position."
+  body_2: "Find day-by-day forecasts or plan multi-day trips to more than 200 Australian crags."
+  compare_generic_label: "Generic weather app"
+  compare_sendtemps_label: "SendTemps"
+  app_cta_label: "Get the app"
+  subsection_heading: "Make every day count"
+  subsection_body_1: "For complex areas like the Grampians, Arapiles, Blue Mountains, or Freycinet, SendTemps offers a crag-by-crag breakdown, so you'll always know where to go to find the best conditions. SendTemps also lets you set custom alerts for your home crags, and highlights rare conditions windows on the days when everything lines up just right."
+  subsection_body_2: "Multi-day trip planning makes destination climbing easy, letting you plan around weather windows to maximise quality time on rock."
+
+how_it_works:
+  tag: "How it works"
+  heading: "Three steps to your next send"
+  steps:
+    - title: "Pick a destination"
+      body: "From the 200-crag database across Australia."
+    - title: "Get a useable score"
+      body: "Not just numbers – aspect, shade, wind, humidity, and drying time rolled into one rank out of 100."
+    - title: "Plan the trip"
+      body: "Best day this week, or the best combined days for a longer trip."
+  feature_heading: "Multi-day trip planning"
+  feature_body_1: "Heading away for a long weekend? SendTemps scores the whole trip, not just today. Pick a destination and a date range, and it ranks every day of your stay, surfaces the best wall for each day, and calls out rare multi-day windows when conditions line up back-to-back."
+  feature_body_2: "Every sub-crag at the destination is broken out separately, so you can see exactly where to climb on the day the main area is marginal."
+
+scores:
+  tag: "What it scores"
+  heading: "What It Actually Scores"
+  intro: "Every SendTemps rank is built from the same conditions climbers actually check for – modelled hour by hour, not just a daily average."
+  cards:
+    - title: "Sun and shade on the wall"
+      body: "True solar geometry by wall aspect, not just a compass label, hour-by-hour sun exposure, adjusted for cloud cover."
+    - title: "Rock dryness"
+      body: "Rain history, rock type, sun, wind, and drying time forecast hour by hour, so you know if the rock will be dry by the time you arrive."
+    - title: "Rain windows with timing"
+      body: "Only rain during actual climbing hours counts, a dawn shower that clears by 7am won't tank an otherwise dry day."
+    - title: "Relative humidity"
+      body: "Moist air hurts friction. Humidity is scored against each crag's own baseline, since ‘dry’ isn’t the same everywhere in Australia."
+    - title: "Wind vs. wall exposure"
+      body: "Wind direction matters as much as speed, the same forecast plays out differently on a wall that's exposed versus one sitting in valley."
+    - title: "Rare windows and trip planning"
+      body: "Forecasts are checked against 10-year climate norms to flag rare good days in a given season, and weekend or multi-day trips are scored by the worst day, not the average."
+  feature_heading: "See exactly why a day scores the way it does"
+  feature_body: "Every score comes with a full breakdown, not just a number. Tap \"Why this score?\" on any crag to see each factor's contribution – temperature versus the ideal range, sweet-spot mismatch, sun-on-wall bonuses – all shown as plus or minus points from a baseline of 100."
+
+coverage:
+  tag: "Coverage"
+  heading: "Coverage"
+  intro: "200+ individual crags across 6 states. Hover or tap a state for details."
+  list:
+    - state: "Victoria"
+      body: "11 destinations including Mt Arapiles and the Grampians"
+    - state: "New South Wales"
+      body: "6 destinations including Blue Mountains and Nowra"
+    - state: "Tasmania"
+      body: "6 destinations including Freycinet, Mt Wellington, Ben Lomond and Sand River"
+    - state: "Queensland"
+      body: "5 destinations including Frog Buttress, Glasshouse Mountains and Coolum"
+    - state: "South Australia"
+      body: "6 destinations including Flinders Ranges"
+    - state: "Western Australia"
+      body: "10 destinations including Kalbarri regional flagships"
+
+pricing:
+  tag: "Free vs Pro"
+  heading: "SendTemps Free vs SendTemps Pro"
+  free_title: "Free features"
+  free_features:
+    - "**2 day forecast window** – today and tomorrow's conditions"
+    - "**Full daily crag score** – sun/shade, dryness, rain windows, humidity, wind"
+    - "**Parent crag view** – score and reasons for larger destination crags"
+  pro_title: "Pro features"
+  pro_features:
+    - "**Full 7-day rolling forecast window** – every day unlocked, not just today/tomorrow"
+    - "**Full sub-crag breakdown** – see individual walls/sectors under a destination crag, with the best-scoring one automatically surfaced"
+    - "**Multi-day and weekend trip planning** – at-a-glance “Weekend away” pick and full destination-based trip scoring section"
+    - "**Push notifications** – rare-window and favourite-crag threshold alerts sent to your device"
+  cta_label: "Get Pro"
+
+footer_cta:
+  heading: "Stop guessing – start sending"
+  cta_primary_label: "Find your forecast"
+  cta_secondary_label: "Suggest a crag or get in touch"
+
+footer:
+  tagline: "Friction forecasts for Australian climbers."
+  copyright: "© 2026 SendTemps"
+  data_credit: "Weather data via Open-Meteo"

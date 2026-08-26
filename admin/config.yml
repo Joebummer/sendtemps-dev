@@ -1,0 +1,190 @@
+backend:
+  name: github
+  repo: Joebummer/sendtemps-dev
+  branch: main
+  base_url: https://sendtemps-cms-auth.tty86ym8z4.workers.dev
+  auth_endpoint: auth
+
+# Where Decap commits go and how the preview looks
+publish_mode: simple
+media_folder: "src/images/uploads"
+public_folder: "/images/uploads"
+
+site_url: https://sendtemps.app
+display_url: https://sendtemps.app
+logo_url: /images/brand/app-icon-128.png
+
+collections:
+  # ---------------------------------------------------------------
+  # Homepage — single file, structured to mirror content/home.yaml
+  # ---------------------------------------------------------------
+  - name: "home"
+    label: "Homepage"
+    files:
+      - name: "home"
+        label: "Homepage Content"
+        file: "content/home.yaml"
+        fields:
+          - label: "SEO"
+            name: "seo"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Page title (browser tab / search results)", name: "title", widget: "string" }
+              - { label: "Meta description", name: "description", widget: "text" }
+
+          - label: "Hero section"
+            name: "hero"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Eyebrow (small label above title)", name: "eyebrow", widget: "string" }
+              - { label: "Title", name: "title", widget: "string" }
+              - { label: "Subtitle", name: "subtitle", widget: "text" }
+              - { label: "Primary button label", name: "cta_primary_label", widget: "string" }
+              - { label: "Secondary button label", name: "cta_secondary_label", widget: "string" }
+              - label: "Proof points (small stats row)"
+                name: "proof_points"
+                widget: "list"
+                field: { label: "Point", name: "point", widget: "string" }
+
+          - label: "Problem section"
+            name: "problem"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Tag", name: "tag", widget: "string" }
+              - { label: "Heading", name: "heading", widget: "string" }
+              - { label: "Body paragraph 1", name: "body_1", widget: "text" }
+              - { label: "Body paragraph 2", name: "body_2", widget: "text" }
+              - { label: "\"Generic weather app\" label", name: "compare_generic_label", widget: "string" }
+              - { label: "\"SendTemps\" label", name: "compare_sendtemps_label", widget: "string" }
+              - { label: "App CTA button label", name: "app_cta_label", widget: "string" }
+              - { label: "Subsection heading", name: "subsection_heading", widget: "string" }
+              - { label: "Subsection body 1", name: "subsection_body_1", widget: "text" }
+              - { label: "Subsection body 2", name: "subsection_body_2", widget: "text" }
+
+          - label: "How it works section"
+            name: "how_it_works"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Tag", name: "tag", widget: "string" }
+              - { label: "Heading", name: "heading", widget: "string" }
+              - label: "Steps"
+                name: "steps"
+                widget: "list"
+                summary: "{{fields.title}}"
+                fields:
+                  - { label: "Title", name: "title", widget: "string" }
+                  - { label: "Body", name: "body", widget: "text" }
+              - { label: "Feature heading", name: "feature_heading", widget: "string" }
+              - { label: "Feature body 1", name: "feature_body_1", widget: "text" }
+              - { label: "Feature body 2", name: "feature_body_2", widget: "text" }
+
+          - label: "What it scores section"
+            name: "scores"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Tag", name: "tag", widget: "string" }
+              - { label: "Heading", name: "heading", widget: "string" }
+              - { label: "Intro", name: "intro", widget: "text" }
+              - label: "Score cards"
+                name: "cards"
+                widget: "list"
+                summary: "{{fields.title}}"
+                fields:
+                  - { label: "Title", name: "title", widget: "string" }
+                  - { label: "Body", name: "body", widget: "text" }
+              - { label: "Feature heading", name: "feature_heading", widget: "string" }
+              - label: "Feature body"
+                name: "feature_body"
+                widget: "text"
+                hint: "Plain text only — this field renders unescaped, so avoid HTML tags."
+
+          - label: "Coverage section"
+            name: "coverage"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Tag", name: "tag", widget: "string" }
+              - { label: "Heading", name: "heading", widget: "string" }
+              - { label: "Intro", name: "intro", widget: "text" }
+              - label: "State list"
+                name: "list"
+                widget: "list"
+                summary: "{{fields.state}}"
+                fields:
+                  - { label: "State", name: "state", widget: "string" }
+                  - { label: "Body", name: "body", widget: "text" }
+
+          - label: "Pricing section"
+            name: "pricing"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Tag", name: "tag", widget: "string" }
+              - { label: "Heading", name: "heading", widget: "string" }
+              - { label: "Free column title", name: "free_title", widget: "string" }
+              - label: "Free features"
+                name: "free_features"
+                widget: "list"
+                field:
+                  label: "Feature"
+                  name: "feature"
+                  widget: "string"
+                hint: "Use **bold** for the feature name — supports Markdown bold/italic only."
+              - { label: "Pro column title", name: "pro_title", widget: "string" }
+              - label: "Pro features"
+                name: "pro_features"
+                widget: "list"
+                field:
+                  label: "Feature"
+                  name: "feature"
+                  widget: "string"
+                hint: "Use **bold** for the feature name — supports Markdown bold/italic only."
+              - { label: "Pro CTA button label", name: "cta_label", widget: "string" }
+
+          - label: "Footer CTA section"
+            name: "footer_cta"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Heading", name: "heading", widget: "string" }
+              - { label: "Primary button label", name: "cta_primary_label", widget: "string" }
+              - { label: "Secondary button label (mailto link)", name: "cta_secondary_label", widget: "string" }
+
+          - label: "Footer"
+            name: "footer"
+            widget: "object"
+            collapsed: true
+            fields:
+              - { label: "Tagline", name: "tagline", widget: "string" }
+              - { label: "Copyright line", name: "copyright", widget: "string" }
+              - { label: "Data credit line", name: "data_credit", widget: "string" }
+
+  # ---------------------------------------------------------------
+  # Legal pages — privacy & terms, each its own Markdown file
+  # ---------------------------------------------------------------
+  - name: "legal"
+    label: "Legal Pages"
+    files:
+      - name: "privacy"
+        label: "Privacy Policy"
+        file: "content/legal/privacy.md"
+        fields:
+          - { label: "Page title (H1)", name: "title", widget: "string" }
+          - { label: "SEO title (browser tab)", name: "seo_title", widget: "string" }
+          - { label: "SEO description", name: "seo_description", widget: "text" }
+          - { label: "Effective date line", name: "effective_date", widget: "string" }
+          - { label: "Body", name: "body", widget: "markdown" }
+      - name: "terms"
+        label: "Terms of Use"
+        file: "content/legal/terms.md"
+        fields:
+          - { label: "Page title (H1)", name: "title", widget: "string" }
+          - { label: "SEO title (browser tab)", name: "seo_title", widget: "string" }
+          - { label: "SEO description", name: "seo_description", widget: "text" }
+          - { label: "Effective date line", name: "effective_date", widget: "string" }
+          - { label: "Body", name: "body", widget: "markdown" }

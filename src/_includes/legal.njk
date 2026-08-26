@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ seo_title }}</title>
+  <meta name="description" content="{{ seo_description }}" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://sendtemps.app{{ page.url }}" />
+
+  <meta property="og:title" content="{{ seo_title }}" />
+  <meta property="og:description" content="{{ seo_description }}" />
+  <meta property="og:image" content="https://sendtemps.app/og-image.png" />
+  <meta property="og:url" content="https://sendtemps.app{{ page.url }}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SendTemps" />
+
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
+  <link href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="../base.css" />
+  <link rel="stylesheet" href="../style.css?v={{ cssVersion }}" />
+  <link rel="stylesheet" href="../assets/legal.css" />
+</head>
+<body>
+
+  {% set rootPath = "../" %}
+  {% set navPrefix = "/" %}
+  {% set brandHref = "/" %}
+  {% include "header.njk" %}
+
+  <main>
+    <div class="legal-page">
+      <h1>{{ title }}</h1>
+      <p>{{ effective_date }}</p>
+      {{ content | safe }}
+    </div>
+  </main>
+
+  {% include "footer.njk" %}
+
+  <script>
+    (function () {
+      const t = document.querySelector('[data-theme-toggle]'),
+        r = document.documentElement;
+      let d = matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+      r.setAttribute('data-theme', d);
+      t &&
+        t.addEventListener('click', () => {
+          d = d === 'dark' ? 'light' : 'dark';
+          r.setAttribute('data-theme', d);
+          t.setAttribute('aria-label', 'Switch to ' + (d === 'dark' ? 'light' : 'dark') + ' mode');
+        });
+    })();
+  </script>
+</body>
+</html>

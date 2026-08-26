@@ -32,8 +32,8 @@ SendTemps is free to download and use, with the following features available at 
 
 SendTemps Pro is offered as:
 
-- **Monthly** — AUD $4.99 per month
-- **Annual** — AUD $29.99 per year (approx. 50% savings versus paying monthly)
+- **Monthly** — AUD $7.99 per month
+- **Annual** — AUD $59.99 per year (approx. 37% savings versus paying monthly)
 
 Prices are set in Australian dollars and may vary by region in accordance with Apple's pricing tiers; the exact price for your region and currency is always shown on the purchase screen before you buy.
 

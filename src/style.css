@@ -297,9 +297,19 @@
   letter-spacing: -0.02em;
   line-height: 1.05;
   color: var(--color-text);
-  max-width: min(26ch, 90vw);
+  max-width: min(22ch, 90vw);
   margin-inline: auto;
   margin-bottom: var(--space-6);
+}
+@media (min-width: 640px) {
+  .hero-title {
+    max-width: min(26ch, 90vw);
+  }
+}
+@media (min-width: 1024px) {
+  .hero-title {
+    max-width: min(34ch, 85vw);
+  }
 }
 .hero-sub {
   font-size: var(--text-lg);

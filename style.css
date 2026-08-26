@@ -101,28 +101,6 @@
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
-/* ============ STAGING BANNER ============ */
-.staging-banner {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-text);
-  color: var(--color-bg);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  text-align: center;
-}
-.staging-banner strong {
-  color: var(--color-primary-soft, var(--color-bg));
-}
-
 /* ============ LAYOUT PRIMITIVES ============ */
 .wrap {
   max-width: var(--content-wide);
@@ -195,7 +173,7 @@
 /* ============ HEADER ============ */
 .site-header {
   position: sticky;
-  top: 33px; /* below staging banner */
+  top: 0;
   z-index: 90;
   background: oklch(from var(--color-bg) l c h / 0.88);
   backdrop-filter: blur(12px);

@@ -639,9 +639,10 @@
   transform: translateX(-50%);
   width: 34%;
   height: 1.15rem;
-  background: #161615;
+  background: #0a0a0a;
   border-radius: var(--radius-full);
   z-index: 2;
+  box-shadow: 0 0 0 5px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.4);
 }
 .phone-frame-screen {
   position: relative;

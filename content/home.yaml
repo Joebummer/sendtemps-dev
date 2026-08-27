@@ -59,7 +59,7 @@ how_it_works:
   feature_image: /images/uploads/screenshot-d.png
 scores:
   tag: What it scores
-  heading: What It Actually Scores
+  heading: What it actually scores
   intro: Every Climbable rank is built from the same conditions climbers actually
     check for – modelled hour by hour, not just a daily average.
   cards:

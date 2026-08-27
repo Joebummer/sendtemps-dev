@@ -182,7 +182,12 @@ eleventyComputed:
         </ul>
       </div>
       <div class="content-block">
-        <strong style="color: var(--color-text); display:block; margin-bottom: var(--space-4); font-size: var(--text-lg);">{{ pr.pro_title }}</strong>
+        <strong style="color: var(--color-text); display:block; margin-bottom: var(--space-2); font-size: var(--text-lg);">{{ pr.pro_title }}</strong>
+        <div style="display:flex; align-items:baseline; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-1);">
+          <span style="color: var(--color-text); font-size: var(--text-2xl); font-weight: 700;">{{ pr.pro_price_annual }}</span>
+          <span style="color: var(--color-text-muted); font-size: var(--text-sm);">or {{ pr.pro_price_monthly }}</span>
+        </div>
+        <div style="color: var(--color-primary); font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--space-4);">{{ pr.pro_price_note }}</div>
         <ul class="tier-feature-list">
           {% for feature in pr.pro_features %}
           <li>{{ feature | mdInline | safe }}</li>

@@ -115,7 +115,10 @@ pricing:
     - "**Full daily crag score** – Sun/shade, dryness, rain windows, humidity,
       wind"
     - "**Parent crag view** – Score and reasons for larger destination crags"
-  pro_title: Pro features – $7.99 per month
+  pro_title: Pro features
+  pro_price_annual: "$35 per year"
+  pro_price_monthly: "$5.99 per month"
+  pro_price_note: Save 51% with annual
   pro_features:
     - "**Full 7-day rolling forecast window** – Every day unlocked, not just
       today/tomorrow"

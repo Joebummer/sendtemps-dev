@@ -32,10 +32,10 @@ Climbable is free to download and use, with the following features available at 
 
 Climbable Pro is offered as:
 
-- **Monthly** — AUD $7.99 per month
-- **Annual** — AUD $59.99 per year (approx. 37% savings versus paying monthly)
+- **Monthly** — USD $5.99 per month
+- **Annual** — USD $35 per year (approx. 51% savings versus paying monthly)
 
-Prices are set in Australian dollars and may vary by region in accordance with Apple's pricing tiers; the exact price for your region and currency is always shown on the purchase screen before you buy.
+Prices are set in US dollars and may vary by region in accordance with Apple's pricing tiers; the exact price for your region and currency is always shown on the purchase screen before you buy.
 
 **Payment and auto-renewal.** Payment is charged to your Apple ID account at confirmation of purchase. Subscriptions automatically renew for the same length of term unless auto-renew is turned off at least 24 hours before the end of the current period. Your account will be charged for renewal within 24 hours prior to the end of the current period, at the then-current price. Any unused portion of a free trial period, if offered, is forfeited when you purchase a subscription.
 

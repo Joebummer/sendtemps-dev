@@ -624,25 +624,45 @@
   max-width: 280px;
   margin: 0 auto;
   aspect-ratio: 1080 / 2341;
-  border-radius: 2.6rem;
-  padding: 0.45rem;
-  background: linear-gradient(160deg, #3a3a38, #161615);
-  box-shadow: var(--shadow-lg), inset 0 0 0 1px rgba(255,255,255,0.06);
+  border-radius: 2.75rem;
+  padding: 0.5rem;
+  background:
+    linear-gradient(155deg, #4a4a47 0%, #1c1c1a 12%, #0e0e0d 50%, #1c1c1a 88%, #4a4a47 100%);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 1px rgba(0,0,0,0.5),
+    inset 0 0 0 1px rgba(255,255,255,0.14),
+    inset 0 0.5px 0 rgba(255,255,255,0.25);
   overflow: hidden;
   isolation: isolate;
+}
+/* Side buttons — power (right) + volume/action (left) */
+.phone-frame::after {
+  content: "";
+  position: absolute;
+  top: 18%;
+  right: -2px;
+  width: 3px;
+  height: 7.5%;
+  background: linear-gradient(90deg, #0a0a09, #2a2a28);
+  border-radius: 2px 0 0 2px;
+  z-index: 0;
+  box-shadow: -78px 4% 0 -1px #0a0a09, -78px 10.5% 0 -1px #0a0a09;
 }
 .phone-frame::before {
   content: "";
   position: absolute;
-  top: 0.85rem;
+  top: 0.95rem;
   left: 50%;
   transform: translateX(-50%);
-  width: 34%;
-  height: 1.15rem;
-  background: #0a0a0a;
+  width: 32%;
+  height: 1.05rem;
+  background: #050505;
   border-radius: var(--radius-full);
   z-index: 2;
-  box-shadow: 0 0 0 5px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.4);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.05),
+    0 0.5px 1px rgba(255,255,255,0.4);
 }
 .phone-frame-screen {
   position: relative;
@@ -650,9 +670,10 @@
   height: 100%;
   max-width: 100%;
   max-height: 100%;
-  border-radius: 2.2rem;
+  border-radius: 2.3rem;
   overflow: hidden;
   background: var(--color-bg);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
 }
 .phone-frame-screen img {
   position: absolute;
@@ -662,6 +683,15 @@
   object-fit: cover;
   object-position: top center;
   display: block;
+}
+/* Subtle glass reflection sweep across the screen */
+.phone-frame-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(115deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 8%, rgba(255,255,255,0) 22%);
 }
 .phone-compare-row {
   display: grid;

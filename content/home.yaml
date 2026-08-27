@@ -27,7 +27,9 @@ problem:
     easy, letting you plan around weather windows to maximise quality time on
     rock.
   compare_generic_label: Generic weather app
+  compare_generic_image: /images/phones/generic-weather-app.jpg
   compare_sendtemps_label: SendTemps
+  compare_sendtemps_image: /images/phones/sendtemps-crag-detail.jpg
   body_1: Generic weather apps give you temperature and rain forecasts. SendTemps
     considers all the other elements that impact how the rock actually feels –
     wall aspect, relative humidity, wind strength and direction, rock type,
@@ -53,6 +55,7 @@ how_it_works:
     rare multi-day windows when conditions line up back-to-back.
   feature_body_2: Every sub-crag at the destination is broken out separately, so
     you can see exactly where to climb on the day the main area is marginal.
+  feature_image: /images/phones/sendtemps-trip-planning.jpg
 scores:
   tag: What it scores
   heading: What It Actually Scores
@@ -83,6 +86,7 @@ scores:
     "Why this score?" on any crag to see each factor's contribution –
     temperature versus the ideal range, sweet-spot mismatch, sun-on-wall bonuses
     – all shown as plus or minus points from a baseline of 100.
+  feature_image: /images/phones/sendtemps-score-breakdown.jpg
 coverage:
   tag: Coverage
   heading: Coverage

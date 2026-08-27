@@ -58,7 +58,9 @@ collections:
               - { label: "Body paragraph 1", name: "body_1", widget: "text" }
               - { label: "Body paragraph 2", name: "body_2", widget: "text" }
               - { label: "\"Generic weather app\" label", name: "compare_generic_label", widget: "string" }
+              - { label: "\"Generic weather app\" phone screenshot", name: "compare_generic_image", widget: "image", hint: "Portrait screenshot, ~1080\u00d72341px (9:19.5 ratio) for best fit in the phone frame." }
               - { label: "\"SendTemps\" label", name: "compare_sendtemps_label", widget: "string" }
+              - { label: "\"SendTemps\" phone screenshot", name: "compare_sendtemps_image", widget: "image", hint: "Portrait screenshot, ~1080\u00d72341px (9:19.5 ratio) for best fit in the phone frame." }
               - { label: "App CTA button label", name: "app_cta_label", widget: "string" }
               - { label: "Subsection heading", name: "subsection_heading", widget: "string" }
               - { label: "Subsection body 1", name: "subsection_body_1", widget: "text" }
@@ -81,6 +83,7 @@ collections:
               - { label: "Feature heading", name: "feature_heading", widget: "string" }
               - { label: "Feature body 1", name: "feature_body_1", widget: "text" }
               - { label: "Feature body 2", name: "feature_body_2", widget: "text" }
+              - { label: "Feature phone screenshot", name: "feature_image", widget: "image", hint: "Portrait screenshot, ~1080\u00d72341px (9:19.5 ratio) for best fit in the phone frame." }
 
           - label: "What it scores section"
             name: "scores"
@@ -102,6 +105,7 @@ collections:
                 name: "feature_body"
                 widget: "text"
                 hint: "Plain text only — this field renders unescaped, so avoid HTML tags."
+              - { label: "Feature phone screenshot", name: "feature_image", widget: "image", hint: "Portrait screenshot, ~1080\u00d72341px (9:19.5 ratio) for best fit in the phone frame." }
 
           - label: "Coverage section"
             name: "coverage"

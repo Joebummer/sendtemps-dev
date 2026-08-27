@@ -47,7 +47,7 @@ eleventyComputed:
           <div class="phone-compare-label">{{ p.compare_generic_label }}</div>
           <div class="phone-frame">
             <div class="phone-frame-screen">
-              <img src="images/phones/generic-weather-app.jpg" alt="A generic weather app showing only a basic temperature and rain forecast for Halls Gap, VIC, with no climbing-specific detail" loading="lazy">
+              <img src="{{ p.compare_generic_image | default('/images/phones/generic-weather-app.jpg') }}" alt="A generic weather app showing only a basic temperature and rain forecast for Halls Gap, VIC, with no climbing-specific detail" loading="lazy">
             </div>
           </div>
         </div>
@@ -55,7 +55,7 @@ eleventyComputed:
           <div class="phone-compare-label is-brand">{{ p.compare_sendtemps_label }}</div>
           <div class="phone-frame">
             <div class="phone-frame-screen">
-              <img src="images/phones/sendtemps-crag-detail.jpg" alt="SendTemps showing a detailed climbing-specific forecast for the Grampians, including a daily conditions score, rock dryness, wind, humidity, cloud cover, and hour-by-hour breakdown" loading="lazy">
+              <img src="{{ p.compare_sendtemps_image | default('/images/phones/sendtemps-crag-detail.jpg') }}" alt="SendTemps showing a detailed climbing-specific forecast for the Grampians, including a daily conditions score, rock dryness, wind, humidity, cloud cover, and hour-by-hour breakdown" loading="lazy">
             </div>
           </div>
         </div>
@@ -105,7 +105,7 @@ eleventyComputed:
       <div class="feature-phone-grid-frame">
         <div class="phone-frame">
           <div class="phone-frame-screen">
-            <img src="images/phones/sendtemps-trip-planning.jpg" alt="SendTemps multi-day trip planning screen for Mt Buffalo showing a rare-window trip score of 91, a Friday-to-Monday outlook with best wall per day, and a sub-crag breakdown with individual scores" loading="lazy">
+            <img src="{{ hiw.feature_image | default('/images/phones/sendtemps-trip-planning.jpg') }}" alt="SendTemps multi-day trip planning screen for Mt Buffalo showing a rare-window trip score of 91, a Friday-to-Monday outlook with best wall per day, and a sub-crag breakdown with individual scores" loading="lazy">
           </div>
         </div>
       </div>
@@ -144,7 +144,7 @@ eleventyComputed:
       <div class="feature-phone-grid-frame">
         <div class="phone-frame">
           <div class="phone-frame-screen">
-            <img src="images/phones/sendtemps-score-breakdown.jpg" alt="SendTemps score breakdown for Cape Raoul showing an 85/100 day score with a Why this score panel listing temperature, sweet spot mismatch, and sun on wall factors as plus or minus points, plus crag notes and aspect tags" loading="lazy">
+            <img src="{{ sc.feature_image | default('/images/phones/sendtemps-score-breakdown.jpg') }}" alt="SendTemps score breakdown for Cape Raoul showing an 85/100 day score with a Why this score panel listing temperature, sweet spot mismatch, and sun on wall factors as plus or minus points, plus crag notes and aspect tags" loading="lazy">
           </div>
         </div>
       </div>

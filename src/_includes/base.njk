@@ -53,21 +53,6 @@
 
   {% include "footer.njk" %}
 
-  <script>
-    (function () {
-      const t = document.querySelector('[data-theme-toggle]'),
-        r = document.documentElement;
-      let d = matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
-      r.setAttribute('data-theme', d);
-      t &&
-        t.addEventListener('click', () => {
-          d = d === 'dark' ? 'light' : 'dark';
-          r.setAttribute('data-theme', d);
-          t.setAttribute('aria-label', 'Switch to ' + (d === 'dark' ? 'light' : 'dark') + ' mode');
-        });
-    })();
-  </script>
-
   {% if includeMapScript %}
   <script>
     (function () {

@@ -44,9 +44,8 @@
   --content-wide: 1200px;
 }
 
-/* LIGHT MODE – warm stone surfaces, forest-green accent (matches app) */
-:root,
-[data-theme='light'] {
+/* Warm stone surfaces, forest-green accent (matches app) */
+:root {
   --color-bg: #f5f2eb;
   --color-surface: #fdfaf3;
   --color-surface-2: #f0ece0;
@@ -71,34 +70,6 @@
   --shadow-sm: 0 1px 2px rgba(20, 30, 10, 0.07);
   --shadow-md: 0 4px 14px rgba(20, 30, 10, 0.11);
   --shadow-lg: 0 16px 40px rgba(20, 30, 10, 0.15);
-}
-
-/* DARK MODE */
-[data-theme='dark'] {
-  --color-bg: #111410;
-  --color-surface: #191d16;
-  --color-surface-2: #20261c;
-  --color-surface-offset: #272e22;
-  --color-divider: #252c20;
-  --color-border: #333d2d;
-
-  --color-text: #e4e8dc;
-  --color-text-muted: #8a9480;
-  --color-text-faint: #575f4e;
-  --color-text-inverse: #111410;
-
-  --color-primary: #6db560;
-  --color-primary-hover: #82cc74;
-  --color-primary-soft: #2a3a24;
-
-  --color-warning: #d1ac3d;
-  --color-warning-soft: #3a341c;
-  --color-error: #d97a52;
-  --color-error-soft: #3a271c;
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
 /* ============ LAYOUT PRIMITIVES ============ */
@@ -221,20 +192,6 @@
   align-items: center;
   gap: var(--space-3);
 }
-.theme-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-full);
-  color: var(--color-text-muted);
-}
-.theme-toggle:hover {
-  background: var(--color-surface-2);
-  color: var(--color-text);
-}
-
 /* ============ BUTTONS ============ */
 .btn {
   display: inline-flex;

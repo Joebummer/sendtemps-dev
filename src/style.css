@@ -692,6 +692,9 @@
 .feature-phone-grid-frame {
   width: 100%;
 }
+.feature-phone-grid-frame .screenshot-frame {
+  max-width: 264px;
+}
 .feature-phone-grid.is-reverse .feature-phone-grid-copy {
   order: 2;
 }

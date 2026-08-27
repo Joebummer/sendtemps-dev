@@ -1,16 +1,16 @@
-// SendTemps service worker — v58.3
+// Climbable service worker — v58.3
 //
-// Goal: SendTemps should still open at the crag with no signal. We precache
+// Goal: Climbable should still open at the crag with no signal. We precache
 // the static shell on install and use a cache-first strategy for it. Forecast
 // API calls go network-first with a cache fallback so we always show the
 // freshest data when online and the last-known-good response when offline.
 //
 // Cache name is bumped per release so old shells get evicted on activate.
 
-const CACHE = 'sendtemps-v65-67';
+const CACHE = 'climbable-v65-67';
 
 // Static shell — paths are app-relative so this works under the
-// /sendtemps/ GitHub Pages prefix as well as a custom-domain root.
+// /climbable/ GitHub Pages prefix as well as a custom-domain root.
 const SHELL = [
   './',
   './index.html',
@@ -33,7 +33,7 @@ self.addEventListener('install', (event) => {
 
 // Stable key for runtime cache — never deleted on SW update so cached
 // forecast responses survive version bumps and rate-limit windows.
-const RUNTIME_CACHE_STABLE = 'sendtemps-runtime-stable';
+const RUNTIME_CACHE_STABLE = 'climbable-runtime-stable';
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
@@ -148,14 +148,14 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', event => {
   if (!event.data) return;
   let data;
-  try { data = event.data.json(); } catch { data = { title: 'SendTemps', body: event.data.text(), url: 'https://sendtemps.app/' }; }
+  try { data = event.data.json(); } catch { data = { title: 'Climbable', body: event.data.text(), url: 'https://climbable.app/' }; }
 
-  const title = data.title || 'SendTemps';
+  const title = data.title || 'Climbable';
   const options = {
     body: data.body || '',
-    icon: 'https://sendtemps.app/icon-192.png',
-    badge: 'https://sendtemps.app/icon-192.png',
-    data: { url: data.url || 'https://sendtemps.app/' },
+    icon: 'https://climbable.app/icon-192.png',
+    badge: 'https://climbable.app/icon-192.png',
+    data: { url: data.url || 'https://climbable.app/' },
     requireInteraction: false,
   };
 
@@ -166,10 +166,10 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const url = event.notification.data?.url || 'https://sendtemps.app/';
+  const url = event.notification.data?.url || 'https://climbable.app/';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      const existing = list.find(c => c.url.startsWith('https://sendtemps.app'));
+      const existing = list.find(c => c.url.startsWith('https://climbable.app'));
       if (existing) return existing.focus();
       return clients.openWindow(url);
     })

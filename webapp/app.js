@@ -115,7 +115,7 @@ function visibleDayCount() {
 // banner needed). No app-side analytics code needed.
 
 // ---- Service worker registration ----
-// Caches the static shell + last good forecast so SendTemps loads at the crag
+// Caches the static shell + last good forecast so Climbable loads at the crag
 // even with no signal. The SW handles its own update lifecycle — we just kick
 // it off here and let it stream in updates.
 // Service worker registration + update detection.
@@ -1254,7 +1254,7 @@ function renderBestWeekendCallout(destinations) {
   const endLabel   = dates[dates.length - 1] ? new Date(dates[dates.length - 1]).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
   const rangeLabel = startLabel && endLabel && startLabel !== endLabel ? `${startLabel} – ${endLabel}` : startLabel;
 
-  const shareText = `${top.destination} looks like the best weekend destination – scoring ${score}/100 on SendTemps. ${reasonLine}. Download sendtemps.app`;
+  const shareText = `${top.destination} looks like the best weekend destination – scoring ${score}/100 on Climbable. ${reasonLine}. Download climbable.app`;
 
   return `
     <div class="best-weekend-callout">
@@ -1310,7 +1310,7 @@ function renderTASCallout(destinations) {
   const rangeLabel = startLabel && endLabel && startLabel !== endLabel ? `${startLabel} – ${endLabel}` : startLabel;
 
   const top = top3[0];
-  const shareText = `Heading to Tasmania? ${top.crag.name} is looking best — scoring ${top.tripScore}/100 on SendTemps. sendtemps.app`;
+  const shareText = `Heading to Tasmania? ${top.crag.name} is looking best — scoring ${top.tripScore}/100 on Climbable. climbable.app`;
 
   return `
     <div class="best-weekend-callout tas-callout">
@@ -3046,18 +3046,18 @@ async function buildShareImage(row, dateStr) {
   ctx.font = `700 26px '${FONT}'`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText('SendTemps', 72, barY + 40);
+  ctx.fillText('Climbable', 72, barY + 40);
 
   // Tagline + URL right
   ctx.fillStyle = MUTED;
   ctx.font = `400 20px '${FONT}'`;
   ctx.textAlign = 'right';
-  ctx.fillText('Friction forecasts for Australian climbers  ·  sendtemps.app', W - 72, barY + 40);
+  ctx.fillText('Friction forecasts for Australian climbers  ·  climbable.app', W - 72, barY + 40);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
       if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
-      resolve(new File([blob], 'sendtemps-forecast.png', { type: 'image/png' }));
+      resolve(new File([blob], 'climbable-forecast.png', { type: 'image/png' }));
     }, 'image/png');
   });
 }
@@ -3070,7 +3070,7 @@ function buildShareText(row, dateStr) {
       return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
     } catch { return dateStr; }
   })();
-  return `${crag.name} · ${dateLabel}\nSendTemps score ${Math.round(score)}/100`;
+  return `${crag.name} · ${dateLabel}\nClimbable score ${Math.round(score)}/100`;
 }
 
 function shareForecast(cragId) {
@@ -3086,7 +3086,7 @@ function shareForecast(cragId) {
 
   const url = buildShareUrl(cragId, dateStr);
   const text = `Check out the conditions at ${row.crag.name}.`;
-  const title = `${row.crag.name} – SendTemps`;
+  const title = `${row.crag.name} – Climbable`;
 
   // Try to generate the image card and include it in the share sheet.
   // Falls back to text-only if canvas or file sharing isn't supported.
@@ -3140,11 +3140,11 @@ function shareDestination(destination) {
     `${destination} · ${dateRange}`,
     `Trip score ${tripScore}/100`,
     dayLines,
-    'via SendTemps. Download at sendtemps.app',
+    'via Climbable. Download at climbable.app',
   ].filter(Boolean).join('\n');
 
   const url = `${location.origin}${location.pathname}`;
-  const title = `${destination} trip forecast – SendTemps`;
+  const title = `${destination} trip forecast – Climbable`;
 
   if (typeof navigator.share === 'function') {
     navigator.share({ title, text, url })
@@ -3294,7 +3294,7 @@ function maybeShowIosInstallHint() {
       <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
     </svg>
     <div class="ios-install-hint-text">
-      <strong>Install SendTemps</strong>
+      <strong>Install Climbable</strong>
       <span>Tap Share <span aria-hidden="true">↑</span> then <em>add to Home Screen</em>.</span>
     </div>
     <button class="ios-install-hint-dismiss" type="button" aria-label="Close install hint">×</button>
@@ -3458,7 +3458,7 @@ function showNotifyPopover(btn, mode, activeState) {
   if (mode === 'locked') {
     pop.innerHTML = `
       <p class="notify-pop-title">Rare window alerts – Pro feature</p>
-      <p class="notify-pop-body">Push alerts are a Pro feature while SendTemps is in testing.</p>
+      <p class="notify-pop-body">Push alerts are a Pro feature while Climbable is in testing.</p>
       <button class="notify-pop-close" id="notify-pop-close" aria-label="Close">✕</button>
     `;
   } else if (mode === 'subscribed') {

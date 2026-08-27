@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /webapp/
 
-Sitemap: https://sendtemps.app/sitemap.xml
+Sitemap: https://climbable.app/sitemap.xml

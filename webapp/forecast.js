@@ -4,7 +4,7 @@
 import { CRAGS } from './crags.js?v=41';
 import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 
-// Routed through the SendTemps Worker (not Open-Meteo directly) so every
+// Routed through the Climbable Worker (not Open-Meteo directly) so every
 // client shares one edge-cached response instead of each device/network
 // being subject to Open-Meteo's own per-IP rate limit. See worker/src/index.js
 // GET /forecast.

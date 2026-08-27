@@ -10,8 +10,8 @@ publish_mode: simple
 media_folder: "src/images/uploads"
 public_folder: "/images/uploads"
 
-site_url: https://sendtemps.app
-display_url: https://sendtemps.app
+site_url: https://climbable.app
+display_url: https://climbable.app
 logo_url: /images/brand/app-icon-128.png
 
 collections:
@@ -59,8 +59,8 @@ collections:
               - { label: "Body paragraph 2", name: "body_2", widget: "text" }
               - { label: "\"Generic weather app\" label", name: "compare_generic_label", widget: "string" }
               - { label: "\"Generic weather app\" phone screenshot", name: "compare_generic_image", widget: "image", hint: "Portrait screenshot, ~1080\u00d72341px (9:19.5 ratio) for best fit in the phone frame." }
-              - { label: "\"SendTemps\" label", name: "compare_sendtemps_label", widget: "string" }
-              - { label: "\"SendTemps\" phone screenshot", name: "compare_sendtemps_image", widget: "image", hint: "Portrait screenshot, ~1080\u00d72341px (9:19.5 ratio) for best fit in the phone frame." }
+              - { label: "\"Climbable\" label", name: "compare_sendtemps_label", widget: "string" }
+              - { label: "\"Climbable\" phone screenshot", name: "compare_sendtemps_image", widget: "image", hint: "Portrait screenshot, ~1080\u00d72341px (9:19.5 ratio) for best fit in the phone frame." }
               - { label: "App CTA button label", name: "app_cta_label", widget: "string" }
               - { label: "Subsection heading", name: "subsection_heading", widget: "string" }
               - { label: "Subsection body 1", name: "subsection_body_1", widget: "text" }

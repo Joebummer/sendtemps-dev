@@ -1,12 +1,12 @@
 seo:
-  title: SendTemps – Friction Forecasts for Australian climbers
+  title: Climbable – Friction Forecasts for Australian climbers
   description: Real-time friction forecasts for Australian climbing crags. Score
     and rank conditions at Mt Arapiles, the Grampians, Blue Mountains, Nowra,
     Freycinet and more.
 hero:
-  eyebrow: SendTemps
+  eyebrow: Climbable
   title: Friction Forecasts for Australian Climbers
-  subtitle: SendTemps gives you an at-a-glance ranking of Australian crag
+  subtitle: Climbable gives you an at-a-glance ranking of Australian crag
     conditions, so you can find the best climbing destination and start sending.
   cta_primary_label: Find your forecast
   cta_secondary_label: See coverage
@@ -19,18 +19,18 @@ problem:
   app_cta_label: Get the app
   subsection_heading: Make every day count
   subsection_body_1: For complex areas like the Grampians, Arapiles, Blue
-    Mountains, or Freycinet, SendTemps offers a crag-by-crag breakdown, so
+    Mountains, or Freycinet, Climbable offers a crag-by-crag breakdown, so
     you'll always know where to go to find the best conditions.
-  subsection_body_2: SendTemps also lets you set custom alerts for your home
+  subsection_body_2: Climbable also lets you set custom alerts for your home
     crags, and highlights rare conditions windows on the days when everything
     lines up just right. Multi-day trip planning makes destination climbing
     easy, letting you plan around weather windows to maximise quality time on
     rock.
   compare_generic_label: Generic weather app
   compare_generic_image: /images/phones/generic-weather-app.jpg
-  compare_sendtemps_label: SendTemps
+  compare_sendtemps_label: Climbable
   compare_sendtemps_image: /images/phones/sendtemps-crag-detail.jpg
-  body_1: Generic weather apps give you temperature and rain forecasts. SendTemps
+  body_1: Generic weather apps give you temperature and rain forecasts. Climbable
     considers all the other elements that impact how the rock actually feels –
     wall aspect, relative humidity, wind strength and direction, rock type,
     drying time, cloud cover, and sun position.
@@ -49,7 +49,7 @@ how_it_works:
     - title: Plan the trip
       body: Best day this week, or the best combined days for a longer trip.
   feature_heading: Multi-day trip planning
-  feature_body_1: Heading away for a long weekend? SendTemps scores the whole
+  feature_body_1: Heading away for a long weekend? Climbable scores the whole
     trip, not just today. Pick a destination and a date range, and it ranks
     every day of your stay, surfaces the best wall for each day, and calls out
     rare multi-day windows when conditions line up back-to-back.
@@ -59,7 +59,7 @@ how_it_works:
 scores:
   tag: What it scores
   heading: What It Actually Scores
-  intro: Every SendTemps rank is built from the same conditions climbers actually
+  intro: Every Climbable rank is built from the same conditions climbers actually
     check for – modelled hour by hour, not just a daily average.
   cards:
     - title: Sun and shade on the wall
@@ -107,7 +107,7 @@ coverage:
       body: 10 destinations including Kalbarri regional flagships
 pricing:
   tag: Free vs Pro
-  heading: SendTemps Free vs SendTemps Pro
+  heading: Climbable Free vs Climbable Pro
   free_title: Free features
   free_features:
     - "**2 day forecast window** – today and tomorrow's conditions"
@@ -131,5 +131,5 @@ footer_cta:
   cta_secondary_label: Suggest a crag or get in touch
 footer:
   tagline: Friction forecasts for Australian climbers.
-  copyright: © 2026 SendTemps
+  copyright: © 2026 Climbable
   data_credit: Weather data via Open-Meteo

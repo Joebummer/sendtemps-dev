@@ -7,7 +7,7 @@
   <script>
     // Legacy deep-link redirect: before the app moved to /webapp/, shared
     // links and the sitemap pointed crag/region params at the root URL
-    // (e.g. sendtemps.app/?crag=arap-main, sendtemps.app/?region=VIC).
+    // (e.g. climbable.app/?crag=arap-main, climbable.app/?region=VIC).
     // Forward those straight into the app with the same query string so
     // old bookmarks, shared links and installed PWA shortcuts keep working.
     (function () {
@@ -21,20 +21,20 @@
   <title>{{ seo.title }}</title>
   <meta name="description" content="{{ seo.description }}" />
   <meta name="robots" content="index, follow" />
-  <link rel="canonical" href="https://sendtemps.app{{ page.url }}" />
+  <link rel="canonical" href="https://climbable.app{{ page.url }}" />
 
   <meta property="og:title" content="{{ seo.title }}" />
   <meta property="og:description" content="{{ seo.description }}" />
-  <meta property="og:image" content="https://sendtemps.app/og-image.png" />
+  <meta property="og:image" content="https://climbable.app/og-image.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="https://sendtemps.app{{ page.url }}" />
+  <meta property="og:url" content="https://climbable.app{{ page.url }}" />
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="SendTemps" />
+  <meta property="og:site_name" content="Climbable" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="{{ seo.title }}" />
   <meta name="twitter:description" content="{{ seo.description }}" />
-  <meta name="twitter:image" content="https://sendtemps.app/og-image.png" />
+  <meta name="twitter:image" content="https://climbable.app/og-image.png" />
 
   <link rel="preconnect" href="https://api.fontshare.com" />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />

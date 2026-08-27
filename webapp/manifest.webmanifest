@@ -1,9 +1,9 @@
 {
-  "name": "SendTemps – Friction forecasts for Australian climbers",
-  "short_name": "SendTemps",
+  "name": "Climbable – Friction forecasts for Australian climbers",
+  "short_name": "Climbable",
   "description": "Climbing conditions forecast across Australia – score and rank crags by weather",
-  "start_url": "https://sendtemps.app/webapp/",
-  "scope": "https://sendtemps.app/webapp/",
+  "start_url": "https://climbable.app/webapp/",
+  "scope": "https://climbable.app/webapp/",
   "display": "standalone",
   "background_color": "#2d5a27",
   "theme_color": "#2d5a27",

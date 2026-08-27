@@ -1,5 +1,5 @@
 /**
- * SendTemps API Worker
+ * Climbable API Worker (formerly SendTemps API Worker)
  * - GET /forecast/scored — full server-side scoring pipeline (fetchAllForecasts +
  *     rankByDay + rankWeekendTrip from lib/forecast.js, ported verbatim from the
  *     web app). Single source of truth for scoring — used by the iOS app and,
@@ -504,6 +504,16 @@ async function handleScoredForecast(request, url, corsHeaders, ctx) {
 
 // ─── Request handler ──────────────────────────────────────────────────────────
 
+// Both the legacy and current marketing-site/webapp origins are allowed
+// during the SendTemps → Climbable domain transition. Remove
+// 'https://sendtemps.app' once sendtemps.app is fully retired.
+const ALLOWED_ORIGINS = ['https://climbable.app', 'https://sendtemps.app'];
+
+function resolveCorsOrigin(request) {
+  const origin = request.headers.get('Origin');
+  return ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+}
+
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
   const { pathname } = url;
@@ -512,7 +522,7 @@ async function handleRequest(request, env, ctx) {
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       headers: {
-        'Access-Control-Allow-Origin': 'https://sendtemps.app',
+        'Access-Control-Allow-Origin': resolveCorsOrigin(request),
         'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
       }
@@ -520,7 +530,7 @@ async function handleRequest(request, env, ctx) {
   }
 
   const corsHeaders = {
-    'Access-Control-Allow-Origin': 'https://sendtemps.app',
+    'Access-Control-Allow-Origin': resolveCorsOrigin(request),
     'Content-Type': 'application/json',
   };
 
@@ -590,8 +600,8 @@ async function handleRequest(request, env, ctx) {
       const title = hits.length === 1
         ? `${hits[0].name} is looking good today`
         : `${hits.length} of your pinned crags are looking good today`;
-      const body = hits.map(r => `${r.name} — ${r.score}/100`).join('\n') + '\n\nCheck the full forecast at sendtemps.app';
-      const payload = JSON.stringify({ title, body, url: 'https://sendtemps.app/' });
+      const body = hits.map(r => `${r.name} — ${r.score}/100`).join('\n') + '\n\nCheck the full forecast at climbable.app';
+      const payload = JSON.stringify({ title, body, url: 'https://climbable.app/' });
       const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
       await sendWebPush(pushSub, payload, env);
     }
@@ -629,7 +639,7 @@ async function handleRequest(request, env, ctx) {
     if (!sub) return new Response(JSON.stringify({ error: 'sub not found' }), { headers: corsHeaders });
     try {
       const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
-      const payload = JSON.stringify({ title: 'Debug test', body: 'Push debug', url: 'https://sendtemps.app/' });
+      const payload = JSON.stringify({ title: 'Debug test', body: 'Push debug', url: 'https://climbable.app/' });
       const res = await sendWebPush(pushSub, payload, env);
       const body = await res.text();
       return new Response(JSON.stringify({ status: res.status, body, vapid_subject: env.VAPID_SUBJECT || 'MISSING' }), { headers: corsHeaders });
@@ -758,8 +768,8 @@ async function handleCron(env) {
   const windows = await checkRareWindows();
   if (windows.length > 0) {
     const title = '✦ Rare window in Victoria';
-    const body = windows.join('\n') + '\n\nCheck sendtemps.app for the full forecast.';
-    const payload = JSON.stringify({ title, body, url: 'https://sendtemps.app/' });
+    const body = windows.join('\n') + '\n\nCheck climbable.app for the full forecast.';
+    const payload = JSON.stringify({ title, body, url: 'https://climbable.app/' });
     const vicSubs = subscriptions.filter(s => s.state === 'VIC' || !s.state);
     for (const sub of vicSubs) {
       const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
@@ -793,8 +803,8 @@ async function handleCron(env) {
     const title = hits.length === 1
       ? `${hits[0].name} is looking good today`
       : `${hits.length} of your pinned crags are looking good today`;
-    const body = hits.map(r => `${r.name} — ${r.score}/100`).join('\n') + '\n\nCheck the full forecast at sendtemps.app';
-    const payload = JSON.stringify({ title, body, url: 'https://sendtemps.app/' });
+    const body = hits.map(r => `${r.name} — ${r.score}/100`).join('\n') + '\n\nCheck the full forecast at climbable.app';
+    const payload = JSON.stringify({ title, body, url: 'https://climbable.app/' });
     const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
     try {
       await sendWebPush(pushSub, payload, env);

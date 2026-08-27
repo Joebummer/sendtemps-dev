@@ -5,9 +5,10 @@ seo:
     Freycinet and more.
 hero:
   eyebrow: Climbable
-  title: Real-time Friction Forecasts for Australian Climbers
-  subtitle: Climbable gives you an at-a-glance ranking of Australian crag
-    conditions, so you can find the best climbing destination and start sending.
+  title: Real-time Friction Forecasts
+  subtitle: Built for Australian climbers, Climbable gives you an at-a-glance
+    ranking of crag conditions, so you can find the best climbing destination
+    and start sending.
   cta_primary_label: Find your forecast
   cta_secondary_label: See coverage
   proof_points:
@@ -54,7 +55,7 @@ how_it_works:
     every day of your stay, surfaces the best wall for each day, and calls out
     rare multi-day windows when conditions line up back-to-back.
   feature_body_2: Every sub-crag at the destination is broken out separately, so
-    you can see exactly where to climb on the day the main area is marginal.
+    you can see exactly where to climb when the margins make a difference.
   feature_image: /images/uploads/screenshot-c.png
 scores:
   tag: What it scores
@@ -110,19 +111,19 @@ pricing:
   heading: Climbable Free vs Climbable Pro
   free_title: Free features
   free_features:
-    - "**2 day forecast window** – today and tomorrow's conditions"
-    - "**Full daily crag score** – sun/shade, dryness, rain windows, humidity,
+    - "**2 day forecast window** – Today and tomorrow's conditions"
+    - "**Full daily crag score** – Sun/shade, dryness, rain windows, humidity,
       wind"
-    - "**Parent crag view** – score and reasons for larger destination crags"
-  pro_title: Pro features
+    - "**Parent crag view** – Score and reasons for larger destination crags"
+  pro_title: Pro features – $7.99 per month
   pro_features:
-    - "**Full 7-day rolling forecast window** – every day unlocked, not just
+    - "**Full 7-day rolling forecast window** – Every day unlocked, not just
       today/tomorrow"
-    - "**Full sub-crag breakdown** – see individual walls/sectors under a
+    - "**Full sub-crag breakdown** – See individual walls/sectors under a
       destination crag, with the best-scoring one automatically surfaced"
-    - "**Multi-day and weekend trip planning** – at-a-glance “Weekend away” pick
+    - "**Multi-day and weekend trip planning** – At-a-glance “Weekend away” pick
       and full destination-based trip scoring section"
-    - "**Push notifications** – rare-window and favourite-crag threshold alerts
+    - "**Push notifications** – Rare-window and favourite-crag threshold alerts
       sent to your device"
   cta_label: Get Pro
 footer_cta:

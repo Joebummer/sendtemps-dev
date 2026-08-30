@@ -25,6 +25,14 @@ module.exports = function (eleventyConfig) {
     return md.renderInline(str);
   });
 
+  // Swap a .jpg/.png image path for its .webp sibling (used to build
+  // <picture> sources for the phone screenshot images without changing
+  // the content-model paths in content/*.yaml).
+  eleventyConfig.addFilter("toWebp", (str) => {
+    if (!str) return "";
+    return str.replace(/\.(jpe?g|png)$/i, ".webp");
+  });
+
   return {
     dir: {
       input: "src",

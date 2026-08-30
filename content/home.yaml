@@ -35,8 +35,8 @@ problem:
     drying time, cloud cover, and sun position.
   body_2: Find day-by-day forecasts or plan multi-day trips to more than 200
     Australian crags.
-  compare_sendtemps_image: /images/uploads/screenshot-c.png
-  compare_generic_image: /images/uploads/screenshot-a.png
+  compare_sendtemps_image: /images/uploads/screenshot-c.jpg
+  compare_generic_image: /images/uploads/screenshot-a.jpg
   tag: The problem
 how_it_works:
   tag: How it works
@@ -56,7 +56,7 @@ how_it_works:
     rare multi-day windows when conditions line up back-to-back.
   feature_body_2: Every sub-crag at the destination is broken out separately, so
     you can see exactly where to climb when the margins make a difference.
-  feature_image: /images/uploads/screenshot-d.png
+  feature_image: /images/uploads/screenshot-d.jpg
 scores:
   tag: What it scores
   heading: What it actually scores
@@ -87,7 +87,7 @@ scores:
     "Why this score?" on any crag to see each factor's contribution –
     temperature versus the ideal range, sweet-spot mismatch, sun-on-wall bonuses
     – all shown as plus or minus points from a baseline of 100.
-  feature_image: /images/uploads/screenshot-b.png
+  feature_image: /images/uploads/screenshot-b.jpg
 coverage:
   tag: Coverage
   heading: Coverage

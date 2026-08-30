@@ -46,13 +46,21 @@ eleventyComputed:
         <div class="phone-compare-item">
           <div class="phone-compare-label">{{ p.compare_generic_label }}</div>
           <div class="screenshot-frame">
-            <img src="{{ p.compare_generic_image | default('/images/phones/generic-weather-app.jpg') }}" alt="A generic weather app showing only a basic temperature and rain forecast for Halls Gap, VIC, with no climbing-specific detail" loading="lazy">
+            {% set generic_src = p.compare_generic_image | default('/images/phones/generic-weather-app.jpg') %}
+            <picture>
+              <source srcset="{{ generic_src | toWebp }}" type="image/webp">
+              <img src="{{ generic_src }}" width="640" height="1308" alt="A generic weather app showing only a basic temperature and rain forecast for Halls Gap, VIC, with no climbing-specific detail" loading="lazy" decoding="async">
+            </picture>
           </div>
         </div>
         <div class="phone-compare-item">
           <div class="phone-compare-label is-brand">{{ p.compare_sendtemps_label }}</div>
           <div class="screenshot-frame">
-            <img src="{{ p.compare_sendtemps_image | default('/images/phones/sendtemps-crag-detail.jpg') }}" alt="Climbable showing a detailed climbing-specific forecast for the Grampians, including a daily conditions score, rock dryness, wind, humidity, cloud cover, and hour-by-hour breakdown" loading="lazy">
+            {% set crag_src = p.compare_sendtemps_image | default('/images/phones/sendtemps-crag-detail.jpg') %}
+            <picture>
+              <source srcset="{{ crag_src | toWebp }}" type="image/webp">
+              <img src="{{ crag_src }}" width="640" height="1308" alt="Climbable showing a detailed climbing-specific forecast for the Grampians, including a daily conditions score, rock dryness, wind, humidity, cloud cover, and hour-by-hour breakdown" loading="lazy" decoding="async">
+            </picture>
           </div>
         </div>
       </div>
@@ -100,7 +108,11 @@ eleventyComputed:
       </div>
       <div class="feature-phone-grid-frame">
         <div class="screenshot-frame">
-          <img src="{{ hiw.feature_image | default('/images/phones/sendtemps-trip-planning.jpg') }}" alt="Climbable multi-day trip planning screen for Mt Buffalo showing a rare-window trip score of 91, a Friday-to-Monday outlook with best wall per day, and a sub-crag breakdown with individual scores" loading="lazy">
+          {% set trip_src = hiw.feature_image | default('/images/phones/sendtemps-trip-planning.jpg') %}
+          <picture>
+            <source srcset="{{ trip_src | toWebp }}" type="image/webp">
+            <img src="{{ trip_src }}" width="640" height="1308" alt="Climbable multi-day trip planning screen for Mt Buffalo showing a rare-window trip score of 91, a Friday-to-Monday outlook with best wall per day, and a sub-crag breakdown with individual scores" loading="lazy" decoding="async">
+          </picture>
         </div>
       </div>
     </div>
@@ -137,7 +149,11 @@ eleventyComputed:
       </div>
       <div class="feature-phone-grid-frame">
         <div class="screenshot-frame">
-          <img src="{{ sc.feature_image | default('/images/phones/sendtemps-score-breakdown.jpg') }}" alt="Climbable score breakdown for Cape Raoul showing an 85/100 day score with a Why this score panel listing temperature, sweet spot mismatch, and sun on wall factors as plus or minus points, plus crag notes and aspect tags" loading="lazy">
+          {% set score_src = sc.feature_image | default('/images/phones/sendtemps-score-breakdown.jpg') %}
+          <picture>
+            <source srcset="{{ score_src | toWebp }}" type="image/webp">
+            <img src="{{ score_src }}" width="640" height="1308" alt="Climbable score breakdown for Cape Raoul showing an 85/100 day score with a Why this score panel listing temperature, sweet spot mismatch, and sun on wall factors as plus or minus points, plus crag notes and aspect tags" loading="lazy" decoding="async">
+          </picture>
         </div>
       </div>
     </div>

@@ -23,7 +23,7 @@ Climbable is free to download and use, with the following features available at 
 
 **Climbable Pro** is an optional auto-renewing subscription that unlocks:
 
-- Full 7-day hourly outlook (the free tier shows today and tomorrow only)
+- Full 10-day hourly outlook (the free tier shows today and tomorrow only)
 - Sub-crag breakdowns — see which wall or sector is best on a given day
 - Weekend Away trip planning — compare the best destination across your whole trip
 - Alerts for your favourite crags when conditions turn good
@@ -32,8 +32,8 @@ Climbable is free to download and use, with the following features available at 
 
 Climbable Pro is offered as:
 
-- **Monthly** — USD $5.99 per month
-- **Annual** — USD $35 per year (approx. 51% savings versus paying monthly)
+- **Monthly** — USD $4.99 per month
+- **Annual** — USD $35 per year (approx. 42% savings versus paying monthly)
 
 Prices are set in US dollars and may vary by region in accordance with Apple's pricing tiers; the exact price for your region and currency is always shown on the purchase screen before you buy.
 

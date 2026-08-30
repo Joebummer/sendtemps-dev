@@ -117,10 +117,10 @@ pricing:
     - "**Parent crag view** – Score and reasons for larger destination crags"
   pro_title: Pro features
   pro_price_annual: "$35 per year"
-  pro_price_monthly: "$5.99 per month"
-  pro_price_note: Save 51% with annual
+  pro_price_monthly: "$4.99 per month"
+  pro_price_note: Save 42% with annual
   pro_features:
-    - "**Full 7-day rolling forecast window** – Every day unlocked, not just
+    - "**Full 10-day rolling forecast window** – Every day unlocked, not just
       today/tomorrow"
     - "**Full sub-crag breakdown** – See individual walls/sectors under a
       destination crag, with the best-scoring one automatically surfaced"

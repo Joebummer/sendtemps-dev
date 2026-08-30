@@ -82,7 +82,7 @@ async function redeemCodeFromUrl() {
 }
 
 // Free tier sees today + tomorrow only; Pro unlocks the full rolling window
-// (currently 7 days, see weekDates() in forecast.js). Locked tabs stay
+// (currently 10 days, see weekDates() in forecast.js). Locked tabs stay
 // visible but dimmed so free users can see there's more forecast to unlock,
 // rather than the days just disappearing.
 const FREE_FORECAST_DAYS = 2;
@@ -2728,7 +2728,7 @@ const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 min auto-refresh while open
 const MIN_FOCUS_REFRESH_MS = 2 * 60 * 1000; // don't refetch on every focus; throttle to 2 min
 
 // Return the trip dates array from state.tripStart to state.tripEnd,
-// filtered to dates within the known 7-day forecast window (state.dates).
+// filtered to dates within the known 10-day forecast window (state.dates).
 function activeTripDates() {
   const allDates = state.dates && state.dates.length ? state.dates : weekDates();
   const start = state.tripStart;

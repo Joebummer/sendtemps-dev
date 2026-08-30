@@ -63,7 +63,7 @@ export async function fetchAllForecasts(region = 'ALL') {
       'weathercode',
     ].join(','),
     timezone: 'Australia/Melbourne',
-    forecast_days: '8',
+    forecast_days: '10',
     past_days: '4',
   });
 
@@ -91,7 +91,7 @@ export async function fetchAllForecasts(region = 'ALL') {
     const f = list[i];
     if (!f) return;
     // Compute hourly rock-dryness series for the whole hourly window.
-    // This consumes past_days=4 of recent rain history plus 8 forecast days.
+    // This consumes past_days=4 of recent rain history plus 10 forecast days.
     const drynessSeries = computeDrynessSeries(crag, f.hourly);
     // Current dryness = the value at the hour closest to "now".
     const nowDryness = currentDryness(f.hourly, drynessSeries);
@@ -2070,11 +2070,11 @@ function todayInMelbourne(now = new Date()) {
   return new Date(fmt.format(now) + 'T00:00:00');
 }
 
-// Returns 7 dates: today + next 6 days, as YYYY-MM-DD strings.
+// Returns 10 dates: today + next 9 days, as YYYY-MM-DD strings.
 export function weekDates(now = new Date()) {
   const today = todayInMelbourne(now);
   const dates = [];
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 10; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     const yyyy = d.getFullYear();

@@ -2,15 +2,14 @@ name = "sendtemps-redirect"
 main = "src/index.js"
 compatibility_date = "2026-07-19"
 
-# Bound directly to sendtemps.app via a Worker Route. This runs ahead of
-# Cloudflare Pages / Bulk Redirects for this host, so it is the single
-# source of truth for the sendtemps.app -> climbable.app redirect. Does NOT
-# touch api.sendtemps.app (owned by sendtemps-api).
-#
-# www.sendtemps.app has no DNS record at all (confirmed via dig, 30 Aug
-# 2026), so no route is added for it here -- there is no traffic reaching
-# Cloudflare's edge on that host to intercept. Add one later only if a
-# DNS record for www.sendtemps.app is created.
+# Bound to sendtemps.app AND www.sendtemps.app via Worker Routes. Both
+# hosts now have a proxied placeholder A record (192.0.2.1) so Cloudflare's
+# edge has something to route -- the Worker intercepts before that dummy
+# origin is ever reached. Runs ahead of Cloudflare Pages / Bulk Redirects,
+# so it is the single source of truth for the sendtemps.app ->
+# climbable.app redirect. Does NOT touch api.sendtemps.app (owned by
+# sendtemps-api).
 routes = [
-  { pattern = "sendtemps.app/*", zone_name = "sendtemps.app" }
+  { pattern = "sendtemps.app/*", zone_name = "sendtemps.app" },
+  { pattern = "www.sendtemps.app/*", zone_name = "sendtemps.app" }
 ]

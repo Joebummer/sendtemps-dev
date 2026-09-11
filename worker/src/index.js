@@ -349,9 +349,7 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
   // viewing the same region filter on the same app version, so this key is
   // shared across all of them — one cache entry per region (VIC, TAS, …, or
   // ALL) rather than one giant shared entry for the whole country.
-  const cacheUrl = new URL(url.toString());
-  cacheUrl.searchParams.set('_cv', SCORED_CACHE_VERSION);
-  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
+  const cacheKey = new Request(url.toString(), { method: 'GET' });
 
   const cached = await cache.match(cacheKey);
   if (cached) {
@@ -461,7 +459,9 @@ async function handleScoredForecast(request, url, corsHeaders, ctx) {
   // itself is deterministic for a given region/tripRange within the same
   // ~15 min window (weekDates()/weekendDates() are computed fresh each call
   // but only change once a day).
-  const cacheKey = new Request(url.toString(), { method: 'GET' });
+  const cacheUrl = new URL(url.toString());
+  cacheUrl.searchParams.set('_cv', SCORED_CACHE_VERSION);
+  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
 
   const cached = await cache.match(cacheKey);
   if (cached) {

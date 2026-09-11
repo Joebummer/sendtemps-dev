@@ -721,6 +721,9 @@ const CRAG_COORDS = {
   'harcourt-dogrocks': { lat: -37.0089, lon: 144.3049, name: 'Dog Rocks' },
   'harcourt-wabbitwocks': { lat: -37.0023, lon: 144.3049, name: 'Wabbit Wocks' },
   'harcourt-scorpionrocks': { lat: -36.9977, lon: 144.3049, name: 'Scorpion Rocks' },
+  'beechworth-main':    { lat: -36.3570, lon: 146.6901, name: 'Beechworth / Mt Pilot' },
+  'wilsons-prom-main':  { lat: -39.0422, lon: 146.3254, name: 'Wilsons Promontory' },
+  'mt-kooyoora':        { lat: -36.5969, lon: 143.7049, name: 'Mt Kooyoora' },
   // ── TAS ──
   'ben-lomond-main':   { lat: -41.530,  lon: 147.650,  name: 'Ben Lomond' },
   'freycinet-main':    { lat: -42.2076, lon: 148.290,  name: 'Freycinet' },
@@ -728,6 +731,10 @@ const CRAG_COORDS = {
   'sand-river-main':   { lat: -42.515,  lon: 147.710,  name: 'Sand River' },
   'fortescue-main':    { lat: -43.1394, lon: 148.006,  name: 'Fortescue Bay' },
   'cape-raoul-main':   { lat: -43.2346, lon: 147.795,  name: 'Cape Raoul' },
+  'hillwood-main':      { lat: -41.2233, lon: 146.9528, name: 'Hillwood' },
+  'cataract-gorge-main': { lat: -41.4531, lon: 147.1049, name: 'Cataract Gorge' },
+  'fingal-valley-main': { lat: -41.6665, lon: 147.9886, name: 'Fingal Valley' },
+  'cloudy-bay-main':    { lat: -43.4774, lon: 147.2443, name: 'Cloudy Bay' },
   // ── NSW ──
   'nowra-main':        { lat: -34.8704, lon: 150.601,  name: 'Nowra' },
   'bluemtns-main':     { lat: -33.632,  lon: 150.317,  name: 'Blue Mountains' },
@@ -735,6 +742,10 @@ const CRAG_COORDS = {
   'bungonia-main':     { lat: -34.7961, lon: 149.950,  name: 'Bungonia Gorge' },
   'pointperp-main':    { lat: -35.094,  lon: 150.800,  name: 'Point Perpendicular' },
   'lindfield-main':    { lat: -33.7688, lon: 151.179,  name: 'Lindfield Rocks' },
+  'warrumbungles-main': { lat: -31.2829, lon: 149.0053, name: 'Warrumbungles' },
+  'wolgan-valley-main': { lat: -33.2212, lon: 150.2614, name: 'Wolgan Valley / Newnes' },
+  'gara-gorge-main':    { lat: -30.6017, lon: 151.8046, name: 'Gara Gorge' },
+  'westside-main':      { lat: -34.0411, lon: 150.8869, name: 'Westside' },
   // ── SA ──
   'morialta-main':     { lat: -34.9043, lon: 138.700,  name: 'Morialta' },
   'norton-summit':     { lat: -34.9229, lon: 138.717,  name: 'Norton Summit' },

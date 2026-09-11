@@ -192,6 +192,9 @@ export const CRAG_TO_PROFILE = {
   "pointperp-lighthouse": "point-perp",
   "pointperp-bayside": "point-perp",
   "lindfield-main": "lindfield",
+  "wolgan-valley-main": "bluemtns-blackheath",
+  "cloudy-bay-main": "fortescue-main",
+  "westside-main": "lindfield",
 };
 
 export const CLIMATE_PROFILES = {

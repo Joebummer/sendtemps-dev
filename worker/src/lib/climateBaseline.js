@@ -214,7 +214,7 @@ export const CRAG_TO_PROFILE = {
   "wolgan-coal-mines": "bluemtns-blackheath",
   "wolgan-petries-gully": "bluemtns-blackheath",
   "westside-boulder": "lindfield",
-  "westside-honeycomb": "lindfield",
+  "westside-delos-descent": "lindfield",
 };
 
 export const CLIMATE_PROFILES = {

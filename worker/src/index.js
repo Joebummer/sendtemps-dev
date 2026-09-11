@@ -349,7 +349,9 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
   // viewing the same region filter on the same app version, so this key is
   // shared across all of them — one cache entry per region (VIC, TAS, …, or
   // ALL) rather than one giant shared entry for the whole country.
-  const cacheKey = new Request(url.toString(), { method: 'GET' });
+  const cacheUrl = new URL(url.toString());
+  cacheUrl.searchParams.set('_cv', SCORED_CACHE_VERSION);
+  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
 
   const cached = await cache.match(cacheKey);
   if (cached) {
@@ -387,7 +389,10 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
 
 // ─── Scored forecast (server-side scoring pipeline) ──────────────────────────
 
-const SCORED_CACHE_TTL = 900; // 15 minutes — matches FORECAST_CACHE_TTL
+const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
+// Bump this when crag data or scoring output changes so a deploy cannot reuse
+// stale scored responses left in Cloudflare's Cache API by the previous build.
+const SCORED_CACHE_VERSION = '2026-09-11-1';
 
 // Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw
 // functions repeat the full crag object on every date's row (a crag with a

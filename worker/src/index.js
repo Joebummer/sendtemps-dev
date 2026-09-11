@@ -355,6 +355,9 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
   if (cached) {
     const res = new Response(cached.body, cached);
     for (const [k, v] of Object.entries(corsHeaders)) res.headers.set(k, v);
+    // Keep the 15-minute cache at Cloudflare, but make clients revalidate so
+    // regional payloads cannot remain stale on-device after a crag-data deploy.
+    res.headers.set('Cache-Control', 'no-store');
     res.headers.set('X-SendTemps-Cache', 'HIT');
     return res;
   }
@@ -486,7 +489,7 @@ async function handleScoredForecast(request, url, corsHeaders, ctx) {
     const weekendTrip = rankWeekendTrip(forecasts, tripDates);
 
     const body = JSON.stringify(normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip, forecasts));
-    const response = new Response(body, {
+    const edgeResponse = new Response(body, {
       status: 200,
       headers: {
         ...corsHeaders,
@@ -495,9 +498,17 @@ async function handleScoredForecast(request, url, corsHeaders, ctx) {
       },
     });
 
-    if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, response.clone()));
-    else await cache.put(cacheKey, response.clone());
+    if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, edgeResponse.clone()));
+    else await cache.put(cacheKey, edgeResponse.clone());
 
+    const response = new Response(body, {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        'Cache-Control': 'no-store',
+        'X-SendTemps-Cache': 'MISS',
+      },
+    });
     return response;
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message || 'scoring failed' }), {

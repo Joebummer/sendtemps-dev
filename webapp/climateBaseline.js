@@ -195,6 +195,16 @@ export const CRAG_TO_PROFILE = {
   "wolgan-valley-main": "bluemtns-blackheath",
   "cloudy-bay-main": "fortescue-main",
   "westside-main": "lindfield",
+  "cloudy-hidden-zawn": "fortescue-main",
+  "cloudy-aviary": "fortescue-main",
+  "cloudy-worlds-end": "fortescue-main",
+  "cloudy-shoreline": "fortescue-main",
+  "wolgan-coke-ovens": "bluemtns-blackheath",
+  "wolgan-old-baldy": "bluemtns-blackheath",
+  "wolgan-coal-mines": "bluemtns-blackheath",
+  "wolgan-petries-gully": "bluemtns-blackheath",
+  "westside-boulder": "lindfield",
+  "westside-honeycomb": "lindfield",
 };
 
 export const CLIMATE_PROFILES = {

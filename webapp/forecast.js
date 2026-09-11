@@ -1278,7 +1278,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // We short-circuit with score 0 and a clear reason so the card surfaces the closure
   // instead of a misleading conditions score.
   if (crag.closedAll) {
-    const label = crag.closureReason ? `closed — ${crag.closureReason}` : 'currently closed';
+    const label = crag.closureReason ? `closed – ${crag.closureReason}` : 'currently closed';
     return {
       score: 0,
       reasons: [label],
@@ -1288,7 +1288,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   if (Array.isArray(crag.closedMonths) && crag.closedMonths.length) {
     const month = new Date(day.date + 'T12:00:00').getMonth() + 1; // 1–12
     if (crag.closedMonths.includes(month)) {
-      const label = crag.closureReason ? `closed — ${crag.closureReason}` : 'closed (seasonal)';
+      const label = crag.closureReason ? `closed – ${crag.closureReason}` : 'closed (seasonal)';
       return {
         score: 0,
         reasons: [label],

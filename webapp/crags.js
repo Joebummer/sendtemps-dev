@@ -57,7 +57,7 @@ export const CRAGS = [
     lat: -37.6736,
     lon: 144.4322,
     elevation: 250,
-    aspect: 'E',
+    aspect: 'ENE',
     rockType: 'conglomerate',
     dryRating: 3,
     idealTemp: [8, 18],
@@ -67,7 +67,7 @@ export const CRAGS = [
     driveTime: '50min',
     trip: 'day',
     state: 'VIC',    notes: "What it lacks in quality it makes up for in proximity to Melbourne. Easy trad routes and harder bolted lines. Ideal in winter, a genuine sun trap. Climbs along the boardwalk and around Veni Vidi Vici get a lot of sun. Aspect of the walls mean they're often sheltered in light rain, dries fast in sun and wind.",
-    sunOnWall: 'Morning sun; shaded later in the day',
+    sunOnWall: 'Morning to early afternoon sun',
     bestIn: 'cool',
   },
   // — Cathedral Ranges sub-areas —

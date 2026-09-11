@@ -1773,6 +1773,10 @@ function renderCard(row, isTop, isWeekend) {
         ${todayStrip}
         ${tomorrowStrip}
         ${renderScoreBreakdown(dayContribs, score)}
+        ${crag.accessStatus ? `<div class="detail-section access-status">
+          <div class="section-label">Access status</div>
+          <p>${escapeHtml(crag.accessStatus)}</p>
+        </div>` : ''}
         <div class="detail-section">
           <div class="section-label">Crag notes</div>
           <p>${escapeHtml(crag.notes)}</p>

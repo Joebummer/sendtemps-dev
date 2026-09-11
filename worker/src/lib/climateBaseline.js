@@ -202,6 +202,9 @@ export const CRAG_TO_PROFILE = {
   "the-frontline": "lindfield",
   "the-hideaway": "lindfield",
   "junkyard-cave": "lindfield",
+  "wolgan-valley-main": "bluemtns-blackheath",
+  "cloudy-bay-main": "fortescue-main",
+  "westside-main": "lindfield",
 };
 
 export const CLIMATE_PROFILES = {

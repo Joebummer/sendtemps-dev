@@ -7,7 +7,7 @@ import {
   scoreBand,
   drynessBand,
 } from './forecast.js?v=70';
-import { CRAGS } from './crags.js?v=42';
+import { CRAGS } from './crags.js?v=43';
 
 const API_BASE = 'https://api.sendtemps.app';
 

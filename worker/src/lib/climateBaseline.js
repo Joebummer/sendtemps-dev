@@ -192,6 +192,16 @@ export const CRAG_TO_PROFILE = {
   "pointperp-lighthouse": "point-perp",
   "pointperp-bayside": "point-perp",
   "lindfield-main": "lindfield",
+  "sissy-crag": "lindfield",
+  "berowra": "lindfield",
+  "barrenjoey": "lindfield",
+  "narrabeen-slabs": "lindfield",
+  "wahroonga-rocks": "lindfield",
+  "tunks-park": "lindfield",
+  "queens-park": "lindfield",
+  "the-frontline": "lindfield",
+  "the-hideaway": "lindfield",
+  "junkyard-cave": "lindfield",
 };
 
 export const CLIMATE_PROFILES = {

@@ -655,7 +655,22 @@ export function sunPosition(date, lat, lon) {
 // Mapping from compass aspect code to the centre of the arc that faces it.
 // A wall with aspect 'N' faces north → azimuth 0°. 'NE' → 45°, 'E' → 90°, etc.
 const ASPECT_AZIMUTH = {
-  N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315,
+  N: 0,
+  NNE: 22.5,
+  NE: 45,
+  ENE: 67.5,
+  E: 90,
+  ESE: 112.5,
+  SE: 135,
+  SSE: 157.5,
+  S: 180,
+  SSW: 202.5,
+  SW: 225,
+  WSW: 247.5,
+  W: 270,
+  WNW: 292.5,
+  NW: 315,
+  NNW: 337.5,
 };
 
 // True when an aspect string maps to a concrete compass bearing we can do
@@ -1521,7 +1536,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   //   • no rain (rain is already penalised separately)
   //   • crag shade is not already 'all-day' (would be redundant)
   if (cloudMean != null && cloudMean > 70 && t < 16 &&
-      (crag.aspect === 'N' || crag.aspect === 'NE' || crag.aspect === 'NW') &&
+      ['NNW', 'N', 'NNE', 'NE', 'ENE', 'NW'].includes(crag.aspect) &&
       crag.shade !== 'all-day' && (day.precipProb ?? 0) < 50) {
     // Scale: 70–80% cloud → -4, 80–90% → -7, 90%+ → -10
     // Steeper on colder days (t < 8 = full effect, t 8–16 = 70% effect)
@@ -1581,7 +1596,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
 
   // — Per-crag heat cap (e.g. sun-bath aspects with no shade) —
   // Crags can set `heatCap: 22` to flag that they become genuinely hot above
-  // that threshold on clear days. Falcon's Lookout is the canonical case: N-aspect,
+  // that threshold on clear days. Falcon's Lookout is the canonical case: ENE aspect,
   // no shade, conglomerate that gets uncomfortable over 22°C with clear sky.
   // Uses the PEAK apparent temperature (not the mean) because even a single
   // baking hour on a sun-trap aspect is the limiting factor for the day.

@@ -57,7 +57,7 @@ export const CRAGS = [
     lat: -37.6736,
     lon: 144.4322,
     elevation: 250,
-    aspect: 'ENE',
+    aspect: 'NE',
     rockType: 'conglomerate',
     dryRating: 3,
     idealTemp: [8, 18],

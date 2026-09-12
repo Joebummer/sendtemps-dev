@@ -91,21 +91,21 @@ scores:
 coverage:
   tag: Coverage
   heading: Coverage
-  intro: 230+ individual crags across 6 states. Hover or tap a state for details.
+  intro: 70 destinations across 6 states. Hover or tap a state for details.
   list:
     - state: Victoria
-      body: 11 destinations including Mt Arapiles and the Grampians
+      body: 15 destinations including Mt Arapiles and the Grampians
     - state: New South Wales
-      body: 6 destinations including Blue Mountains and Nowra
+      body: 20 destinations including Blue Mountains and Nowra
     - state: Tasmania
-      body: 6 destinations including Freycinet, Mt Wellington, Ben Lomond and Sand
+      body: 10 destinations including Freycinet, Mt Wellington, Ben Lomond and Sand
         River
     - state: Queensland
       body: 5 destinations including Frog Buttress, Glasshouse Mountains and Coolum
     - state: South Australia
-      body: 6 destinations including Flinders Ranges
+      body: 7 destinations including Flinders Ranges
     - state: Western Australia
-      body: 10 destinations including Kalbarri regional flagships
+      body: 13 destinations including Kalbarri and Margaret River
 pricing:
   tag: Free vs Pro
   heading: Climbable Free vs Climbable Pro

@@ -393,7 +393,7 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-09-12-1';
+const SCORED_CACHE_VERSION = '2026-09-12-2';
 
 // Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw
 // functions repeat the full crag object on every date's row (a crag with a
@@ -721,6 +721,15 @@ async function getCragScoreToday(lat, lon) {
 // Crag ID → lat/lon map for favourite lookups.
 // IDs match crags.js exactly. Sub-crags inherit their parent's coords.
 const CRAG_COORDS = {
+  'gramps-tribute': { lat: -36.8949, lon: 142.3876, name: "Tribute Wall" },
+  'gramps-centurion-lower': { lat: -36.975, lon: 142.459, name: "Centurion Walls – Lower" },
+  'gramps-centurion-upper': { lat: -36.975, lon: 142.458, name: "Centurion Walls – Upper" },
+  'gramps-watchtower': { lat: -37.12202, lon: 142.52276, name: "The Watchtower" },
+  'gramps-trackside': { lat: -36.895741, lon: 142.384716, name: "Trackside Boulders" },
+  'gramps-andersens-west': { lat: -36.8909, lon: 142.3806, name: "Andersens West" },
+  'gramps-venus-baths': { lat: -37.13811, lon: 142.51449, name: "Venus Baths" },
+  'gramps-bad-moon': { lat: -36.8955, lon: 142.3882, name: "Bad Moon Rising Wall" },
+  'gramps-grey-green': { lat: -36.8942, lon: 142.3854, name: "Grey and Green Walls" },
   // ── VIC ──
   'arap-main':         { lat: -36.7556, lon: 141.8403, name: 'Mt Arapiles' },
   'gramps-main':       { lat: -37.1389, lon: 142.5217, name: 'Grampians' },

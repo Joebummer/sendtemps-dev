@@ -1,8 +1,8 @@
 // Open-Meteo forecast fetching + scoring
 // API: https://open-meteo.com/en/docs — free, no key, CORS-enabled
 
-import { CRAGS } from './crags.js?v=41';
-import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
+import { CRAGS } from './crags.js?v=44';
+import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js?v=44';
 
 // Routed through the Climbable Worker (not Open-Meteo directly) so every
 // client shares one edge-cached response instead of each device/network

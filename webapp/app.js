@@ -6,8 +6,8 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=70';
-import { CRAGS } from './crags.js?v=43';
+} from './forecast.js?v=71';
+import { CRAGS } from './crags.js?v=44';
 
 const API_BASE = 'https://api.sendtemps.app';
 

@@ -7,16 +7,16 @@
 //
 // Cache name is bumped per release so old shells get evicted on activate.
 
-const CACHE = 'climbable-v65-70';
+const CACHE = 'climbable-v65-71';
 
 // Static shell — paths are app-relative so this works under the
 // /climbable/ GitHub Pages prefix as well as a custom-domain root.
 const SHELL = [
   './',
   './index.html',
-  './app.js?v=65.70',
+  './app.js?v=65.71',
   './forecast.js?v=71',
-  './crags.js?v=44',
+  './crags.js?v=45',
   './climateBaseline.js?v=44',
   './style.css?v=65.25',
   './manifest.webmanifest',

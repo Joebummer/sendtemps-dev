@@ -80,7 +80,7 @@
         stateEl.textContent = name;
         listEl.innerHTML = '';
         if (count > 0) {
-          countEl.textContent = count + (count === 1 ? ' crag and sub-crag' : ' crags and sub-crags');
+          countEl.textContent = count + (count === 1 ? ' destination' : ' destinations');
           const crags = note ? note.split('|').filter(Boolean) : [];
           crags.forEach((crag) => {
             const li = document.createElement('li');

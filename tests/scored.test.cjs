@@ -75,5 +75,74 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ALL']) {
     assert.equal(second.headers.get('X-SendTemps-Cache'), 'HIT');
     assert.deepEqual(await second.json(), body);
     assert.equal(calls, 1);
+
+    // The unoptimised two-argument path remains our score-equivalence oracle.
+    // Compare every trip field and ordering, not just the aggregate score.
+    const baseline = await loadWorker(async url => Response.json(weatherFixture(url)));
+    const forecasts = await baseline.forecasts.fetchAllForecasts(region);
+    for (const query of [
+      '', '&tripStart=2026-09-18&tripEnd=2026-09-20',
+      '&tripEnd=2026-09-18&tripStart=2026-09-20',
+      '&tripStart=2026-09-15&tripEnd=2026-09-15',
+      '&tripStart=2026-09-13&tripEnd=2026-09-22',
+      '&tripStart=invalid&tripEnd=2026-09-20',
+    ]) {
+      const response = await harness.worker.fetch(new Request(`https://api.test/forecast/scored?region=${region.toLowerCase()}${query}&unused=ignored`), {}, harness.ctx);
+      assert.equal(response.headers.get('X-SendTemps-Cache'), 'HIT');
+      const actual = await response.json();
+      const expectedTrip = baseline.forecasts.rankWeekendTrip(forecasts, actual.tripDates)
+        .map(({ crag, ...rest }) => ({ cragId: crag.id, ...rest }));
+      assert.deepEqual(actual.weekendTrip, JSON.parse(JSON.stringify(expectedTrip)));
+      assert.deepEqual(actual.byDate, body.byDate);
+    }
+    assert.equal(calls, 1, 'trip changes must not download or score regional weather again');
+    assert.equal(harness.entries.size, 1, 'query variants must share the same regional cache key');
   });
 }
+
+test('invalid regions are rejected before cache or network access', async () => {
+  let calls = 0;
+  const harness = await loadWorker(async () => { calls++; throw new Error('unexpected network'); });
+  for (const region of ['INVALID', 'VIIC', ' VIC ', '__proto__']) {
+    const response = await harness.worker.fetch(new Request(`https://api.test/forecast/scored?region=${encodeURIComponent(region)}`), {}, harness.ctx);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'invalid region' });
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  }
+  assert.equal(calls, 0);
+  assert.equal(harness.entries.size, 0);
+});
+
+test('region separation, expiry and midnight rollover cannot reuse the wrong dataset', async () => {
+  let calls = 0;
+  const harness = await loadWorker(async url => { calls++; return Response.json(weatherFixture(url)); });
+  async function get(region) {
+    const response = await harness.worker.fetch(new Request(`https://api.test/forecast/scored?region=${region}`), {}, harness.ctx);
+    assert.equal(response.status, 200);
+    await harness.flush();
+    return response;
+  }
+  assert.equal((await get('NSW')).headers.get('X-SendTemps-Cache'), 'MISS');
+  assert.equal((await get('TAS')).headers.get('X-SendTemps-Cache'), 'MISS');
+  assert.equal(calls, 2);
+  harness.setNow('2026-09-13T02:14:59Z');
+  assert.equal((await get('NSW')).headers.get('X-SendTemps-Cache'), 'HIT');
+  harness.setNow('2026-09-13T02:15:00Z');
+  assert.equal((await get('NSW')).headers.get('X-SendTemps-Cache'), 'MISS');
+  assert.equal(calls, 3);
+  harness.setNow('2026-09-13T13:59:00Z'); // 23:59 Melbourne
+  await get('NSW');
+  harness.setNow('2026-09-13T14:01:00Z'); // next local day, still inside TTL
+  const next = await get('NSW');
+  assert.equal(next.headers.get('X-SendTemps-Cache'), 'MISS');
+  assert.equal((await next.json()).dates[0], '2026-09-14');
+  assert.equal(calls, 5);
+});
+
+test('failed weather fetches never populate the regional cache', async () => {
+  const harness = await loadWorker(async () => new Response('unavailable', { status: 503 }));
+  const response = await harness.worker.fetch(new Request('https://api.test/forecast/scored?region=NSW'), {}, harness.ctx);
+  assert.equal(response.status, 502);
+  await harness.flush();
+  assert.equal(harness.entries.size, 0);
+});

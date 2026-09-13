@@ -64,16 +64,16 @@ test('scored forecast: cache hit overrides stored headers and uses current CORS 
   const harness = await loadWorker();
   const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '../worker/src/index.js'), 'utf8');
   const version = source.match(/const SCORED_CACHE_VERSION = '([^']+)'/)[1];
-  const key = `https://api.test/forecast/scored?region=VIC&_cv=${version}`;
-  const payload = { region: 'VIC', dates: [], tripDates: [], crags: {}, byDate: {}, weekendTrip: [], today: {} };
-  harness.entries.set(key, Response.json(payload, {
+  const key = `https://api.test/_cache/scored-region?region=VIC&date=2026-09-13&_cv=${version}`;
+  const payload = { region: 'VIC', dates: ['2026-09-13'], tripDates: [], crags: {}, byDate: {}, weekendTrip: [], today: {} };
+  harness.entries.set(key, Response.json({ payload, cragOrder: [] }, {
     headers: { 'Cache-Control': 'public, max-age=900', 'Access-Control-Allow-Origin': 'https://climbable.app' },
   }));
   const response = await harness.worker.fetch(request('/forecast/scored?region=VIC', 'GET', undefined, 'https://sendtemps.app'), env, harness.ctx);
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
   assert.equal(response.headers.get('X-SendTemps-Cache'), 'HIT');
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'https://sendtemps.app');
-  assert.deepEqual(await response.json(), payload);
+  assert.deepEqual(await response.json(), { ...payload, tripDates: ['2026-09-13'] });
   assert.equal(harness.entries.get(key).headers.get('Cache-Control'), 'public, max-age=900');
 });
 

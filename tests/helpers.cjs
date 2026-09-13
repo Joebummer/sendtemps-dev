@@ -6,6 +6,7 @@ const path = require('node:path');
 // Every outbound request is intercepted; unexpected network calls fail tests.
 async function loadWorker(fetchMock, now = '2026-09-13T02:00:00Z') {
   const entries = new Map();
+  const expires = new Map();
   const pending = [];
   const context = vm.createContext({
     Date: class extends Date {
@@ -16,8 +17,15 @@ async function loadWorker(fetchMock, now = '2026-09-13T02:00:00Z') {
     console, setTimeout, clearTimeout,
     fetch: fetchMock || (() => { throw new Error('Unexpected network request'); }),
     caches: { default: {
-      match: async key => entries.get(key.url)?.clone(),
-      put: async (key, response) => { entries.set(key.url, response.clone()); },
+      match: async key => {
+        if (expires.has(key.url) && expires.get(key.url) <= new Date(now).getTime()) return undefined;
+        return entries.get(key.url)?.clone();
+      },
+      put: async (key, response) => {
+        entries.set(key.url, response.clone());
+        const ttl = Number(response.headers.get('Cache-Control')?.match(/max-age=(\d+)/)?.[1] || 0);
+        expires.set(key.url, new Date(now).getTime() + ttl * 1000);
+      },
     } },
   });
   const modules = new Map();
@@ -33,6 +41,7 @@ async function loadWorker(fetchMock, now = '2026-09-13T02:00:00Z') {
   await worker.evaluate();
   return {
     worker: worker.namespace.default, entries,
+    setNow: value => { now = value; },
     ctx: { waitUntil: promise => pending.push(promise) },
     flush: () => Promise.all(pending.splice(0)),
     forecasts: modules.get(path.join(__dirname, '..', 'worker/src/lib/forecast.js')).namespace,

@@ -13,6 +13,7 @@
  */
 
 import { fetchAllForecasts, rankByDay, rankWeekendTrip, weekDates, weekendDates } from './lib/forecast.js';
+import { CRAGS } from './lib/crags.js';
 
 // ─── VAPID helpers (Web Push without npm) ────────────────────────────────────
 
@@ -420,7 +421,8 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-09-13-cache-write-validation';
+const SCORED_CACHE_VERSION = '2026-09-13-regional-score-reuse';
+const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 
 // Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw
 // functions repeat the full crag object on every date's row (a crag with a
@@ -480,31 +482,48 @@ function normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip, 
 
 async function handleScoredForecast(request, url, corsHeaders, ctx) {
   const region = (url.searchParams.get('region') || 'ALL').toUpperCase();
+  if (!SCORED_REGIONS.has(region)) {
+    return new Response(JSON.stringify({ error: 'invalid region' }), {
+      status: 400, headers: { ...corsHeaders, 'Cache-Control': 'no-store' },
+    });
+  }
   const tripStart = url.searchParams.get('tripStart') || null;
   const tripEnd = url.searchParams.get('tripEnd') || null;
 
   const cache = caches.default;
-  // Cache key includes region + trip range so different trip windows don't
-  // collide, but excludes anything time-sensitive beyond that — the pipeline
-  // itself is deterministic for a given region/tripRange within the same
-  // ~15 min window (weekDates()/weekendDates() are computed fresh each call
-  // but only change once a day).
-  const cacheUrl = new URL(url.toString());
+  const dates = weekDates();
+  // One regional dataset per edge location, independent of trip dates and
+  // irrelevant query parameters. The local date prevents reuse across midnight.
+  // This internal key is not a public route and never contains CORS headers.
+  const cacheUrl = new URL('/_cache/scored-region', url.origin);
+  cacheUrl.searchParams.set('region', region);
+  cacheUrl.searchParams.set('date', dates[0]);
   cacheUrl.searchParams.set('_cv', SCORED_CACHE_VERSION);
   const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
 
-  const cached = await cache.match(cacheKey);
-  if (cached) {
-    const res = new Response(cached.body, cached);
-    for (const [k, v] of Object.entries(corsHeaders)) res.headers.set(k, v);
-    res.headers.set('Cache-Control', 'no-store');
-    res.headers.set('X-SendTemps-Cache', 'HIT');
-    return res;
-  }
-
   try {
-    const forecasts = await fetchAllForecasts(region);
-    const dates = weekDates();
+    const cached = await cache.match(cacheKey);
+    let regional;
+    if (cached) {
+      regional = await cached.json();
+    } else {
+      const forecasts = await fetchAllForecasts(region);
+      const ranked = rankByDay(forecasts, dates);
+      regional = {
+        payload: normalizeScoredResponse(region, dates, [], ranked, [], forecasts),
+        // Preserve stable trip-score ties in the original forecast order.
+        cragOrder: Object.keys(forecasts),
+      };
+      const edgeResponse = new Response(JSON.stringify(regional), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': `public, max-age=${SCORED_CACHE_TTL}`,
+        },
+      });
+      if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, edgeResponse));
+      else await cache.put(cacheKey, edgeResponse);
+    }
+    const { payload, cragOrder } = regional;
     const tripDates = (() => {
       if (!tripStart || !tripEnd) return weekendDates().slice(0, 7);
       const idxStart = dates.indexOf(tripStart);
@@ -513,28 +532,21 @@ async function handleScoredForecast(request, url, corsHeaders, ctx) {
       return dates.slice(Math.min(idxStart, idxEnd), Math.max(idxStart, idxEnd) + 1);
     })();
 
-    const ranked = rankByDay(forecasts, dates);
-    const weekendTrip = rankWeekendTrip(forecasts, tripDates);
-
-    const body = JSON.stringify(normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip, forecasts));
-    const edgeResponse = new Response(body, {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        'Cache-Control': `public, max-age=${SCORED_CACHE_TTL}`,
-        'X-SendTemps-Cache': 'MISS',
-      },
-    });
-
-    if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, edgeResponse.clone()));
-    else await cache.put(cacheKey, edgeResponse.clone());
+    // Only lightweight trip aggregation is repeated. Raw hourly weather and
+    // scoring intermediates are not duplicated in the regional cache.
+    const tripForecasts = Object.fromEntries(cragOrder
+      .filter(id => payload.crags[id])
+      .map(id => [id, { crag: payload.crags[id], ...payload.today[id] }]));
+    const weekendTrip = rankWeekendTrip(tripForecasts, tripDates, payload.byDate)
+      .map(({ crag, ...entry }) => ({ cragId: crag.id, ...entry }));
+    const body = JSON.stringify({ ...payload, tripDates, weekendTrip });
 
     const response = new Response(body, {
       status: 200,
       headers: {
         ...corsHeaders,
         'Cache-Control': 'no-store',
-        'X-SendTemps-Cache': 'MISS',
+        'X-SendTemps-Cache': cached ? 'HIT' : 'MISS',
       },
     });
     return response;

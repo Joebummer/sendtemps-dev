@@ -670,3 +670,10 @@
     flex: none;
   }
 }
+
+/* A readable, tappable ACT entry beside the small territory outline. */
+.map-act-leader { fill: none; stroke: var(--color-primary); stroke-width: 0.6; pointer-events: none; }
+.map-act-callout rect { fill: var(--color-bg); stroke: var(--color-primary); }
+.map-act-callout text { fill: var(--color-primary); stroke: none; }
+.map-act-label { font-size: 5px; font-weight: 700; }
+.map-act-count { font-size: 3.4px; }

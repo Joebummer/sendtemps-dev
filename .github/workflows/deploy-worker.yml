@@ -5,9 +5,39 @@ on:
     branches: [main]
     paths:
       - 'worker/**'
+      - 'webapp/crags.js'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'package.json'
+      - '.github/workflows/deploy-worker.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - 'webapp/crags.js'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'package.json'
+      - '.github/workflows/deploy-worker.yml'
+
+permissions:
+  contents: read
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Validate crags and API
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # Tests and validation use Node built-ins only; no install or secrets needed.
+      - run: npm run check
+
   deploy:
+    needs: validate
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     name: Deploy sendtemps-api Worker
     steps:

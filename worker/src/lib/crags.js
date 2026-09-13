@@ -309,6 +309,7 @@ export const CRAGS = [
     area: 'You Yangs',
     lat: -37.955437,
     lon: 144.412521,
+    elevation: 112, // Open-Meteo / Copernicus GLO-90 terrain estimate at stored coordinates
     aspect: 'mixed',
     rockType: 'granite',
     dryRating: 5,
@@ -331,6 +332,7 @@ export const CRAGS = [
     area: 'You Yangs',
     lat: -37.9489,
     lon: 144.4297,
+    elevation: 139, // Open-Meteo / Copernicus GLO-90 terrain estimate at stored coordinates
     aspect: 'SW',
     rockType: 'granite',
     dryRating: 5,
@@ -351,6 +353,7 @@ export const CRAGS = [
     area: 'You Yangs',
     lat: -37.943252,
     lon: 144.439282,
+    elevation: 138, // Open-Meteo / Copernicus GLO-90 terrain estimate at stored coordinates
     aspect: 'mixed',
     rockType: 'granite',
     dryRating: 5,
@@ -372,6 +375,7 @@ export const CRAGS = [
     area: 'You Yangs',
     lat: -37.948401,
     lon: 144.426315,
+    elevation: 229, // Open-Meteo / Copernicus GLO-90 terrain estimate at stored coordinates
     aspect: 'E',
     rockType: 'granite',
     dryRating: 4,

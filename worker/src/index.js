@@ -235,6 +235,31 @@ async function getAllSubscriptions(env) {
   return res.json();
 }
 
+// Only acknowledge a write after Supabase confirms it. Never expose upstream
+// error bodies (which can contain database details) to API clients.
+async function handleDatabaseWrite(request, corsHeaders, write) {
+  const headers = { ...corsHeaders, 'Cache-Control': 'no-store' };
+  let body;
+  try {
+    body = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error();
+  } catch {
+    return new Response(JSON.stringify({ ok: false, error: 'invalid JSON object' }), {
+      status: 400, headers,
+    });
+  }
+
+  try {
+    const result = await write(body);
+    if (!result.ok) throw new Error('database write failed');
+    return new Response(JSON.stringify({ ok: true }), { headers });
+  } catch {
+    return new Response(JSON.stringify({ ok: false, error: 'database write failed' }), {
+      status: 502, headers,
+    });
+  }
+}
+
 // ─── Rare window detection ────────────────────────────────────────────────────
 
 const VIC_CRAGS = [
@@ -385,7 +410,9 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
   if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, response.clone()));
   else await cache.put(cacheKey, response.clone());
 
-  return response;
+  const clientResponse = new Response(response.body, response);
+  clientResponse.headers.set('Cache-Control', 'no-store');
+  return clientResponse;
 }
 
 // ─── Scored forecast (server-side scoring pipeline) ──────────────────────────
@@ -393,7 +420,7 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-09-13-elevations';
+const SCORED_CACHE_VERSION = '2026-09-13-cache-write-validation';
 
 // Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw
 // functions repeat the full crag object on every date's row (a crag with a
@@ -470,6 +497,7 @@ async function handleScoredForecast(request, url, corsHeaders, ctx) {
   if (cached) {
     const res = new Response(cached.body, cached);
     for (const [k, v] of Object.entries(corsHeaders)) res.headers.set(k, v);
+    res.headers.set('Cache-Control', 'no-store');
     res.headers.set('X-SendTemps-Cache', 'HIT');
     return res;
   }
@@ -580,15 +608,13 @@ async function handleRequest(request, env, ctx) {
   }
 
   if (pathname === '/subscribe' && request.method === 'POST') {
-    const { subscription, state, favourites, thresholds } = await request.json();
-    await saveSubscription(env, subscription, state, favourites, thresholds);
-    return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+    return handleDatabaseWrite(request, corsHeaders, ({ subscription, state, favourites, thresholds }) =>
+      saveSubscription(env, subscription, state, favourites, thresholds));
   }
 
   if (pathname === '/subscribe' && request.method === 'PATCH') {
-    const { endpoint, favourites, thresholds } = await request.json();
-    await updateSubscriptionFavourites(env, endpoint, favourites, thresholds);
-    return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+    return handleDatabaseWrite(request, corsHeaders, ({ endpoint, favourites, thresholds }) =>
+      updateSubscriptionFavourites(env, endpoint, favourites, thresholds));
   }
 
   // Test endpoint — triggers favourite alerts for the calling subscription
@@ -665,17 +691,16 @@ async function handleRequest(request, env, ctx) {
   }
 
   if (pathname === '/checkin' && request.method === 'POST') {
-    const { crag_id, crag_name, climbed_date, month, app_score, rock, temp_feel } = await request.json();
-    await supabaseRequest(env, 'POST', '/checkins', {
-      crag_id, crag_name, climbed_date, month, app_score, rock, temp_feel,
-    });
-    return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+    return handleDatabaseWrite(request, corsHeaders,
+      ({ crag_id, crag_name, climbed_date, month, app_score, rock, temp_feel }) =>
+        supabaseRequest(env, 'POST', '/checkins', {
+          crag_id, crag_name, climbed_date, month, app_score, rock, temp_feel,
+        }));
   }
 
   if (pathname === '/subscribe' && request.method === 'DELETE') {
-    const { endpoint } = await request.json();
-    await deleteSubscription(env, endpoint);
-    return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+    return handleDatabaseWrite(request, corsHeaders, ({ endpoint }) =>
+      deleteSubscription(env, endpoint));
   }
 
   return new Response('Not found', { status: 404 });

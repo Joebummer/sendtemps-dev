@@ -21,3 +21,10 @@ protection rule. Manually deploying outside this workflow bypasses the gate.
 Tests do not exercise Cloudflare's runtime, live Supabase, native Swift decoding,
 or real weather-provider responses. Verify those separately when releasing.
 The native Xcode project is not part of this repository.
+
+Regional forecast reuse tests additionally compare every trip field and result
+ordering against the original two-argument trip scorer across VIC, TAS, NSW and
+ALL. Changing trip dates, query order or region letter case must reuse one
+regional weather request within the cache lifetime. Tests cover invalid regions,
+separate regional entries, expiry, Melbourne midnight rollover and upstream
+failure. The cache mock models TTL but is not a Cloudflare runtime benchmark.

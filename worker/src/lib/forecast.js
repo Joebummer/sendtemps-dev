@@ -1994,13 +1994,25 @@ export function rankByDay(forecasts, dayDates) {
 // Weekend-Away trip score: combines Fri/Sat/Sun into a single 0–100 score
 // where the WORST day matters most. Formula: 0.5 * min + 0.3 * mean + 0.2 * median.
 // Returns { 'cragId': { crag, tripScore, dailyScores: [{date, score, reasons, day}], worstDate, summary } }
-export function rankWeekendTrip(forecasts, tripDates) {
+// Optional pre-ranked days let the API reuse daily scores without changing
+// the legacy two-argument behaviour or the forecast insertion order for ties.
+export function rankWeekendTrip(forecasts, tripDates, ranked = null) {
+  const rankedByDate = ranked && new Map(tripDates.map(date => [date,
+    new Map((ranked[date] || []).map(row => [row.cragId ?? row.crag.id, row])),
+  ]));
   const out = {};
   for (const id in forecasts) {
     const fc = forecasts[id];
     if (fc.crag.trip !== 'weekend' && fc.crag.trip !== 'both') continue;
     const dailyScores = [];
     for (const date of tripDates) {
+      if (rankedByDate) {
+        const row = rankedByDate.get(date)?.get(id);
+        if (!row) continue;
+        const { score, reasons, contributions, day, prevDay } = row;
+        dailyScores.push({ date, score, reasons, contributions, day, prevDay });
+        continue;
+      }
       const dayIdx = fc.days.findIndex(d => d.date === date);
       if (dayIdx === -1) continue;
       const day = fc.days[dayIdx];

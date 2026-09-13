@@ -55,3 +55,25 @@ Once the marketing/web app also calls `/forecast/scored` instead of running
 copies of these three files can be deleted and the web app can fetch scored
 JSON from the Worker directly — eliminating the sync step entirely. That
 migration is tracked as a follow-up, not done yet.
+
+## Regional scoring reuse
+
+The Worker copy now supports an optional third `ranked` argument to
+`rankWeekendTrip(forecasts, tripDates, ranked)`. This reuses previously computed
+`rankByDay` rows (including their normalized `cragId` form) without re-running
+`scoreDay`. The existing two-argument path is unchanged and is covered as the
+reference calculation in equivalence tests. This is an additional intentional
+Worker-only difference; do not overwrite it when syncing the webapp modules.
+
+The Worker caches one normalized regional dataset plus original crag ordering
+for 900 seconds, keyed by region, Melbourne calendar date and cache version.
+Trip selections aggregate the cached daily scores without downloading weather
+again. Original crag ordering preserves tie-breaking. Raw hourly forecast
+intermediates are not added to this cache. `X-SendTemps-Cache` now describes
+whether this regional dataset was reused, rather than an exact trip response.
+Client responses remain `no-store`. Cache sharing is per Cloudflare edge
+location; simultaneous cold misses are not coalesced.
+
+Run `npm run check` after any sync. Scoring and crag edits must still bump
+`SCORED_CACHE_VERSION` in the Worker so old regional entries are not reused.
+

@@ -25,3 +25,25 @@ test('reject duplicate IDs, bad coordinates, missing parents and cycles', () => 
   assert.ok(validateCrags([{ ...valid(), parentId: 'absent' }]).some(e => e.includes('unknown parent')));
   assert.ok(validateCrags([{ ...valid(), parentId: 'parent' }]).some(e => e.includes('cycle')));
 });
+
+test('Canberra coverage agrees across databases, marketing counts and map', async () => {
+  const fs = require('node:fs');
+  const client = await loadCrags('webapp/crags.js');
+  const server = await loadCrags('worker/src/lib/crags.js');
+  const additions = client.filter(c => /^(orroral-|gibraltar-|snake-rock-|coree-|red-rocks-|kambah-rocks)/.test(c.id));
+  assert.equal(additions.length, 19);
+  for (const crag of additions) assert.deepEqual(server.find(c => c.id === crag.id), crag);
+  const parents = client.filter(c => !c.parentId);
+  assert.equal(client.length, 307);
+  assert.equal(parents.length, 76);
+  assert.deepEqual(parents.filter(c => c.state === 'ACT').map(c => c.id).sort(),
+    ['booroomba-main', 'gibraltar-main', 'kambah-rocks', 'orroral-main', 'red-rocks-main', 'snake-rock-main']);
+  assert.equal(client.find(c => c.id === 'coree-main').state, 'NSW');
+  assert.match(client.find(c => c.id === 'red-rocks-main').accessStatus, /1 August to 31 December/);
+  const map = fs.readFileSync('src/_includes/coverage-map.njk', 'utf8');
+  for (const region of ['VIC', 'NSW', 'ACT', 'TAS', 'QLD', 'SA', 'WA']) {
+    const count = parents.filter(c => c.state === region).length;
+    assert.match(map, new RegExp(`data-state="${region.toLowerCase()}"[^>]*data-count="${count}"`));
+  }
+  assert.match(fs.readFileSync('content/home.yaml', 'utf8'), /76 destinations across 6 states and the ACT/);
+});

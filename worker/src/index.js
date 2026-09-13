@@ -421,7 +421,7 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-09-13-regional-score-reuse';
+const SCORED_CACHE_VERSION = '2026-09-13-act-coverage';
 const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 
 // Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw
@@ -758,6 +758,26 @@ async function getCragScoreToday(lat, lon) {
 // Crag ID → lat/lon map for favourite lookups.
 // IDs match crags.js exactly. Sub-crags inherit their parent's coords.
 const CRAG_COORDS = {
+  "orroral-main": {"lat": -35.60435, "lon": 148.9509, "name": "Orroral Ridge"},
+  "orroral-tower-rocks": {"lat": -35.60435, "lon": 148.9509, "name": "Tower Rocks"},
+  "orroral-belfry": {"lat": -35.61045, "lon": 148.95893, "name": "The Belfry"},
+  "orroral-legoland": {"lat": -35.60044, "lon": 148.94662, "name": "Legoland"},
+  "orroral-trojan-wall": {"lat": -35.59471, "lon": 148.94301, "name": "Trojan Wall"},
+  "orroral-cloisters": {"lat": -35.61217, "lon": 148.95933, "name": "The Cloisters"},
+  "gibraltar-main": {"lat": -35.45835, "lon": 148.94762, "name": "Gibraltar Peak"},
+  "gibraltar-ape": {"lat": -35.45828, "lon": 148.94776, "name": "Ape Area"},
+  "gibraltar-nailbiter": {"lat": -35.458479, "lon": 148.947836, "name": "Nailbiter Spike"},
+  "snake-rock-main": {"lat": -35.479142, "lon": 148.953291, "name": "Snake Rock"},
+  "snake-rock-tiers": {"lat": -35.479142, "lon": 148.953291, "name": "The Tiers"},
+  "snake-rock-amphitheatre": {"lat": -35.479142, "lon": 148.953291, "name": "The Amphitheatre"},
+  "snake-rock-buttress": {"lat": -35.479142, "lon": 148.953291, "name": "The Buttress"},
+  "coree-main": {"lat": -35.30608, "lon": 148.81079, "name": "Mount Coree"},
+  "coree-wind-wall": {"lat": -35.30608, "lon": 148.81079, "name": "Wind Wall"},
+  "coree-sun-wall": {"lat": -35.30966, "lon": 148.80768, "name": "Sun Wall"},
+  "coree-the-lime": {"lat": -35.30989, "lon": 148.8073, "name": "The Lime"},
+  "red-rocks-main": {"lat": -35.407564, "lon": 149.034809, "name": "Red Rocks"},
+  "kambah-rocks": {"lat": -35.405737, "lon": 149.027247, "name": "Kambah Rocks"},
+
   'gramps-tribute': { lat: -36.8949, lon: 142.3876, name: "Tribute Wall" },
   'gramps-centurion-lower': { lat: -36.975, lon: 142.459, name: "Centurion Walls – Lower" },
   'gramps-centurion-upper': { lat: -36.975, lon: 142.458, name: "Centurion Walls – Upper" },
@@ -800,7 +820,7 @@ const CRAG_COORDS = {
   // ── NSW ──
   'nowra-main':        { lat: -34.8704, lon: 150.601,  name: 'Nowra' },
   'bluemtns-main':     { lat: -33.632,  lon: 150.317,  name: 'Blue Mountains' },
-  'booroomba-main':    { lat: -35.5576, lon: 148.817,  name: 'Booroomba Rocks' },
+  'booroomba-main':    { lat: -35.5576, lon: 148.9905, name: 'Booroomba Rocks' },
   'bungonia-main':     { lat: -34.7961, lon: 149.950,  name: 'Bungonia Gorge' },
   'pointperp-main':    { lat: -35.094,  lon: 150.800,  name: 'Point Perpendicular' },
   'lindfield-main':    { lat: -33.7688, lon: 151.179,  name: 'Lindfield Rocks' },

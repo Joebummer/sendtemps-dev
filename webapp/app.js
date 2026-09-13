@@ -6,8 +6,8 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=71';
-import { CRAGS } from './crags.js?v=45';
+} from './forecast.js?v=72';
+import { CRAGS } from './crags.js?v=46';
 
 const API_BASE = 'https://api.sendtemps.app';
 
@@ -449,10 +449,11 @@ function renderRegionFilter() {
   const bar = document.getElementById('region-filter');
   if (!bar) return;
   const options = [
-    { value: 'ALL', label: 'All states' },
+    { value: 'ALL', label: 'All regions' },
     { value: 'VIC', label: 'Victoria' },
     { value: 'TAS', label: 'Tasmania' },
     { value: 'NSW', label: 'NSW' },
+    { value: 'ACT', label: 'ACT' },
     { value: 'QLD', label: 'QLD' },
     { value: 'SA', label: 'SA' },
     { value: 'WA', label: 'WA' },

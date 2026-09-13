@@ -1,1 +1,1 @@
-module.exports = "15e22ab8";
+module.exports = "act-coverage-1";

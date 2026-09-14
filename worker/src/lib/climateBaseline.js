@@ -1,4 +1,8 @@
 export const CRAG_TO_PROFILE = {
+  "gramps-tribute-lower": "gramps-stapylton",
+  "gramps-tribute-upper": "gramps-stapylton",
+  "bluemtns-bell-sunny": "bluemtns-blackheath",
+  "bluemtns-bell-shady": "bluemtns-blackheath",
   "camels-hump": "camels-hump",
   "ben-cairn": "ben-cairn",
   "falcons-lookout": "falcons-lookout",

@@ -421,7 +421,7 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-09-15-heat-relief-windows';
+const SCORED_CACHE_VERSION = '2026-09-15-hot-weather-sectors';
 const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 
 // Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw
@@ -758,6 +758,10 @@ async function getCragScoreToday(lat, lon) {
 // Crag ID → lat/lon map for favourite lookups.
 // IDs match crags.js exactly. Sub-crags inherit their parent's coords.
 const CRAG_COORDS = {
+  "bluemtns-bell-shady": {"lat":-33.53536,"lon":150.29594,"name":"Bell – Shady Side"},
+  "bluemtns-bell-sunny": {"lat":-33.5353,"lon":150.2956,"name":"Bell – Sunny Side"},
+  "gramps-tribute-upper": {"lat":-36.8949,"lon":142.3876,"name":"Tribute Wall – Upper"},
+  "gramps-tribute-lower": {"lat":-36.8949,"lon":142.3876,"name":"Tribute Wall – Lower"},
   "orroral-main": {"lat": -35.60435, "lon": 148.9509, "name": "Orroral Ridge"},
   "orroral-tower-rocks": {"lat": -35.60435, "lon": 148.9509, "name": "Tower Rocks"},
   "orroral-belfry": {"lat": -35.61045, "lon": 148.95893, "name": "The Belfry"},

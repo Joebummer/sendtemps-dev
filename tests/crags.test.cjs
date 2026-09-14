@@ -3,6 +3,32 @@ const assert = require('node:assert/strict');
 const { validateCrags, loadCrags } = require('../scripts/validate-crags.cjs');
 const valid = () => ({ id: 'parent', name: 'Parent', state: 'VIC', lat: -37, lon: 144, elevation: 0, idealTemp: [10, 20] });
 
+test('hot-weather sectors preserve hierarchy, catalogue parity and original thermal limits', async () => {
+  const server = await loadCrags('worker/src/lib/crags.js');
+  const client = await loadCrags('webapp/crags.js');
+  const pairs = [['bluemtns-bell-shady', 'bluemtns-bellsupercrag'], ['bluemtns-bell-sunny', 'bluemtns-bellsupercrag'],
+    ['gramps-tribute-upper', 'gramps-tribute'], ['gramps-tribute-lower', 'gramps-tribute']];
+  for (const [id, combined] of pairs) {
+    const c = server.find(c => c.id === id), parent = server.find(c => c.id === combined);
+    assert.deepEqual(c, client.find(c => c.id === id));
+    assert.equal(c.parentId, parent.parentId);
+    assert.deepEqual(c.idealTemp, parent.idealTemp);
+    assert.equal(c.heatCap, parent.heatCap);
+    assert.equal(c.accessStatus, parent.accessStatus);
+    assert.ok(Number.isFinite(c.elevation));
+  }
+  for (const cs of [server, client]) {
+    const freezer = cs.find(c => c.id === 'bluemtns-thefreezer');
+    assert.equal(freezer.elevation, 1009);
+    assert.deepEqual(freezer.idealTemp, [10, 26]);
+    assert.equal(freezer.heatCap, 28);
+    assert.equal(freezer.warmWeatherRelief, 'afternoon');
+    assert.match(freezer.notes, /Cosmic County/);
+    assert.doesNotMatch(freezer.notes, /Bowens/);
+    assert.equal(cs.find(c => c.id === 'bluemtns-bellsupercrag').shade, 'mixed');
+  }
+});
+
 for (const file of ['worker/src/lib/crags.js', 'webapp/crags.js']) {
   test(`${file}: all records satisfy the data contract`, async () => {
     assert.deepEqual(validateCrags(await loadCrags(file)), []);
@@ -34,7 +60,7 @@ test('Canberra coverage agrees across databases, marketing counts and map', asyn
   assert.equal(additions.length, 19);
   for (const crag of additions) assert.deepEqual(server.find(c => c.id === crag.id), crag);
   const parents = client.filter(c => !c.parentId);
-  assert.equal(client.length, 319);
+  assert.equal(client.length, 323);
   assert.equal(parents.length, 79);
   assert.deepEqual(parents.filter(c => c.state === 'ACT').map(c => c.id).sort(),
     ['booroomba-main', 'gibraltar-main', 'kambah-rocks', 'orroral-main', 'red-rocks-main', 'snake-rock-main']);
@@ -135,7 +161,7 @@ test('Blue Mountains profiles reject freezing conditions with a 10 degree minimu
   for (const file of ['worker/src/lib/crags.js', 'webapp/crags.js']) {
     const blue = (await loadCrags(file)).filter(crag =>
       crag.id === 'bluemtns-main' || crag.parentId === 'bluemtns-main');
-    assert.equal(blue.length, 28, `${file}: Blue Mountains record count`);
+    assert.equal(blue.length, 30, `${file}: Blue Mountains record count`);
     for (const crag of blue) {
       assert.ok(crag.idealTemp[0] >= 10, `${file}: ${crag.id} minimum`);
     }

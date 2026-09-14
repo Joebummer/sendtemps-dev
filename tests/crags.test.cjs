@@ -66,3 +66,17 @@ test('NT destinations and sectors agree across databases and have numeric elevat
     assert.match(crag.accessStatus, /not permitted/);
   }
 });
+
+test('Westside uses its cool bouldering temperature profile in both datasets', async () => {
+  for (const file of ['worker/src/lib/crags.js', 'webapp/crags.js']) {
+    const crags = await loadCrags(file);
+    const westside = crags.filter(crag => crag.id === 'westside-main' || crag.parentId === 'westside-main');
+    assert.deepEqual(westside.map(crag => crag.id).sort(), [
+      'westside-boulder', 'westside-delos-descent', 'westside-main',
+    ]);
+    for (const crag of westside) {
+      assert.deepEqual(crag.idealTemp, [10, 18], file + ': ' + crag.id);
+      assert.equal(crag.heatCap, 20, file + ': ' + crag.id);
+    }
+  }
+});

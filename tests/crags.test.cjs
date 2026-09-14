@@ -34,16 +34,35 @@ test('Canberra coverage agrees across databases, marketing counts and map', asyn
   assert.equal(additions.length, 19);
   for (const crag of additions) assert.deepEqual(server.find(c => c.id === crag.id), crag);
   const parents = client.filter(c => !c.parentId);
-  assert.equal(client.length, 307);
-  assert.equal(parents.length, 76);
+  assert.equal(client.length, 319);
+  assert.equal(parents.length, 79);
   assert.deepEqual(parents.filter(c => c.state === 'ACT').map(c => c.id).sort(),
     ['booroomba-main', 'gibraltar-main', 'kambah-rocks', 'orroral-main', 'red-rocks-main', 'snake-rock-main']);
   assert.equal(client.find(c => c.id === 'coree-main').state, 'NSW');
   assert.match(client.find(c => c.id === 'red-rocks-main').accessStatus, /1 August to 31 December/);
   const map = fs.readFileSync('src/_includes/coverage-map.njk', 'utf8');
-  for (const region of ['VIC', 'NSW', 'ACT', 'TAS', 'QLD', 'SA', 'WA']) {
+  for (const region of ['VIC', 'NSW', 'ACT', 'TAS', 'QLD', 'SA', 'WA', 'NT']) {
     const count = parents.filter(c => c.state === region).length;
     assert.match(map, new RegExp(`data-state="${region.toLowerCase()}"[^>]*data-count="${count}"`));
   }
-  assert.match(fs.readFileSync('content/home.yaml', 'utf8'), /76 destinations across 6 states and the ACT/);
+  assert.match(fs.readFileSync('content/home.yaml', 'utf8'), /79 destinations across all 6 states, the ACT and NT/);
+});
+
+
+test('NT destinations and sectors agree across databases and have numeric elevations', async () => {
+  const client = (await loadCrags('webapp/crags.js')).filter(c => c.state === 'NT');
+  const server = (await loadCrags('worker/src/lib/crags.js')).filter(c => c.state === 'NT');
+  assert.equal(client.length, 12);
+  assert.equal(client.filter(c => !c.parentId).length, 3);
+  assert.deepEqual(server, client);
+  assert.deepEqual(validateCrags(server), []);
+  for (const crag of server.filter(c => c.parentId)) {
+    assert.ok(server.some(parent => parent.id === crag.parentId && !parent.parentId));
+  }
+  for (const crag of server.filter(c => c.id.includes('hayes-creek'))) {
+    assert.match(crag.accessStatus, /closed/);
+  }
+  for (const crag of server.filter(c => c.id.includes('second-pool'))) {
+    assert.match(crag.accessStatus, /not permitted/);
+  }
 });

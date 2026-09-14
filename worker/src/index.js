@@ -421,7 +421,7 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-09-13-act-coverage';
+const SCORED_CACHE_VERSION = '2026-09-14-nt-coverage';
 const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 
 // Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw
@@ -764,6 +764,18 @@ const CRAG_COORDS = {
   "orroral-legoland": {"lat": -35.60044, "lon": 148.94662, "name": "Legoland"},
   "orroral-trojan-wall": {"lat": -35.59471, "lon": 148.94301, "name": "Trojan Wall"},
   "orroral-cloisters": {"lat": -35.61217, "lon": 148.95933, "name": "The Cloisters"},
+  "nt-robin-falls-main": {"lat": -13.3541, "lon": 131.13009, "name": "Robin Falls"},
+  "nt-robin-falls-right": {"lat": -13.3541, "lon": 131.13009, "name": "Right Hand Side"},
+  "nt-robin-falls-left": {"lat": -13.3541, "lon": 131.13009, "name": "Left Hand Side"},
+  "nt-hayes-creek-main": {"lat": -13.583307, "lon": 131.457962, "name": "Hayes Creek"},
+  "nt-hayes-creek-right": {"lat": -13.583307, "lon": 131.457962, "name": "Right Hand Side"},
+  "nt-hayes-creek-upper-right": {"lat": -13.583307, "lon": 131.457962, "name": "Upper Right Hand Side"},
+  "nt-hayes-creek-left": {"lat": -13.583307, "lon": 131.457962, "name": "Left Hand Side"},
+  "nt-hayes-creek-spider-gully": {"lat": -13.583307, "lon": 131.457962, "name": "Spider Gully"},
+  "nt-umbrawarra-main": {"lat": -13.971414, "lon": 131.689301, "name": "Umbrawarra Gorge"},
+  "nt-umbrawarra-first-pool": {"lat": -13.971414, "lon": 131.689301, "name": "First Pool"},
+  "nt-umbrawarra-second-pool-left": {"lat": -13.971414, "lon": 131.689301, "name": "Second Pool – Left Hand Side"},
+  "nt-umbrawarra-second-pool-right": {"lat": -13.971414, "lon": 131.689301, "name": "Second Pool – Right Hand Side"},
   "gibraltar-main": {"lat": -35.45835, "lon": 148.94762, "name": "Gibraltar Peak"},
   "gibraltar-ape": {"lat": -35.45828, "lon": 148.94776, "name": "Ape Area"},
   "gibraltar-nailbiter": {"lat": -35.458479, "lon": 148.947836, "name": "Nailbiter Spike"},

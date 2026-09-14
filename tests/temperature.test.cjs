@@ -268,3 +268,86 @@ test('heat uses air, cold retains wind chill, and missing readings fall back', a
   assert.equal(f.temperaturePenalty(crag, 22), 16);
   assert.equal(f.temperaturePenalty(crag, 22, null), 16);
 });
+
+test('feels-like heat starts continuously above 21 and preserves mild/cold scoring', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const c = { idealTemp: [10, 30], shade: 'all-day', lat: -37, lon: 144 };
+  assert.equal(f.feelsLikeHeatPenalty(c, 21), 0);
+  assert.ok(f.feelsLikeHeatPenalty(c, 21.01) < 0.05);
+  for (const [feel, ceiling] of [[22,96], [23,92], [25,84], [31,60]]) {
+    assert.equal(f.scoreHour(c, hourAt(20, { apparentTemp: feel, hour: 10, sunOnWall: false })), ceiling);
+    const d = dayFor(f, c, 20);
+    d.climbTemps.temperatureSamples.forEach(h => { h.apparent = feel; h.solarFraction = 0; });
+    const result = f.scoreDay(c, d, null, null);
+    assert.ok(result.score <= ceiling);
+    assert.ok(result.contributions.some(x => x.label === 'Feels-like heat' && x.delta < 0));
+  }
+  assert.equal(f.feelsLikeHeatPenalty(c, null), 0);
+  assert.equal(f.feelsLikeHeatPenalty(c, NaN), 0);
+});
+
+test('light relief is explicit, remains penalised and steepens beyond 26', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const cs = await loadCrags('worker/src/lib/crags.js');
+  const light = cs.filter(c => c.warmWeatherRelief === 'light');
+  assert.equal(light.length, 10);
+  for (const c of light) {
+    assert.equal(f.feelsLikeHeatPenalty(c, 23, 10), 3, c.id);
+    assert.equal(f.feelsLikeHeatPenalty(c, 26, 10), 7.5, c.id);
+    assert.equal(f.feelsLikeHeatPenalty(c, 27, 10), 11.5, c.id);
+    assert.ok(f.scoreHour(c, hourAt(23, { hour: 10 })) <= 97);
+  }
+  for (const id of ['arap-cgleft', 'bluemtns-thefreezer', 'bluemtns-bellsupercrag',
+    'sand-river-colosseum-cave', 'gramps-hollowmtn', 'westside-main']) {
+    assert.equal(f.feelsLikeHeatPenalty(cs.find(c => c.id === id), 23, 10), 8, id);
+  }
+});
+
+test('West Flank relief is morning-only in hourly and daily calculations', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const c = (await loadCrags('worker/src/lib/crags.js')).find(c => c.id === 'gramps-westflank');
+  const morning = f.scoreHour(c, hourAt(23, { hour: 11, sunOnWall: false }));
+  const afternoon = f.scoreHour(c, hourAt(23, { hour: 12, sunOnWall: false }));
+  assert.equal(morning, 97);
+  assert.equal(afternoon, 92);
+  assert.equal(f.scoreHour(c, hourAt(23, { sunOnWall: false })), afternoon,
+    'unknown time must not grant morning relief');
+  const d = dayFor(f, c, 23);
+  assert.deepEqual(Array.from(d.climbTemps.temperatureSamples, x => x.hour),
+    Array.from({ length: 12 }, (_, i) => i + 8));
+  const result = f.scoreDay(c, d, null, null);
+  const expected = (4 * 3 + 8 * 8) / 12;
+  const entry = result.contributions.find(x => x.label === 'Feels-like heat');
+  assert.equal(entry.delta, -Math.round(expected));
+  assert.ok(result.score <= Math.floor(100 - expected));
+  delete d.climbTemps;
+  const fallback = f.scoreDay(c, d, null, null);
+  assert.equal(fallback.contributions.find(x => x.label === 'Feels-like heat').delta, -8);
+});
+
+test('air and feels-like heat overlap once while sun and wind penalties persist', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const c = { idealTemp: [10, 24], heatCap: 24, shade: 'mixed', lat: -37, lon: 144 };
+  // 25 air: 4 distance + 1.5 ambient. 25 feel: 16. Total heat is 16, not 21.5.
+  assert.equal(f.scoreHour(c, hourAt(25, { apparentTemp: 25, sunOnWall: false })), 84);
+  const sunny = f.scoreHour(c, hourAt(25, { apparentTemp: 25, sunOnWall: true }));
+  assert.ok(sunny < 84);
+  assert.ok(f.scoreHour(c, hourAt(25, { apparentTemp: 25, sunOnWall: false, wind: 60 })) < 84);
+  const d = dayFor(f, c, 25);
+  d.climbTemps.temperatureSamples.forEach(h => { h.solarFraction = 0; });
+  const entries = f.scoreDay(c, d, null, null).contributions;
+  assert.equal(entries.find(x => x.label === 'Feels-like heat').delta, Math.round(-10.5));
+});
+
+test('brief feels-like heat is averaged per hour and does not cancel against cool hours', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const c = { idealTemp: [10, 30], shade: 'all-day', lat: -37, lon: 144, trip: 'both' };
+  const mixed = dayFor(f, c, 20);
+  mixed.climbTemps.temperatureSamples.forEach((s,i) => { s.apparent = i < 6 ? 26 : 16; });
+  const sustained = dayFor(f, c, 26);
+  const m = f.scoreDay(c, mixed, null, null);
+  const all = f.scoreDay(c, sustained, null, null);
+  assert.equal(m.contributions.find(x => x.label === 'Feels-like heat').delta, -10);
+  assert.equal(all.contributions.find(x => x.label === 'Feels-like heat').delta, -20);
+  assert.ok(m.score > all.score);
+});

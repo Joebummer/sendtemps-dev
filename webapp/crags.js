@@ -14,6 +14,7 @@ export const CRAGS = [
   // – Metro / day-trip – 
   {
     id: 'camels-hump',
+    warmWeatherRelief: "light",
     name: "Camel's Hump",
     area: 'Mt Macedon',
     lat: -37.3947,
@@ -92,6 +93,7 @@ export const CRAGS = [
   },
   {
     id: 'cathedral-balcony',
+    warmWeatherRelief: "light",
     parentId: 'cathedral-main',
     name: 'The Balcony',
     area: 'Cathedral Ranges',
@@ -659,6 +661,7 @@ export const CRAGS = [
   },
   {
     id: 'arap-pharos-back',
+    warmWeatherRelief: "light",
     parentId: 'arap-main',
     name: 'Pharos Back Wall',
     area: 'Mt Arapiles',
@@ -717,6 +720,7 @@ export const CRAGS = [
   },
   {
     id: 'arap-henrybolte',
+    warmWeatherRelief: "light",
     parentId: 'arap-main',
     name: 'Henry Bolte Wall',
     area: 'Mt Arapiles',
@@ -757,6 +761,7 @@ export const CRAGS = [
   },
   {
     id: 'arap-cgright',
+    warmWeatherRelief: "light",
     parentId: 'arap-main',
     name: 'Central Gully Right',
     area: 'Mt Arapiles',
@@ -816,6 +821,7 @@ export const CRAGS = [
   },
   {
     id: 'arap-kingrat',
+    warmWeatherRelief: "light",
     parentId: 'arap-main',
     name: 'King Rat Gully',
     area: 'Mt Arapiles',
@@ -914,6 +920,7 @@ export const CRAGS = [
   },
   {
     id: 'arap-bluffs',
+    warmWeatherRelief: "light",
     parentId: 'arap-main',
     name: 'The Bluffs South Side',
     area: 'Mt Arapiles',
@@ -1013,6 +1020,7 @@ export const CRAGS = [
   },
   {
     id: 'arap-grotto',
+    warmWeatherRelief: "light",
     parentId: 'arap-main',
     name: 'Grotto Wall',
     area: 'Mt Arapiles',
@@ -1254,6 +1262,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-westflank',
+    warmWeatherRelief: "morning",
     parentId: 'gramps-main',
     name: 'West Flank',
     area: 'Grampians (Northern)',
@@ -1292,6 +1301,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-ravine',
+    warmWeatherRelief: "light",
     parentId: 'gramps-main',
     name: 'The Ravine',
     area: 'Grampians (Northern)',
@@ -3210,6 +3220,7 @@ export const CRAGS = [
   },
   {
     id: 'bluemtns-mtyork-shady',
+    warmWeatherRelief: "light",
     name: 'Mt York – Shady Side',
     area: 'Blue Mountains',
     lat: -33.5536,

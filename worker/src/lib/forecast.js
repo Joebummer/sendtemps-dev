@@ -313,6 +313,28 @@ export function heatPenalty(crag, air, solarFraction = 0) {
   return { ambient, solar };
 }
 
+// Feels-like warmth is an additional constraint, never a replacement for
+// stricter air-temperature heat settings. Wind/humidity already affect feels-like;
+// do not add a separate breeze bonus here. These slopes are product calibration.
+export function feelsLikeHeatPenalty(crag, apparent, hour) {
+  if (!Number.isFinite(apparent)) return 0;
+  const over = Math.max(0, apparent - 21);
+  const light = crag.warmWeatherRelief === 'light' ||
+    (crag.warmWeatherRelief === 'morning' && Number.isFinite(hour) && hour >= 0 && hour < 12);
+  return Math.min(40, light
+    ? Math.min(5, over) * 1.5 + Math.max(0, over - 5) * 4
+    : over * 4);
+}
+
+function additionalFeelsLikeHeat(crag, apparent, air, hour) {
+  const hotAir = Number.isFinite(air) ? air : apparent;
+  const airDistance = Number.isFinite(hotAir)
+    ? Math.min(40, Math.max(0, hotAir - crag.idealTemp[1]) * 4) : 0;
+  const ambient = heatPenalty(crag, hotAir, 0).ambient;
+  // Count overlapping air/comfort heat once; solar and cold remain independent.
+  return Math.max(0, feelsLikeHeatPenalty(crag, apparent, hour) - airDistance - ambient);
+}
+
 function hourSolarFraction(crag, h) {
   if (crag.shade === 'all-day' || h.sunOnWall === false || h.sunAlt <= 0) return 0;
   const clear = 1 - Math.min(100, Math.max(0, h.cloud ?? 0)) / 100;
@@ -349,6 +371,7 @@ export function computeClimbTemps(crag, hourly, dateStr) {
     const lit = hasConcreteAspect(crag.aspect)
       ? sunOnAspect(crag.aspect, sun.azimuth, sun.altitude) : null;
     temperatureSamples.push({
+      hour,
       apparent: app,
       air: temp,
       solarFraction: hourSolarFraction(crag, {
@@ -951,7 +974,8 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   const tFeel = h.apparentTemp ?? h.temp;
   const tAir = Number.isFinite(h.temp) ? h.temp : tFeel;
   const thermal = heatPenalty(crag, tAir, hourSolarFraction(crag, h));
-  const thermalPenalty = temperaturePenalty(crag, tFeel, tAir) + thermal.ambient + thermal.solar;
+  const thermalPenalty = temperaturePenalty(crag, tFeel, tAir) + thermal.ambient + thermal.solar +
+    additionalFeelsLikeHeat(crag, tFeel, tAir, h.hour);
   penalize(thermalPenalty);
 
   // Dryness — penalty up to 35
@@ -1619,6 +1643,16 @@ export function scoreDay(crag, day, prevDay, nextDay) {
         `Air-temperature heat exposure above ${crag.heatCap ?? idealMax}°C during climbing hours` +
         (samples.length ? '' : ' (hourly detail unavailable)'));
     }
+  }
+  const comfortHeat = thermalSamples.reduce((sum, sample) =>
+    sum + additionalFeelsLikeHeat(crag, sample.apparent, sample.air, sample.hour),
+    0) / thermalSamples.length;
+  if (comfortHeat > 0) {
+    score -= comfortHeat;
+    protectedTemperaturePenalty += comfortHeat;
+    add('temp', 'Feels-like heat', -comfortHeat,
+      'Feels-like above 21°C during climbing hours; stricter air heat takes precedence');
+    reasons.push('warm feels-like conditions');
   }
   if (heat.ambient > 0) reasons.push('warm air affects friction');
   if (heat.solar > 0) reasons.push('sun heats the rock');

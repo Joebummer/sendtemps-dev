@@ -13,7 +13,7 @@ hero:
   cta_secondary_label: See coverage
   proof_points:
     - 300+ crags
-    - 6 states + ACT
+    - 6 states + 2 territories
     - Day-by-day and multi-day trip forecasts
 problem:
   heading: Your weather app only tells part of the story
@@ -91,7 +91,7 @@ scores:
 coverage:
   tag: Coverage
   heading: Coverage
-  intro: 76 destinations across 6 states and the ACT. Hover or tap a region for details.
+  intro: 79 destinations across all 6 states, the ACT and NT. Hover or tap a region for details.
   list:
     - state: Victoria
       body: 15 destinations including Mt Arapiles and the Grampians
@@ -108,6 +108,8 @@ coverage:
       body: 7 destinations including Flinders Ranges
     - state: Western Australia
       body: 13 destinations including Kalbarri and Margaret River
+    - state: Northern Territory
+      body: 3 destinations including Robin Falls, Hayes Creek and Umbrawarra Gorge
 pricing:
   tag: Free vs Pro
   heading: Climbable Free vs Climbable Pro

@@ -24,7 +24,7 @@ function weatherFixture(url) {
   return params.get('latitude').split(',').map(() => forecast);
 }
 
-for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'ALL']) {
+for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
   test(`${region}: real scoring pipeline preserves the response contract and cache payload`, async () => {
     let calls = 0;
     const harness = await loadWorker(async url => {

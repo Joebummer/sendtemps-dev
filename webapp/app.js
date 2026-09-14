@@ -6,8 +6,8 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=72';
-import { CRAGS } from './crags.js?v=46';
+} from './forecast.js?v=73';
+import { CRAGS } from './crags.js?v=47';
 
 const API_BASE = 'https://api.sendtemps.app';
 
@@ -457,6 +457,7 @@ function renderRegionFilter() {
     { value: 'QLD', label: 'QLD' },
     { value: 'SA', label: 'SA' },
     { value: 'WA', label: 'WA' },
+    { value: 'NT', label: 'NT' },
   ];
   bar.innerHTML = options.map(opt => `
     <button class="region-pill${state.regionFilter === opt.value ? ' active' : ''}"

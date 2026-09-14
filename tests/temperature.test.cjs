@@ -325,6 +325,31 @@ test('West Flank relief is morning-only in hourly and daily calculations', async
   assert.equal(fallback.contributions.find(x => x.label === 'Feels-like heat').delta, -8);
 });
 
+test('Boronia evening relief starts at 17, preserves air limits and averages by hour', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const c = (await loadCrags('worker/src/lib/crags.js')).find(c => c.id === 'bluemtns-boronia');
+  assert.deepEqual(Array.from(c.idealTemp), [10, 20]);
+  assert.equal(c.heatCap, 23);
+  for (const hour of [undefined, null, NaN, -1, 24, 16, 16.99]) {
+    assert.equal(f.feelsLikeHeatPenalty(c, 23, hour), 8);
+  }
+  for (const hour of [17, 18, 23]) {
+    assert.equal(f.scoreHour(c, hourAt(20, { apparentTemp: 23, hour, sunOnWall: false })), 97);
+    // Air heat above the existing ideal ceiling is stronger than light relief.
+    assert.equal(f.scoreHour(c, hourAt(23, { hour, sunOnWall: false })), 88);
+  }
+  assert.equal(f.scoreHour(c, hourAt(20, { apparentTemp: 23, hour: 16, sunOnWall: false })), 92);
+  const d = dayFor(f, c, 20);
+  d.climbTemps.temperatureSamples.forEach(s => { s.apparent = 23; s.solarFraction = 0; });
+  const result = f.scoreDay(c, d, null, null);
+  const expected = (9 * 8 + 3 * 3) / 12;
+  assert.equal(result.contributions.find(x => x.label === 'Feels-like heat').delta, -Math.round(expected));
+  assert.ok(result.score <= Math.floor(100 - expected));
+  delete d.climbTemps;
+  d.tFeel = 23;
+  assert.equal(f.scoreDay(c, d, null, null).contributions.find(x => x.label === 'Feels-like heat').delta, -8);
+});
+
 test('air and feels-like heat overlap once while sun and wind penalties persist', async () => {
   const f = await loadForecast('worker/src/lib/forecast.js');
   const c = { idealTemp: [10, 24], heatCap: 24, shade: 'mixed', lat: -37, lon: 144 };

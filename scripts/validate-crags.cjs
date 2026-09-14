@@ -33,7 +33,7 @@ function validateCrags(crags) {
     if (crag.discipline != null && !['bouldering', 'routes', 'mixed'].includes(crag.discipline)) {
       errors.push(`${label}: invalid discipline`);
     }
-    if (crag.warmWeatherRelief != null && !['light', 'morning'].includes(crag.warmWeatherRelief)) {
+    if (crag.warmWeatherRelief != null && !['light', 'morning', 'evening'].includes(crag.warmWeatherRelief)) {
       errors.push(`${label}: invalid warmWeatherRelief`);
     }
     if (crag.heatExposure != null && !['exposed', 'partial', 'sheltered'].includes(crag.heatExposure)) {

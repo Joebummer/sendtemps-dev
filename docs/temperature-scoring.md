@@ -21,9 +21,13 @@ cannot erase the combined temperature constraint.
 ## Explicit lighter profiles
 
 User-confirmed: Camel's Hump, The Balcony, King Rat Gully, Central Gully Right,
-The Ravine, and West Flank. West Flank receives the lighter profile only before
-12:00 in the forecast's existing climbing-hour time basis; unknown time receives
-the standard penalty.
+The Ravine, and West Flank. The Ravine retains all-day relief following the
+user's firsthand confirmation of near-all-day shade. West Flank receives the
+lighter profile only before 12:00. Boronia receives it from 17:00. These are conservative
+calibration windows in the forecast's existing climbing-hour time basis, not
+measured sun-arrival times. Unknown or invalid time receives the standard
+penalty. Boronia retains ideal [10, 20] and heatCap 23; air heat can still dominate.
+See [the evidence audit](hot-weather-evidence.md) for confidence and limitations.
 
 Catalogue-supported shaded candidates: Henry Bolte Wall, Pharos Back Wall,
 Grotto Wall, The Bluffs South Side, and Mt York Shady Side. These are provisional
@@ -36,10 +40,10 @@ Bell Supercrag, The Freezer, Colosseum Cave and other uncertain/mixed candidates
 receive the standard profile pending sector, aspect or mapping verification.
 Central Gully Left and shaded bouldering areas are not automatically exempt.
 
-The warmWeatherRelief catalogue field accepts only light or morning. Missing
+The warmWeatherRelief catalogue field accepts only light, morning or evening. Missing
 values mean standard behaviour. Both catalogue copies carry the metadata, but
 the legacy web scoring implementation is unchanged.
 
-Tests cover the 21°C boundary, stronger heat, light profiles, morning expiry,
+Tests cover the 21°C boundary, stronger heat, light profiles, morning expiry, evening onset,
 missing hourly detail, overlapping penalties, solar/wind effects, brief heat,
 Westside regression fixtures and Blue Mountains cold edges.

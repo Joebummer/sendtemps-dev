@@ -319,8 +319,11 @@ export function heatPenalty(crag, air, solarFraction = 0) {
 export function feelsLikeHeatPenalty(crag, apparent, hour) {
   if (!Number.isFinite(apparent)) return 0;
   const over = Math.max(0, apparent - 21);
+  const validHour = Number.isFinite(hour) && hour >= 0 && hour < 24;
+  // Conservative local-time windows; missing/invalid time receives no relief.
   const light = crag.warmWeatherRelief === 'light' ||
-    (crag.warmWeatherRelief === 'morning' && Number.isFinite(hour) && hour >= 0 && hour < 12);
+    (crag.warmWeatherRelief === 'morning' && validHour && hour < 12) ||
+    (crag.warmWeatherRelief === 'evening' && validHour && hour >= 17);
   return Math.min(40, light
     ? Math.min(5, over) * 1.5 + Math.max(0, over - 5) * 4
     : over * 4);

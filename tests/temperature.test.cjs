@@ -204,8 +204,8 @@ test('Westside evening heat cannot score 95–99 when feels-like is 21–22 degr
         hourAt(t, { sunOnWall: false, sunAlt: -5, cloud: 45 }), 0, 0, 45, 43));
       assert.ok(scores[0] <= 86 && scores[1] <= 81, crag.id + ': heat penalties survive bonuses');
       assert.ok(scores[1] < scores[0]);
-      // Cooler feels-like can legitimately score better than the air temperature suggests.
-      assert.ok(f.scoreHour(crag, hourAt(22, { apparentTemp: 18, sunOnWall: false })) > scores[1]);
+      // Cooler feels-like must not excuse warm air.
+      assert.equal(f.scoreHour(crag, hourAt(22, { apparentTemp: 18, sunOnWall: false, sunAlt: -5, cloud: 45 }), 0, 0, 45, 43), scores[1]);
       const shade = dayFor(f, crag, 22);
       shade.climbTemps.temperatureSamples.forEach(sample => { sample.solarFraction = 0; });
       const result = f.scoreDay(crag, shade, null, null);
@@ -234,4 +234,37 @@ test('temperature protection applies across the dataset, including crags without
       assert.ok(sunny.solar > 0);
     }
   }
+});
+
+test('Westside live evening air temperatures retain heat penalties despite cooler feels-like', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const crags = (await loadCrags('worker/src/lib/crags.js')).filter(c => c.id.startsWith('westside-'));
+  for (const crag of crags) {
+    for (const [air, feel, expected] of [[22.3, 20.3, 79], [21, 19, 86]]) {
+      const score = f.scoreHour(crag, hourAt(air, {
+        apparentTemp: feel, sunOnWall: false, sunAlt: -4, cloud: 18,
+      }), 0, 8, 45.3, 43);
+      assert.equal(score, expected, crag.id + ': observed evening fixture');
+      const weather = hourly(air);
+      weather.apparent_temperature.fill(feel);
+      const day = dayFor(f, crag, air);
+      day.climbTemps = f.computeClimbTemps(crag, weather, date);
+      assert.equal(day.climbTemps.hoursInRange, 0);
+      assert.equal(day.climbTemps.hoursHot, day.climbTemps.climbHours);
+      const result = f.scoreDay(crag, day, null, null);
+      assert.ok(result.score <= score);
+      assert.ok(result.contributions.some(c => c.label === 'Ambient heat' && c.delta < 0));
+    }
+  }
+});
+
+test('heat uses air, cold retains wind chill, and missing readings fall back', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const crag = { idealTemp: [10, 18], heatCap: 20, heatExposure: 'partial' };
+  assert.equal(f.temperaturePenalty(crag, 18, 22), 16);
+  assert.equal(f.temperaturePenalty(crag, 25, 18), 0);
+  assert.ok(f.temperaturePenalty(crag, 0, 12) > f.temperaturePenalty(crag, 12, 12));
+  assert.equal(f.temperaturePenalty(crag, null, 22), 16);
+  assert.equal(f.temperaturePenalty(crag, 22), 16);
+  assert.equal(f.temperaturePenalty(crag, 22, null), 16);
 });

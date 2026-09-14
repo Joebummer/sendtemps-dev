@@ -23,6 +23,19 @@ function validateCrags(crags) {
     }
     // Required for every crag and subcrag, including elevation zero.
     if (!Number.isFinite(crag.elevation)) errors.push(`${label}: elevation must be a finite number`);
+    if (!Array.isArray(crag.idealTemp) || crag.idealTemp.length !== 2 ||
+        !crag.idealTemp.every(Number.isFinite) || crag.idealTemp[0] >= crag.idealTemp[1]) {
+      errors.push(`${label}: idealTemp must be two increasing finite numbers`);
+    }
+    if (crag.heatCap != null && !Number.isFinite(crag.heatCap)) {
+      errors.push(`${label}: heatCap must be a finite number`);
+    }
+    if (crag.discipline != null && !['bouldering', 'routes', 'mixed'].includes(crag.discipline)) {
+      errors.push(`${label}: invalid discipline`);
+    }
+    if (crag.heatExposure != null && !['exposed', 'partial', 'sheltered'].includes(crag.heatExposure)) {
+      errors.push(`${label}: invalid heatExposure`);
+    }
   }
   const byId = new Map(crags.filter(Boolean).map(crag => [crag.id, crag]));
   for (const crag of crags.filter(Boolean)) {

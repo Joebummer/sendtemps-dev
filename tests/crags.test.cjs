@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { validateCrags, loadCrags } = require('../scripts/validate-crags.cjs');
-const valid = () => ({ id: 'parent', name: 'Parent', state: 'VIC', lat: -37, lon: 144, elevation: 0 });
+const valid = () => ({ id: 'parent', name: 'Parent', state: 'VIC', lat: -37, lon: 144, elevation: 0, idealTemp: [10, 20] });
 
 for (const file of ['worker/src/lib/crags.js', 'webapp/crags.js']) {
   test(`${file}: all records satisfy the data contract`, async () => {
@@ -79,4 +79,45 @@ test('Westside uses its cool bouldering temperature profile in both datasets', a
       assert.equal(crag.heatCap, 20, file + ': ' + crag.id);
     }
   }
+});
+
+const auditedBoulderingProfiles = {
+  'mt-beckworth': [[10, 18], 20, 'mixed', 'exposed'],
+  'black-hill': [[10, 18], 20, 'mixed', 'exposed'],
+  'gramps-stapylton': [[6, 18], 20, 'mixed', 'exposed'],
+  'gramps-trackside': [[6, 18], 20, 'bouldering', 'partial'],
+  'gramps-andersens-west': [[6, 18], 20, 'bouldering', 'partial'],
+  'kooyoora-sundial': [[8, 18], 20, 'bouldering', 'exposed'],
+  'kooyoora-area-1': [[8, 18], 20, 'bouldering', 'exposed'],
+  'wa-eaglestone': [[8, 18], 20, 'mixed', 'exposed'],
+  'queens-park': [[10, 20], 22, 'bouldering', 'partial'],
+  'sissy-crag': [[8, 20], 22, 'bouldering', 'partial'],
+  'westside-main': [[10, 18], 20, 'bouldering', 'partial'],
+  'westside-boulder': [[10, 18], 20, 'bouldering', 'partial'],
+  'westside-delos-descent': [[10, 18], 20, 'bouldering', 'sheltered'],
+};
+
+test('audited bouldering profiles agree across both datasets', async () => {
+  for (const file of ['worker/src/lib/crags.js', 'webapp/crags.js']) {
+    const crags = new Map((await loadCrags(file)).map(crag => [crag.id, crag]));
+    for (const [id, [idealTemp, heatCap, discipline, heatExposure]] of Object.entries(auditedBoulderingProfiles)) {
+      const crag = crags.get(id);
+      assert.ok(crag, `${file}: missing ${id}`);
+      assert.deepEqual(crag.idealTemp, idealTemp, `${file}: ${id} idealTemp`);
+      assert.equal(crag.heatCap, heatCap, `${file}: ${id} heatCap`);
+      assert.equal(crag.discipline, discipline, `${file}: ${id} discipline`);
+      assert.equal(crag.heatExposure, heatExposure, `${file}: ${id} heatExposure`);
+    }
+  }
+});
+
+test('reject malformed temperature and bouldering metadata', () => {
+  for (const crag of [
+    { ...valid(), idealTemp: [18, 10] },
+    { ...valid(), idealTemp: [10, null] },
+    { ...valid(), idealTemp: [10] },
+    { ...valid(), heatCap: '20' },
+    { ...valid(), discipline: 'sport' },
+    { ...valid(), heatExposure: 'sunny' },
+  ]) assert.ok(validateCrags([crag]).length > 0);
 });

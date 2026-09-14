@@ -1610,7 +1610,15 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     // so we apply a softer multiplier rather than a hard sunHours gate.
     const over = peakHeat - crag.heatCap;
     const clearness = Math.min(1, Math.max(0.4, sunHours / 7));
-    const raw = (5 + over * 3) * clearness;
+    // Explicit exposure metadata keeps exposed friction bouldering sensitive
+    // to heat without treating a sheltered cave or gully as an open sun trap.
+    // Missing metadata retains the previous behaviour for existing crags.
+    const exposureFactor = {
+      exposed: 1,
+      partial: 0.7,
+      sheltered: 0.4,
+    }[crag.heatExposure] ?? 1;
+    const raw = (5 + over * 3) * clearness * exposureFactor;
     const pen = Math.min(40, Math.round(raw));
     if (pen > 0) {
       score -= pen;

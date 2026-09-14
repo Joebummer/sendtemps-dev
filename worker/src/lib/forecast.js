@@ -172,7 +172,7 @@ export async function fetchAllForecasts(region = 'ALL') {
         morningDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 8),
         afternoonDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 14),
         dayDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 11), // mid-day single value
-        elevCorrection: _lapseCorrection !== 0 ? Math.round(_lapseCorrection * 10) / 10 : null,
+        elevCorrection: lapse !== 0 ? Math.round(lapse * 10) / 10 : null,
       });
       }),
     };

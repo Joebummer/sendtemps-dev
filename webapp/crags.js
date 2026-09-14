@@ -1315,8 +1315,8 @@ export const CRAGS = [
     shade: 'afternoon',
     driveTime: '3h45',
     trip: 'both',
-    state: 'VIC',    notes: 'Canyon east of the olive plantation. East-facing – very shady, great hot-weather option. North cave is steep sport, other side has a spread of grades. Lush valley, slow to dry.',
-    sunOnWall: 'Morning only',
+    state: 'VIC',    notes: 'Canyon east of the olive plantation. Near-all-day shade makes this a useful hot-weather option. North cave is steep sport, other side has a spread of grades. Lush valley, slow to dry.',
+    sunOnWall: 'Mostly shaded throughout the day; exposure varies by route',
     bestIn: 'warm',
   },
   {
@@ -3442,6 +3442,7 @@ export const CRAGS = [
   },
   {
     id: 'bluemtns-boronia',
+    warmWeatherRelief: "evening",
     name: 'Boronia',
     area: 'Blue Mountains',
     lat: -33.6029,

@@ -88,8 +88,28 @@ export async function fetchAllForecasts(region = 'ALL') {
   // Map each crag to its forecast object
   const byId = {};
   targetCrags.forEach((crag, i) => {
-    const f = list[i];
-    if (!f) return;
+    const rawForecast = list[i];
+    if (!rawForecast) return;
+    const elevation = crag.elevation ?? 0;
+    const lapse = elevation > 400 ? -((elevation - 400) / 1000) * 6.5 : 0;
+    const adjust = values => values?.map(value =>
+      Number.isFinite(value) ? value + lapse : value);
+    // Clone per crag: forecast locations can be shared by several elevations.
+    // Apply the existing correction once, before strips, bins and daily scoring.
+    const f = {
+      ...rawForecast,
+      hourly: {
+        ...rawForecast.hourly,
+        temperature_2m: adjust(rawForecast.hourly.temperature_2m),
+        apparent_temperature: adjust(rawForecast.hourly.apparent_temperature),
+      },
+      daily: {
+        ...rawForecast.daily,
+        temperature_2m_max: adjust(rawForecast.daily.temperature_2m_max),
+        temperature_2m_min: adjust(rawForecast.daily.temperature_2m_min),
+        apparent_temperature_max: adjust(rawForecast.daily.apparent_temperature_max),
+      },
+    };
     // Compute hourly rock-dryness series for the whole hourly window.
     // This consumes past_days=4 of recent rain history plus 10 forecast days.
     const drynessSeries = computeDrynessSeries(crag, f.hourly);
@@ -105,14 +125,6 @@ export async function fetchAllForecasts(region = 'ALL') {
     const tomorrowBestWindow = bestWindow(tomorrowHourly);
     // Last 4 days of daily precipitation totals for the sparkline.
     const pastPrecip = extractPastDailyPrecip(f.hourly, todayMel, 4);
-    // Elevation lapse rate correction.
-    // Open-Meteo's 2m temperature is model-derived and can run 2–4°C warm
-    // at high-elevation crags. We apply a standard environmental lapse rate
-    // of 6.5°C/1000m above a 400m reference (below that the model is adequate).
-    // Only applied when crag.elevation is set and > 400m.
-    // This corrects tMax, tFeel, and climbTemps.meanApparent before scoring.
-    const _elev = crag.elevation ?? 0;
-    const _lapseCorrection = _elev > 400 ? -((_elev - 400) / 1000) * 6.5 : 0;
 
     byId[crag.id] = {
       crag,
@@ -128,19 +140,12 @@ export async function fetchAllForecasts(region = 'ALL') {
       tomorrowHourly,
       tomorrowBestWindow,
       days: f.daily.time.map((date, di) => {
-        const _climbTempsRaw = computeClimbTemps(crag, f.hourly, date);
-        // Apply lapse rate correction to climbTemps means if elevation warrants it.
-        const _climbTemps = _lapseCorrection !== 0 ? {
-          ..._climbTempsRaw,
-          meanTemp:     _climbTempsRaw.meanTemp     != null ? _climbTempsRaw.meanTemp     + _lapseCorrection : null,
-          meanApparent: _climbTempsRaw.meanApparent != null ? _climbTempsRaw.meanApparent + _lapseCorrection : null,
-          maxApparent:  _climbTempsRaw.maxApparent  != null ? _climbTempsRaw.maxApparent  + _lapseCorrection : null,
-        } : _climbTempsRaw;
+        const _climbTemps = computeClimbTemps(crag, f.hourly, date);
         return ({
         date,
-        tMax:  (f.daily.temperature_2m_max[di]     ?? 0) + _lapseCorrection,
-        tMin:  (f.daily.temperature_2m_min[di]     ?? 0) + _lapseCorrection,
-        tFeel: (f.daily.apparent_temperature_max[di] ?? 0) + _lapseCorrection,
+        tMax:  (f.daily.temperature_2m_max[di]     ?? 0),
+        tMin:  (f.daily.temperature_2m_min[di]     ?? 0),
+        tFeel: (f.daily.apparent_temperature_max[di] ?? 0),
         precipSum: f.daily.precipitation_sum[di],
         precipProb: f.daily.precipitation_probability_max[di],
         precipHours: f.daily.precipitation_hours[di],
@@ -152,8 +157,7 @@ export async function fetchAllForecasts(region = 'ALL') {
         // aspect labels). scoreDay uses these for the heat/cold/sunshine maths.
         ...computeSolarExposure(crag, f.hourly, date),
         sunWindow: computeSunWindow(crag, f.hourly, date),
-        // Temperature distribution across the climbing window — lapse-corrected
-        // for high-elevation crags (see _climbTemps above).
+        // Temperature distribution from the same corrected hours as the strip.
         climbTemps: _climbTemps,
         // Humidity distribution across the climbing window. Lets scoreDay
         // apply a per-crag-tuned penalty when the rock spends real hours in
@@ -168,7 +172,7 @@ export async function fetchAllForecasts(region = 'ALL') {
         morningDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 8),
         afternoonDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 14),
         dayDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 11), // mid-day single value
-        elevCorrection: _lapseCorrection !== 0 ? Math.round(_lapseCorrection * 10) / 10 : null,
+        elevCorrection: lapse !== 0 ? Math.round(lapse * 10) / 10 : null,
       });
       }),
     };
@@ -281,10 +285,50 @@ function daytimeWindExposure(crag, hourly, dateStr) {
 // day is actually inside the comfort band, not just whether the peak afternoon
 // hour clips into the range. A 3°C–12°C day with idealTemp [10,24] passes the
 // old "tFeel inside range" check but practically only spends 1–2 hours in-range.
-function computeClimbTemps(crag, hourly, dateStr) {
+// Shared temperature model for hourly scores and climbing-hour daily averages.
+// The first 5 degrees below ideal are tolerable; sustained deeper cold ramps up.
+// These are product calibration curves, not physiological temperature limits.
+export function temperaturePenalty(crag, apparent) {
+  if (!Number.isFinite(apparent)) return 0;
+  const [lo, hi] = crag.idealTemp;
+  if (apparent < lo) {
+    const below = lo - apparent;
+    return Math.min(80, Math.min(5, below) * 2.5 + Math.max(0, below - 5) * 6);
+  }
+  return Math.min(40, Math.max(0, apparent - hi) * 4);
+}
+
+// Ambient heat affects shaded rock too. Only the solar portion depends on
+// exposure. Both components start continuously at heatCap, without a step.
+export function heatPenalty(crag, apparent, solarFraction = 0) {
+  const hasCap = Number.isFinite(crag.heatCap);
+  const threshold = hasCap ? crag.heatCap : crag.idealTemp[1];
+  const over = Number.isFinite(apparent) ? Math.max(0, apparent - threshold) : 0;
+  // Without an explicit heat cap, temperaturePenalty already covers air heat.
+  // Still account for direct solar heating above the ideal maximum.
+  const ambient = hasCap ? Math.min(25, over * 1.5) : 0;
+  const exposure = { exposed: 1, partial: 0.7, sheltered: 0.4 }[crag.heatExposure] ?? 1;
+  const solar = Math.min(40 - ambient, over * 1.5 *
+    Math.min(1, Math.max(0, solarFraction)) * exposure);
+  return { ambient, solar };
+}
+
+function hourSolarFraction(crag, h) {
+  if (crag.shade === 'all-day' || h.sunOnWall === false || h.sunAlt <= 0) return 0;
+  const clear = 1 - Math.min(100, Math.max(0, h.cloud ?? 0)) / 100;
+  // Unknown aspect is uncertain, not necessarily sunny.
+  return clear * (h.sunOnWall === true ? 1 : 0.5);
+}
+
+function temperatureScoreCeiling(penalty) {
+  return Math.max(0, 100 - penalty);
+}
+
+export function computeClimbTemps(crag, hourly, dateStr) {
   const empty = {
     climbHours: 0, hoursInRange: 0, hoursCold: 0, hoursHot: 0,
     meanTemp: null, meanApparent: null, maxApparent: null,
+    temperatureSamples: [],
   };
   if (!hourly || !hourly.time || !crag.idealTemp) return empty;
   const [lo, hi] = crag.idealTemp;
@@ -292,6 +336,7 @@ function computeClimbTemps(crag, hourly, dateStr) {
   const cutoffH = (crag.trip === 'weekend' || crag.trip === 'both') ? 20 : 18;
   let inRange = 0, cold = 0, hot = 0, count = 0;
   let tempSum = 0, appSum = 0, maxApp = -Infinity;
+  const temperatureSamples = [];
   for (let i = 0; i < hourly.time.length; i++) {
     const t = hourly.time[i];
     if (!t.startsWith(dateStr)) continue;
@@ -299,7 +344,16 @@ function computeClimbTemps(crag, hourly, dateStr) {
     if (hour < startH || hour >= cutoffH) continue;
     const temp = hourly.temperature_2m?.[i];
     const app = hourly.apparent_temperature?.[i] ?? temp;
-    if (temp == null) continue;
+    if (!Number.isFinite(temp) || !Number.isFinite(app)) continue;
+    const sun = sunPosition(melbourneHourToDate(t), crag.lat, crag.lon);
+    const lit = hasConcreteAspect(crag.aspect)
+      ? sunOnAspect(crag.aspect, sun.azimuth, sun.altitude) : null;
+    temperatureSamples.push({
+      apparent: app,
+      solarFraction: hourSolarFraction(crag, {
+        sunOnWall: lit, sunAlt: sun.altitude, cloud: hourly.cloudcover?.[i],
+      }),
+    });
     count++;
     tempSum += temp;
     appSum += app;
@@ -317,6 +371,7 @@ function computeClimbTemps(crag, hourly, dateStr) {
     meanTemp: tempSum / count,
     meanApparent: appSum / count,
     maxApparent: maxApp,
+    temperatureSamples,
   };
 }
 
@@ -835,7 +890,7 @@ function melbourneHourNow() {
 // rainNeighbours: count of hours within ±2h that also have precipProb > 30%.
 // Used to scale up the probability penalty for sustained rain windows vs
 // isolated single-hour showers.
-function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 0, meanDayHumid = 0) {
+export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 0, meanDayHumid = 0) {
   let s = 100;
   // Tracks whether any real penalty fired this hour (mirrors scoreDay's
   // `contributions.some(c => c.delta < 0)` check). Only actual non-zero
@@ -893,11 +948,9 @@ function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 
   // and humidity are factored in. Falls back to air temp if apparentTemp missing.
   const [idealMin, idealMax] = crag.idealTemp;
   const tFeel = h.apparentTemp ?? h.temp;
-  if (tFeel < idealMin) {
-    penalize(Math.min(25, (idealMin - tFeel) * 2.5));
-  } else if (tFeel > idealMax) {
-    penalize(Math.min(35, (tFeel - idealMax) * 3.5));
-  }
+  const thermal = heatPenalty(crag, tFeel, hourSolarFraction(crag, h));
+  const thermalPenalty = temperaturePenalty(crag, tFeel) + thermal.ambient + thermal.solar;
+  penalize(thermalPenalty);
 
   // Dryness — penalty up to 35
   if (h.dryness != null && h.dryness < 100) {
@@ -917,12 +970,11 @@ function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 
   // Sun-on-wall interactions — use apparent temp for the threshold checks
   // so a cold-feeling 20°C day (windy, humid) doesn't falsely claim a sun bonus.
   if (h.sunOnWall === true) {
-    if (tFeel > 24) penalize(8); // sun-baked
-    else if (tFeel < 12) s += 5; // sun-trap (bonus)
-    else if (tFeel < 18) s += 3; // bonus
+    if (tFeel > 0 && tFeel < idealMin) s += 5; // sun-trap (bonus)
+    else if (tFeel >= idealMin && tFeel <= idealMax) s += 3; // bonus
   } else if (h.sunOnWall === false) {
     // In shade
-    if (tFeel > 24) s += 4; // shade is welcome (bonus)
+    if (tFeel > idealMax) s += 4; // shade is welcome (bonus)
     else if (tFeel < 8) penalize(4); // cold and shaded
   }
 
@@ -930,7 +982,7 @@ function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 
   // any real penalty can't claim a perfect 100, even if bonuses clawed it
   // all the way back there. Keeps hour-by-hour scores honest relative to
   // the day score, which already applies this same cap.
-  const rawFinal = Math.max(0, Math.min(100, Math.round(s)));
+  const rawFinal = Math.max(0, Math.min(Math.floor(temperatureScoreCeiling(thermalPenalty)), Math.round(s)));
   return (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
 }
 
@@ -1364,71 +1416,30 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // Late-rain flag retained for the "rain after dark only" reason string.
   const skipLateRain = climb.allAfterDark && nextMorningDry(nextDay);
 
-  // — Temperature scoring —
-  // Old model used the day's peak apparent temperature (tFeel). That's the
-  // warmest moment of the day — if it just clips into the ideal range, the
-  // crag scores well even though most of the climbing window is too cold or
-  // too hot. The new model uses the MEAN apparent temperature during climbing
-  // hours plus a dwell-time correction.
+  // Score each climbing hour before averaging, so cold/hot extremes cannot
+  // cancel into a deceptively comfortable mean. No overnight minimum penalty.
   const [idealMin, idealMax] = crag.idealTemp;
   const ct = day.climbTemps || {};
   const climbHours = ct.climbHours || 0;
-  // Headline temperature: mean apparent across climbing hours when we have
-  // hourly data, otherwise fall back to the peak feels-like.
   const t = (climbHours > 0 && ct.meanApparent != null) ? ct.meanApparent : (day.tFeel ?? day.tMax);
-  // Fraction of the climbing window that's actually in the comfort band.
-  const inRangeFrac = climbHours > 0 ? ct.hoursInRange / climbHours : 1;
-  // Dwell-time penalty: even if the mean is in-range, a window where only a
-  // couple of hours sit inside the comfort band shouldn't score as "ideal".
-  //   inRangeHours ≥ 6 → 0 penalty (most of the climbing day comfortable)
-  //   inRangeHours = 4 → -1.4
-  //   inRangeHours = 2 → -5.6
-  //   inRangeHours = 0 → -10 (capped) on top of the temp-distance penalty
-  let dwellPen = 0;
-  if (climbHours >= 4) {
-    const shortfall = Math.max(0, 6 - ct.hoursInRange);
-    dwellPen = Math.min(10, shortfall * shortfall * 0.35);
-  }
-  if (t < idealMin) {
-    const diff = idealMin - t;
-    // Cold is climbable, just less pleasant — slightly gentler curve than
-    // the heat side (×2.5 vs ×4) and capped at 25.
-    const pen = Math.min(25, diff * 2.5) + dwellPen;
-    score -= pen;
-    if (diff > 5) reasons.push(`cold (${Math.round(t)}°C avg)`);
-    const detail = climbHours > 0
-      ? `${Math.round(t)}°C avg during climbing hours — ${Math.round(diff)}° below ideal (${idealMin}–${idealMax}°C); only ${ct.hoursInRange}/${climbHours}h in range`
-      : `${Math.round(t)}°C — ${Math.round(diff)}° below ideal (${idealMin}–${idealMax}°C)`;
-    add('temp', 'Temperature', -pen, detail);
-  } else if (t > idealMax) {
-    const diff = t - idealMax;
-    const pen = Math.min(40, diff * 4) + dwellPen;
-    score -= pen;
-    if (diff > 3) reasons.push(`hot (${Math.round(t)}°C avg)`);
-    const detail = climbHours > 0
-      ? `${Math.round(t)}°C avg during climbing hours — ${Math.round(diff)}° above ideal (${idealMin}–${idealMax}°C); only ${ct.hoursInRange}/${climbHours}h in range`
-      : `${Math.round(t)}°C — ${Math.round(diff)}° above ideal (${idealMin}–${idealMax}°C)`;
-    add('temp', 'Temperature', -pen, detail);
-  } else if (climbHours > 0 && dwellPen > 0) {
-    // Mean lands in-range but a chunk of the climbing window is outside it.
-    // Apply just the dwell-time penalty so users see why the day still drags.
-    score -= dwellPen;
-    if (ct.hoursCold > ct.hoursHot) {
-      reasons.push(`cool stretches (${ct.hoursCold}h)`);
-      add('temp', 'Temperature', -dwellPen, `mean ${Math.round(t)}°C, but only ${ct.hoursInRange}/${climbHours}h in range — ${ct.hoursCold}h cooler than ideal`);
-    } else if (ct.hoursHot > 0) {
-      reasons.push(`hot stretches (${ct.hoursHot}h)`);
-      add('temp', 'Temperature', -dwellPen, `mean ${Math.round(t)}°C, but only ${ct.hoursInRange}/${climbHours}h in range — ${ct.hoursHot}h hotter than ideal`);
-    } else {
-      // Edge case: range is tiny so all out-of-range hours rounded to neither bucket
-      add('temp', 'Temperature', -dwellPen, `mean ${Math.round(t)}°C, but only ${ct.hoursInRange}/${climbHours}h in range`);
-    }
+  const dwellPen = climbHours >= 4
+    ? Math.min(10, Math.pow(Math.max(0, Math.min(6, climbHours) - ct.hoursInRange), 2) * 0.35)
+    : 0;
+  const samples = Array.isArray(ct.temperatureSamples)
+    ? ct.temperatureSamples.filter(sample => Number.isFinite(sample.apparent)) : [];
+  const tempDistance = samples.length
+    ? samples.reduce((sum, sample) => sum + temperaturePenalty(crag, sample.apparent), 0) / samples.length
+    : temperaturePenalty(crag, t);
+  let protectedTemperaturePenalty = tempDistance + dwellPen;
+  if (protectedTemperaturePenalty > 0) {
+    score -= protectedTemperaturePenalty;
+    reasons.push(t < idealMin ? `cold (${Math.round(t)}°C avg)`
+      : t > idealMax ? `hot (${Math.round(t)}°C avg)` : 'temperature varies through the day');
+    add('temp', 'Temperature', -protectedTemperaturePenalty,
+      `${Math.round(t)}°C climbing average; ideal ${idealMin}–${idealMax}°C` +
+      (climbHours > 0 ? `; ${ct.hoursInRange}/${climbHours}h in range` : ''));
   } else {
     reasons.push(`temp ideal (${Math.round(t)}°C)`);
-    const detail = climbHours > 0
-      ? `${Math.round(t)}°C avg during climbing hours — ${ct.hoursInRange}/${climbHours}h inside ideal (${idealMin}–${idealMax}°C)`
-      : `${Math.round(t)}°C — inside ideal range (${idealMin}–${idealMax}°C)`;
-    add('temp', 'Temperature', 0, detail);
   }
 
   // — Humidity: descriptive label + score delta (v59.15) —
@@ -1487,14 +1498,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
 
   // Hot day (>22°C): each hour of direct sun on the wall during the hottest
   // part of the day adds a penalty. Capped so it can't dominate the score.
-  if (t > 22) {
-    if (warmHours >= 0.5) {
-      const pen = Math.min(14, Math.round(warmHours * 3));
-      score -= pen;
-      if (pen >= 6) reasons.push('sun-baked wall');
-      else if (t > 25 && warmHours > 2) reasons.push('afternoon sun-trap');
-      add('aspect', 'Sun on wall × heat', -pen, `${warmHours.toFixed(1)}h direct sun on wall during the hottest hours`);
-    }
+  if (t > idealMax) {
     // Shade refuge: hot day AND the wall barely sees the sun in the warm window.
     if (warmHours < 1 && onWallHours < 3) {
       const bon = Math.min(8, Math.round(6 + (3 - Math.min(onWallHours, 3))));
@@ -1507,13 +1511,8 @@ export function scoreDay(crag, day, prevDay, nextDay) {
       score += bon;
       add('aspect', 'Partial shade × heat', +bon, `${warmHours.toFixed(1)}h direct sun in the warm window — partial shade helps`);
     }
-  } else if (t > 18) {
+  } else if (t > idealMax - 4) {
     // Mid-warm day: smaller signal, same direction.
-    if (warmHours >= 2) {
-      const pen = Math.min(7, Math.round(warmHours * 1.4));
-      score -= pen;
-      add('aspect', 'Sun on wall × warmth', -pen, `${warmHours.toFixed(1)}h direct sun during 11am–4pm`);
-    }
     if (warmHours < 1 && onWallHours < 3) {
       const bon = 3;
       score += bon;
@@ -1593,40 +1592,30 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     }
   }
 
-  // — Per-crag heat cap (e.g. sun-bath aspects with no shade) —
-  // Crags can set `heatCap: 22` to flag that they become genuinely hot above
-  // that threshold on clear days. Falcon's Lookout is the canonical case: N-aspect,
-  // no shade, conglomerate that gets uncomfortable over 22°C with clear sky.
-  // Uses the PEAK apparent temperature (not the mean) because even a single
-  // baking hour on a sun-trap aspect is the limiting factor for the day.
-  const peakHeat = (ct.maxApparent != null) ? ct.maxApparent : (day.tFeel ?? day.tMax);
-  if (typeof crag.heatCap === 'number' && peakHeat > crag.heatCap) {
-    // sunHours is daily clear-sky proxy in hours (sunshine_duration / 3600).
-    // Scale ramps quickly: at the cap the wall is already warm; every degree
-    // over compounds because there's no shade refuge on these aspects.
-    //   1° over: -8   |  3° over: -16  |  6° over (e.g. 28°C at Falcon's): -28
-    //   10° over: hits the -40 cap (matches the temperature-mismatch ceiling).
-    // Even on a partly cloudy day there's still meaningful sun on a N aspect,
-    // so we apply a softer multiplier rather than a hard sunHours gate.
-    const over = peakHeat - crag.heatCap;
-    const clearness = Math.min(1, Math.max(0.4, sunHours / 7));
-    // Explicit exposure metadata keeps exposed friction bouldering sensitive
-    // to heat without treating a sheltered cave or gully as an open sun trap.
-    // Missing metadata retains the previous behaviour for existing crags.
-    const exposureFactor = {
-      exposed: 1,
-      partial: 0.7,
-      sheltered: 0.4,
-    }[crag.heatExposure] ?? 1;
-    const raw = (5 + over * 3) * clearness * exposureFactor;
-    const pen = Math.min(40, Math.round(raw));
-    if (pen > 0) {
-      score -= pen;
-      reasons.push('sun-baked aspect');
-      const climate = sunHours >= 5 ? `${sunHours.toFixed(1)}h of clear sun` : `${sunHours.toFixed(1)}h of sun forecast`;
-      add('aspect', 'Sun-trap × heat', -pen, `peak ${peakHeat.toFixed(0)}°C with ${climate} — this aspect bakes above ${crag.heatCap}°C`);
+  // Heat severity is averaged across climbing hours, not set by one peak.
+  // Air heat persists in shade; solar heat follows hourly cloud and wall sun.
+  const thermalSamples = samples.length ? samples : [{
+    apparent: t,
+    solarFraction: crag.shade === 'all-day' ? 0 :
+      Math.min(1, (day.sunHoursOnWall ?? 0) / Math.max(1, climbHours || 8)),
+  }];
+  const heat = thermalSamples.reduce((sum, sample) => {
+    const h = heatPenalty(crag, sample.apparent, sample.solarFraction);
+    sum.ambient += h.ambient / thermalSamples.length;
+    sum.solar += h.solar / thermalSamples.length;
+    return sum;
+  }, { ambient: 0, solar: 0 });
+  for (const [kind, label] of [['ambient', 'Ambient heat'], ['solar', 'Solar heat']]) {
+    if (heat[kind] > 0) {
+      score -= heat[kind];
+      protectedTemperaturePenalty += heat[kind];
+      add('temp', label, -heat[kind],
+        `Climbing-hour average above ${crag.heatCap ?? idealMax}°C` +
+        (samples.length ? '' : ' (hourly detail unavailable)'));
     }
   }
+  if (heat.ambient > 0) reasons.push('warm air affects friction');
+  if (heat.solar > 0) reasons.push('sun heats the rock');
 
   // — bestIn alignment with conditions —
   // Soft ±5 modifier: matches the day's character to the crag's sweet spot.
@@ -1907,7 +1896,13 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // If penalties fired but bonuses compensated back to 100, cap at 99
   // so the score honestly reflects that something is working against it.
   const hasPenalty = contributions.some(c => c.delta < 0);
-  const rawFinal = Math.max(0, Math.min(100, Math.round(score)));
+  // Bonuses may improve other factors but cannot erase temperature severity.
+  const ceiling = temperatureScoreCeiling(protectedTemperaturePenalty);
+  if (protectedTemperaturePenalty > 0 && score > ceiling) {
+    add('temp', 'Temperature limit', ceiling - score,
+      'Sun and dry weather cannot offset the full temperature penalty');
+  }
+  const rawFinal = Math.max(0, Math.min(Math.floor(ceiling), Math.round(score)));
   const finalScore = (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
 
   // Sort contributions: penalties first (most impactful negative), then bonuses.

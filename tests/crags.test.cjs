@@ -90,8 +90,28 @@ const auditedBoulderingProfiles = {
   'kooyoora-sundial': [[8, 18], 20, 'bouldering', 'exposed'],
   'kooyoora-area-1': [[8, 18], 20, 'bouldering', 'exposed'],
   'wa-eaglestone': [[8, 18], 20, 'mixed', 'exposed'],
-  'queens-park': [[10, 20], 22, 'bouldering', 'partial'],
-  'sissy-crag': [[8, 20], 22, 'bouldering', 'partial'],
+  'mt-kooyoora': [[8, 20], 22, 'bouldering', 'partial'],
+  'kooyoora-melvilles-caves': [[8, 20], 22, 'mixed', 'partial'],
+  'kooyoora-black-spot': [[8, 18], 20, 'bouldering', 'exposed'],
+  'gramps-venus-baths': [[6, 18], 20, 'bouldering', 'partial'],
+  'beechworth-gorge': [[8, 20], 22, 'bouldering', 'partial'],
+  'youyangs-main': [[10, 20], 22, 'mixed', 'partial'],
+  'youyangs-royaltywalls': [[8, 20], 20, 'routes', 'exposed'],
+  'youyangs-adamblock': [[8, 18], 20, 'mixed', 'partial'],
+  'youyangs-urinalwall': [[8, 20], 20, 'routes', 'exposed'],
+  'youyangs-bigrock': [[10, 20], 20, 'routes', 'exposed'],
+  'youyangs-northwesternoutcrop': [[8, 20], 22, 'routes', 'partial'],
+  'lindfield-main': [[10, 19], 20, 'bouldering', 'sheltered'],
+  'sissy-crag': [[10, 19], 20, 'bouldering', 'partial'],
+  'berowra': [[10, 19], 20, 'mixed', 'exposed'],
+  'barrenjoey': [[10, 19], 20, 'mixed', 'partial'],
+  'narrabeen-slabs': [[10, 19], 20, 'routes', 'sheltered'],
+  'wahroonga-rocks': [[10, 19], 20, 'mixed', 'partial'],
+  'tunks-park': [[10, 19], 20, 'bouldering', 'sheltered'],
+  'queens-park': [[10, 19], 20, 'bouldering', 'partial'],
+  'the-frontline': [[10, 19], 20, 'bouldering', 'sheltered'],
+  'the-hideaway': [[10, 19], 20, 'bouldering', 'partial'],
+  'junkyard-cave': [[10, 19], 20, 'mixed', 'sheltered'],
   'westside-main': [[10, 18], 20, 'bouldering', 'partial'],
   'westside-boulder': [[10, 18], 20, 'bouldering', 'partial'],
   'westside-delos-descent': [[10, 18], 20, 'bouldering', 'sheltered'],
@@ -108,6 +128,18 @@ test('audited bouldering profiles agree across both datasets', async () => {
       assert.equal(crag.discipline, discipline, `${file}: ${id} discipline`);
       assert.equal(crag.heatExposure, heatExposure, `${file}: ${id} heatExposure`);
     }
+  }
+});
+
+test('Blue Mountains profiles reject freezing conditions with a 10 degree minimum', async () => {
+  for (const file of ['worker/src/lib/crags.js', 'webapp/crags.js']) {
+    const blue = (await loadCrags(file)).filter(crag =>
+      crag.id === 'bluemtns-main' || crag.parentId === 'bluemtns-main');
+    assert.equal(blue.length, 28, `${file}: Blue Mountains record count`);
+    for (const crag of blue) {
+      assert.ok(crag.idealTemp[0] >= 10, `${file}: ${crag.id} minimum`);
+    }
+    assert.deepEqual(blue.find(crag => crag.id === 'bluemtns-mtyork-shady').idealTemp, [15, 28]);
   }
 });
 

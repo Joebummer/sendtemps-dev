@@ -57,7 +57,7 @@ for (const file of ['worker/src/lib/forecast.js']) {
     const f = await loadForecast(file);
     const blue = (await loadCrags('worker/src/lib/crags.js')).filter(c =>
       c.id === 'bluemtns-main' || c.parentId === 'bluemtns-main');
-    assert.equal(blue.length, 28);
+    assert.equal(blue.length, 30);
     for (const crag of blue) {
       const scores = [-5, 0, 5, 10, 15, 20, 25].map(t => {
         const result = f.scoreDay(crag, dayFor(f, crag, t), null, null);
@@ -173,7 +173,7 @@ test('forecast pipeline applies elevation once to hourly cells, temperature bins
     return Response.json(data);
   });
   const forecasts = await harness.forecasts.fetchAllForecasts('NSW');
-  for (const id of ['bluemtns-shipley', 'bluemtns-bowenscreek', 'westside-main']) {
+  for (const id of ['bluemtns-shipley', 'bluemtns-bowenscreek', 'bluemtns-thefreezer', 'bluemtns-bell-shady', 'westside-main']) {
     const f = forecasts[id];
     const correction = Math.max(0, f.crag.elevation - 400) / 1000 * 6.5;
     const expected = 10 - correction;
@@ -290,7 +290,7 @@ test('light relief is explicit, remains penalised and steepens beyond 26', async
   const f = await loadForecast('worker/src/lib/forecast.js');
   const cs = await loadCrags('worker/src/lib/crags.js');
   const light = cs.filter(c => c.warmWeatherRelief === 'light');
-  assert.equal(light.length, 10);
+  assert.equal(light.length, 11);
   for (const c of light) {
     assert.equal(f.feelsLikeHeatPenalty(c, 23, 10), 3, c.id);
     assert.equal(f.feelsLikeHeatPenalty(c, 26, 10), 7.5, c.id);
@@ -348,6 +348,31 @@ test('Boronia evening relief starts at 17, preserves air limits and averages by 
   delete d.climbTemps;
   d.tFeel = 23;
   assert.equal(f.scoreDay(c, d, null, null).contributions.find(x => x.label === 'Feels-like heat').delta, -8);
+});
+
+test('new heat windows apply only to their own hours in hourly and daily scoring', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const cs = await loadCrags('worker/src/lib/crags.js');
+  for (const [id, start] of [['bluemtns-thefreezer', 12], ['gramps-tribute-lower', 16], ['bluemtns-bell-sunny', 17]]) {
+    const c = cs.find(c => c.id === id);
+    assert.equal(f.scoreHour(c, hourAt(20, { apparentTemp: 23, hour: start - 1, sunOnWall: false })), 92, id);
+    assert.equal(f.scoreHour(c, hourAt(20, { apparentTemp: 23, hour: start, sunOnWall: false })), 97, id);
+    for (const hour of [undefined, null, NaN, -1, 24]) assert.equal(f.feelsLikeHeatPenalty(c, 23, hour), 8, id);
+    const d = dayFor(f, c, 20);
+    d.climbTemps.temperatureSamples.forEach(s => { s.apparent = 23; s.solarFraction = 0; });
+    const expected = ((start - 8) * 8 + (20 - start) * 3) / 12;
+    const result = f.scoreDay(c, d, null, null);
+    assert.equal(result.contributions.find(x => x.label === 'Feels-like heat').delta, -Math.round(expected), id);
+    assert.ok(result.score <= Math.floor(100 - expected), id);
+    // Relief cannot remove this sector's original air-temperature limit.
+    const air = c.idealTemp[1] + 2;
+    const heat = f.heatPenalty(c, air, 0).ambient;
+    assert.ok(f.scoreHour(c, hourAt(air, { apparentTemp: 23, hour: start, sunOnWall: false })) <= Math.floor(100 - 8 - heat), id);
+  }
+  assert.equal(f.feelsLikeHeatPenalty(cs.find(c => c.id === 'bluemtns-bell-shady'), 23, 10), 3);
+  for (const id of ['bluemtns-bellsupercrag', 'gramps-tribute', 'gramps-tribute-upper']) {
+    assert.equal(f.feelsLikeHeatPenalty(cs.find(c => c.id === id), 23, 18), 8, id);
+  }
 });
 
 test('air and feels-like heat overlap once while sun and wind penalties persist', async () => {

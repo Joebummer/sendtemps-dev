@@ -1,5 +1,48 @@
 # Hot-weather evidence follow-up
 
+## Applied after further cross-reference and user confirmation
+
+This section supersedes the earlier deferred decisions below for The Freezer,
+Bell and Tribute.
+
+- **The Freezer:** the user confirms the Cosmic County location, higher 1,009 m
+  elevation and summer suitability. [Mountain Project](https://www.mountainproject.com/area/116533426/the-freezer)
+  reports shade after 11 am; [theCrag's indexed guide](https://www.thecrag.com/en/climbing/australia/blue-mountains/the-freezer)
+  describes shade developing around lunchtime at the Soul Sister end. Apply
+  conservative relief from noon; preserve ideal 10–26 and heat cap 28. The
+  [publisher's access document](https://www.onsight.com.au/wordpress/wp-content/uploads/2014/01/ACCESS-TO-COSMIC-COUNTY-AND-THE-FREEZER.pdf)
+  resolves the erroneous Bowens Creek description. Existing coordinates are
+  close to the published point and retained. The unverified south bearing is
+  replaced with mixed/unknown, and shade is afternoon rather than all-day.
+- **Bell Shady Side:** [dedicated sector guide](https://www.mountainproject.com/area/126075993/shady-side)
+  confirms the roof-covered wall and provides -33.53536, 150.29594 and 938 m.
+  Add a separate sector with light relief.
+- **Bell Sunny Side:** [sector guide](https://www.mountainproject.com/area/126075917/sunny-side)
+  confirms NW aspect and late-afternoon shade; [indexed theCrag description](https://www.thecrag.com/en/climbing/australia/blue-mountains/sunny-side)
+  gives full shade at 16:00 AEST. Use conservative 17:00 local relief, including
+  the daylight-saving hour. The new record explicitly uses the combined Bell
+  forecast point and 981 m elevation estimate. No precise sector elevation is
+  invented. The combined Bell record remains standard, with mixed shade.
+- **Lower Tribute:** [indexed guide](https://www.thecrag.com/en/climbing/australia/grampians/hollow-mountain/area/161746722)
+  reports mid-afternoon summer shade. Apply relief from 16:00.
+- **Upper Tribute:** [indexed guide](https://www.thecrag.com/en/climbing/australia/grampians/hollow-mountain/area/161746692)
+  describes earlier shade but does not establish a reliable exact time. Add its
+  own record with standard heat treatment. Both Tribute sectors explicitly use
+  the existing combined forecast point and numeric 400 m elevation estimate;
+  both retain the combined record's access notice and ideal temperatures.
+
+The four new records follow the existing destination-level subcrag hierarchy.
+Existing combined IDs remain valid. Climate profile mappings and favourite
+coordinate lookups include the new IDs. Total coverage becomes 323 records
+across the same 79 destinations, so destination marketing counts do not change.
+
+The Tower's [developer guide](https://www.chockstone.org/grampians/thetower/thetower.htm)
+and [2006 update](https://www.chockstone.org/grampians/thetower/tower.pdf) now
+corroborate summer suitability of the main wall. The Tower and Gallery are not
+added in this change: neither has an existing exact catalogue record and current
+access was not established. Their historical condition evidence is not an
+access determination.
+
 Reviewed 14 September 2026. This is a targeted follow-up, not a completed national
 survey. Community observations identify candidates and time windows; they do not
 measure rock temperature or establish numerical penalty slopes. No private group

@@ -40,10 +40,35 @@ Bell Supercrag, The Freezer, Colosseum Cave and other uncertain/mixed candidates
 receive the standard profile pending sector, aspect or mapping verification.
 Central Gully Left and shaded bouldering areas are not automatically exempt.
 
-The warmWeatherRelief catalogue field accepts only light, morning or evening. Missing
+The warmWeatherRelief catalogue field accepts light, morning, afternoon,
+late-afternoon or evening. Morning ends at 12:00; afternoon starts at 12:00,
+late-afternoon at 16:00 and evening at 17:00. All windows use the existing
+forecast local-hour basis and reject missing/invalid hours. Missing
 values mean standard behaviour. Both catalogue copies carry the metadata, but
 the legacy web scoring implementation is unchanged.
 
 Tests cover the 21°C boundary, stronger heat, light profiles, morning expiry, evening onset,
 missing hourly detail, overlapping penalties, solar/wind effects, brief heat,
 Westside regression fixtures and Blue Mountains cold edges.
+
+## Confirmed sector follow-up
+
+The Freezer uses afternoon relief and elevation 1,009 m, confirmed by the user.
+Its description places it near Cosmic County in the Dargan Creek area. Preserve
+ideal 10–26 and air heat cap 28. The existing lapse adjustment changes from
+-1.04°C to -3.9585°C, once before both hourly and daily scoring. This is a
+correction to the catalogue input, not a new elevation model.
+
+Bell Shady Side receives light relief. Bell Sunny Side receives evening relief.
+The combined Bell record now has mixed shade and remains on standard heat
+scoring. Lower Tribute receives late-afternoon relief. Upper Tribute has its
+own record and shade description but retains standard heat scoring until its
+earlier shade window can be established. Original ideal bands and heat caps are
+copied to the new sectors without widening them. Keep the existing combined
+IDs for favourites, with the four new sector IDs under the established Blue
+Mountains/Grampians destination hierarchy.
+
+These relief windows are conservative calibration choices; they do not replace
+the solar geometry model with measured shadow maps. The Freezer's previously
+unverified S aspect is now mixed/unknown, and it is no longer marked all-day
+shade. No new bearing was inferred solely from its summer suitability.

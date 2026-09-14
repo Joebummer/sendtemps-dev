@@ -147,20 +147,21 @@ test('failed weather fetches never populate the regional cache', async () => {
   assert.equal(harness.entries.size, 0);
 });
 
-test('heat exposure scales heat-cap penalties and preserves the legacy default', async () => {
+test('heat exposure scales only solar heat and preserves ambient heat in shade', async () => {
   const harness = await loadWorker(async url => Response.json(weatherFixture(url)));
   const forecast = (await harness.forecasts.fetchAllForecasts('VIC'))['mt-beckworth'];
   const day = structuredClone(forecast.days.find(item => item.date === '2026-09-13'));
-  day.climbTemps.maxApparent = 26;
-  day.sunshine = 7 * 3600;
-  const penalty = heatExposure => {
+  day.climbTemps.temperatureSamples = [{ apparent: 26, solarFraction: 1 }];
+  const penalties = heatExposure => {
     const result = harness.forecasts.scoreDay(
       { ...forecast.crag, heatCap: 20, heatExposure }, day, null, null,
     );
-    return result.contributions.find(item => item.label === 'Sun-trap × heat')?.delta;
+    return Object.fromEntries(result.contributions.map(item => [item.label, item.delta]));
   };
-  assert.equal(penalty('exposed'), -23);
-  assert.equal(penalty('partial'), -16);
-  assert.equal(penalty('sheltered'), -9);
-  assert.equal(penalty(undefined), -23);
+  assert.equal(penalties('exposed')['Solar heat'], -9);
+  assert.equal(penalties('partial')['Solar heat'], -6);
+  assert.equal(penalties('sheltered')['Solar heat'], -4);
+  assert.equal(penalties(undefined)['Solar heat'], -9);
+  for (const exposure of ['exposed', 'partial', 'sheltered', undefined])
+    assert.equal(penalties(exposure)['Ambient heat'], -9);
 });

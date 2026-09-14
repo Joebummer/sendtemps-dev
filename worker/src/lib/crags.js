@@ -1,17 +1,17 @@
-// Crag database — Melbourne climber's regular destinations
+// Crag database – Melbourne climber's regular destinations
 // Each crag has lat/lon, aspect, elevation, dry-out time, and notes.
 // Sub-areas where it matters (Arapiles, Grampians).
 //
 // Aspect codes: N, NE, E, SE, S, SW, W, NW
 // dryRating: 1 (slow to dry, holds moisture) → 5 (very fast, dries in hours)
-// idealTemp: [min, max] °C — sweet spot for friction & comfort
-// shade: "morning", "afternoon", "all-day", "none" — when shade is available
-// rockType: granite, sandstone, quartzite — used for context
+// idealTemp: [min, max] °C – sweet spot for friction & comfort
+// shade: "morning", "afternoon", "all-day", "none" – when shade is available
+// rockType: granite, sandstone, quartzite – used for context
 // trip: "day" (<3h drive, day-trip from Melbourne) or "weekend" (3h+, overnight worth it)
 // heatCap: (optional) temperature in °C above which the crag becomes uncomfortable on clear days (e.g. N-aspect sun-baths)
 
 export const CRAGS = [
-  // — Metro / day-trip —
+  // – Metro / day-trip – 
   {
     id: 'camels-hump',
     name: "Camel's Hump",
@@ -71,7 +71,7 @@ export const CRAGS = [
     sunOnWall: 'Morning to early afternoon sun',
     bestIn: 'cool',
   },
-  // — Cathedral Ranges sub-areas —
+  // – Cathedral Ranges sub-areas – 
   {
     id: 'cathedral-main',
     name: 'Cathedral Ranges',
@@ -87,7 +87,7 @@ export const CRAGS = [
     driveTime: '1h45',
     trip: 'both',
     state: 'VIC',    notes: 'Sandstone ridge ~1h45 NE of Melbourne (just past Buxton). 900–950m elevation keeps it noticeably cooler than the valley. Mix of single-pitch sport and committing multipitch trad. Check sub-crags for aspect.',
-    sunOnWall: 'Mixed — depends on sub-crag aspect',
+    sunOnWall: 'Mixed – depends on sub-crag aspect',
     bestIn: 'mild',
   },
   {
@@ -561,7 +561,7 @@ export const CRAGS = [
     notes: 'Quieter Sutton Grange-side climbing area with sport routes and bouldering across several formations. Sun exposure varies by wall and bloc.',
   },
 
-  // — Arapiles sub-areas —
+  // – Arapiles sub-areas – 
   {
     id: 'arap-main',
     name: 'Mt Arapiles',
@@ -965,7 +965,7 @@ export const CRAGS = [
     shade: 'morning',
     driveTime: '4h',
     trip: 'both',
-    state: 'VIC',    notes: 'CLOSED — cultural heritage protection.',
+    state: 'VIC',    notes: 'CLOSED – cultural heritage protection.',
     sunOnWall: 'Late afternoon (shaded most of day)',
     bestIn: 'mild',
     closedAll: true,
@@ -1005,7 +1005,7 @@ export const CRAGS = [
     shade: 'morning',
     driveTime: '4h',
     trip: 'both',
-    state: 'VIC',    notes: 'Compact free-standing pillar opposite Tiger Wall — ~35 routes in the 20–26 range (Procol Harum, The Undertaker). Morning-shady, afternoon sun. CLOSED — cultural heritage protection.',
+    state: 'VIC',    notes: 'Compact free-standing pillar opposite Tiger Wall – ~35 routes in the 20–26 range (Procol Harum, The Undertaker). Morning-shady, afternoon sun. CLOSED – cultural heritage protection.',
     sunOnWall: 'Afternoon only (W-facing)',
     bestIn: 'mild',
     closedAll: true,
@@ -1085,14 +1085,14 @@ export const CRAGS = [
     shade: 'morning',
     driveTime: '4h',
     trip: 'both',
-    state: 'VIC',    notes: 'Obscure wilderness trad with a Grampians feel — ~200 routes. W-facing, afternoon sun. CLOSED — total ban under 2024/25 Parks Victoria cultural heritage protections.',
+    state: 'VIC',    notes: 'Obscure wilderness trad with a Grampians feel – ~200 routes. W-facing, afternoon sun. CLOSED – total ban under 2024/25 Parks Victoria cultural heritage protections.',
     sunOnWall: 'Afternoon (W-facing)',
     bestIn: 'mild',
     closedAll: true,
     closureReason: 'cultural heritage (Parks Vic 2024/25)',
   },
 
-  // — Grampians sub-areas —
+  // – Grampians sub-areas – 
   {
     id: 'gramps-main',
     name: 'Grampians',
@@ -1369,7 +1369,7 @@ export const CRAGS = [
     state: 'VIC',
     notes: 'Premier winter destination.',
     sunOnWall: 'Variable by wall',
-    bestIn: 'cold/cool — premier winter destination',
+    bestIn: 'cold/cool – premier winter destination',
   },
   {
     id: 'gramps-lowertaipan',
@@ -1450,7 +1450,7 @@ export const CRAGS = [
     driveTime: '3h45',
     trip: 'both',
     state: 'VIC',
-    notes: 'Steep, hard sport crag on Mackeys Peak in the Halls Gap Northern Wonderland Range — 5–10 min walk from Venus Baths trail. 27 routes grades 20–28 (mostly 25–27). Entire sector tagged dry-in-rain, morning sun, sheltered from wind — making it one of the most reliable foul-weather climbing options in the Grampians. Grade 22 and up to make the most of it; famous routes include Minister of Affairs. East-facing — best in morning, shaded by afternoon.',
+    notes: 'Steep, hard sport crag on Mackeys Peak in the Halls Gap Northern Wonderland Range – 5–10 min walk from Venus Baths trail. 27 routes grades 20–28 (mostly 25–27). Entire sector tagged dry-in-rain, morning sun, sheltered from wind – making it one of the most reliable foul-weather climbing options in the Grampians. Grade 22 and up to make the most of it; famous routes include Minister of Affairs. East-facing – best in morning, shaded by afternoon.',
     sunOnWall: 'Morning sun; shaded by early afternoon',
     bestIn: 'cool mornings; also wet/foul weather refuge',
   },
@@ -1681,7 +1681,7 @@ export const CRAGS = [
     "accessStatus": "Access via Central Buttress only. Do not enter the Taipan Wall designated climbing area from Grey and Green Walls. Follow the Parks Victoria Taipan access information and on-ground signage."
   },
 
-  // — Mt Buffalo —
+  // – Mt Buffalo – 
   {
     id: 'buffalo-main',
     name: 'Mt Buffalo',
@@ -1971,7 +1971,7 @@ export const CRAGS = [
     notes: 'High-elevation climbing area containing The Horn, Dreamworld, Wall of China, Mothballs and other formations. The sectors span multiple orientations, with strong wind exposure common across the area.',
   },
 // ─────────────────────────────────────────────────────────────
-  // — Tasmania —
+  // – Tasmania – 
   // ─────────────────────────────────────────────────────────────
 
   // ── Ben Lomond ──
@@ -1991,8 +1991,8 @@ export const CRAGS = [
     baseCity: 'Launceston',
     trip: 'both',
     state: 'TAS',
-    notes: 'Alpine dolerite plateau ~50km from Launceston. Exposed and cold — wind and access (road may be closed in winter/snow) are the main variables. Outstanding position. Check snow forecast and road conditions before committing.',
-    sunOnWall: 'Mixed — depends on sub-crag',
+    notes: 'Alpine dolerite plateau ~50km from Launceston. Exposed and cold – wind and access (road may be closed in winter/snow) are the main variables. Outstanding position. Check snow forecast and road conditions before committing.',
+    sunOnWall: 'Mixed – depends on sub-crag',
     bestIn: 'mild',
   },
   {
@@ -2012,7 +2012,7 @@ export const CRAGS = [
     baseCity: 'Launceston',
     trip: 'both',
     state: 'TAS',
-    notes: 'Classic Ben Lomond dolerite. All day sun — best on clear, still days. Wind is the main enemy at altitude.',
+    notes: 'Classic Ben Lomond dolerite. All day sun – best on clear, still days. Wind is the main enemy at altitude.',
     sunOnWall: 'All day',
     bestIn: 'mild',
   },
@@ -2033,7 +2033,7 @@ export const CRAGS = [
     baseCity: 'Launceston',
     trip: 'both',
     state: 'TAS',
-    notes: 'North-facing dolerite wall. All day sun. Exposed position — check wind forecast.',
+    notes: 'North-facing dolerite wall. All day sun. Exposed position – check wind forecast.',
     sunOnWall: 'All day',
     bestIn: 'mild',
   },
@@ -2054,7 +2054,7 @@ export const CRAGS = [
     baseCity: 'Launceston',
     trip: 'both',
     state: 'TAS',
-    notes: 'North-facing alpine dolerite. All day sun at altitude. Cold despite sun — dress in layers.',
+    notes: 'North-facing alpine dolerite. All day sun at altitude. Cold despite sun – dress in layers.',
     sunOnWall: 'All day',
     bestIn: 'mild',
   },
@@ -2117,7 +2117,7 @@ export const CRAGS = [
     baseCity: 'Launceston',
     trip: 'both',
     state: 'TAS',
-    notes: 'East-facing — morning sun, afternoon shade. More sheltered from westerly winds than the north-facing buttresses.',
+    notes: 'East-facing – morning sun, afternoon shade. More sheltered from westerly winds than the north-facing buttresses.',
     sunOnWall: 'Morning only',
     bestIn: 'mild',
   },
@@ -2140,7 +2140,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'TAS',
     notes: 'Stunning coastal granodiorite on the east coast. 2.5h from Hobart. Mix of sea-cliff sport and trad on pink granite. Dries quickly. Check sub-crags for aspect.',
-    sunOnWall: 'Mixed — depends on sub-crag',
+    sunOnWall: 'Mixed – depends on sub-crag',
     bestIn: 'mild',
   },
   {
@@ -2244,7 +2244,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'The Hazards granite ridge. East-facing main wall — morning sun. Excellent multi-pitch and sport.',
+    notes: 'The Hazards granite ridge. East-facing main wall – morning sun. Excellent multi-pitch and sport.',
     sunOnWall: 'Morning only',
     bestIn: 'mild',
   },
@@ -2265,7 +2265,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'Sunny winter days are best — goes into shade in the afternoon in summer. East-facing with excellent friction climbing.',
+    notes: 'Sunny winter days are best – goes into shade in the afternoon in summer. East-facing with excellent friction climbing.',
     sunOnWall: 'Morning only (afternoon shade earlier in summer)',
     bestIn: 'cool',
   },
@@ -2349,7 +2349,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'All day sun — north-facing granite. Best on cool to mild days. Can get hot in summer.',
+    notes: 'All day sun – north-facing granite. Best on cool to mild days. Can get hot in summer.',
     sunOnWall: 'All day',
     bestIn: 'cool',
   },
@@ -2370,7 +2370,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'West-facing — afternoon sun. Good option when eastern crags are in shade.',
+    notes: 'West-facing – afternoon sun. Good option when eastern crags are in shade.',
     sunOnWall: 'Afternoon only',
     bestIn: 'mild',
   },
@@ -2413,8 +2413,8 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'Iconic dolerite above Hobart — the Organ Pipes and surrounding tiers are 20-30min from the CBD. Temperature is significantly colder than at sea level. World-class dolerite trad and sport. Check sub-crags for aspect.',
-    sunOnWall: 'Mixed — Organ Pipes face east; western tiers face north/NW',
+    notes: 'Iconic dolerite above Hobart – the Organ Pipes and surrounding tiers are 20-30min from the CBD. Temperature is significantly colder than at sea level. World-class dolerite trad and sport. Check sub-crags for aspect.',
+    sunOnWall: 'Mixed – Organ Pipes face east; western tiers face north/NW',
     bestIn: 'mild',
   },
   {
@@ -2434,7 +2434,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'East-facing dolerite — morning sun. Long routes on the lower tiers. Cold in shade; dress warmly.',
+    notes: 'East-facing dolerite – morning sun. Long routes on the lower tiers. Cold in shade; dress warmly.',
     sunOnWall: 'Morning only',
     bestIn: 'mild',
   },
@@ -2497,7 +2497,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'East-facing gully. Morning sun. Stays damp longer than open faces — allow extra dry time.',
+    notes: 'East-facing gully. Morning sun. Stays damp longer than open faces – allow extra dry time.',
     sunOnWall: 'Morning only',
     bestIn: 'mild',
   },
@@ -2518,7 +2518,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'East-facing tier. Morning sun. Classic Organ Pipes character — columnar dolerite.',
+    notes: 'East-facing tier. Morning sun. Classic Organ Pipes character – columnar dolerite.',
     sunOnWall: 'Morning only',
     bestIn: 'mild',
   },
@@ -2539,7 +2539,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'The main Organ Pipes face. East-facing — morning sun. Iconic Hobart climbing.',
+    notes: 'The main Organ Pipes face. East-facing – morning sun. Iconic Hobart climbing.',
     sunOnWall: 'Morning only',
     bestIn: 'mild',
   },
@@ -2581,7 +2581,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'West-facing — afternoon sun. Good choice when the Organ Pipes are in shade.',
+    notes: 'West-facing – afternoon sun. Good choice when the Organ Pipes are in shade.',
     sunOnWall: 'Afternoon only',
     bestIn: 'mild',
   },
@@ -2686,7 +2686,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'NW-facing lower crag — afternoon sun. Dries faster than high-altitude tiers. Popular moderate climbing.',
+    notes: 'NW-facing lower crag – afternoon sun. Dries faster than high-altitude tiers. Popular moderate climbing.',
     sunOnWall: 'Afternoon only',
     bestIn: 'cool',
   },
@@ -2708,8 +2708,8 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'Tasmanian sandstone ~1h from Hobart near Buckland. Mix of sport and trad. Sandstone needs 2-3 dry days minimum — check sub-crags for aspect.',
-    sunOnWall: 'Mixed — depends on sub-crag',
+    notes: 'Tasmanian sandstone ~1h from Hobart near Buckland. Mix of sport and trad. Sandstone needs 2-3 dry days minimum – check sub-crags for aspect.',
+    sunOnWall: 'Mixed – depends on sub-crag',
     bestIn: 'mild',
   },
   {
@@ -2729,7 +2729,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'All day sun — north-facing sandstone. Best on cool days. Needs 2-3 dry days.',
+    notes: 'All day sun – north-facing sandstone. Best on cool days. Needs 2-3 dry days.',
     sunOnWall: 'All day',
     bestIn: 'cool',
   },
@@ -2750,7 +2750,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'East-facing — morning sun, afternoon shade. Good for warm days.',
+    notes: 'East-facing – morning sun, afternoon shade. Good for warm days.',
     sunOnWall: 'Morning only',
     bestIn: 'mild',
   },
@@ -2771,7 +2771,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'West-facing — afternoon sun. Good on cooler mornings, warm afternoons.',
+    notes: 'West-facing – afternoon sun. Good on cooler mornings, warm afternoons.',
     sunOnWall: 'Afternoon only',
     bestIn: 'mild',
   },
@@ -2792,7 +2792,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'All day sun — north-facing. Avoid on hot days.',
+    notes: 'All day sun – north-facing. Avoid on hot days.',
     sunOnWall: 'All day',
     bestIn: 'cool',
   },
@@ -2813,7 +2813,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'All day shade — south-facing cave. The hot-weather option at Sand River. Cave roof protects from rain.',
+    notes: 'All day shade – south-facing cave. The hot-weather option at Sand River. Cave roof protects from rain.',
     sunOnWall: 'No direct sun',
     bestIn: 'warm',
   },
@@ -2855,7 +2855,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'Great winter spot — thin crimp climbing on north-facing sandstone. All day sun keeps it warm in cooler months.',
+    notes: 'Great winter spot – thin crimp climbing on north-facing sandstone. All day sun keeps it warm in cooler months.',
     sunOnWall: 'All day',
     bestIn: 'cool',
   },
@@ -2939,7 +2939,7 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'South end of the Panopticon — west-facing. Afternoon sun.',
+    notes: 'South end of the Panopticon – west-facing. Afternoon sun.',
     sunOnWall: 'Afternoon only',
     bestIn: 'mild',
   },
@@ -2961,8 +2961,8 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'Sea-cliff dolerite on the Tasman Peninsula. The Totem Pole is one of the most iconic routes in Australia. ~2h from Hobart plus significant walk-in. Check swell and spray — sea conditions affect climbability.',
-    sunOnWall: 'Mixed — depends on sub-crag',
+    notes: 'Sea-cliff dolerite on the Tasman Peninsula. The Totem Pole is one of the most iconic routes in Australia. ~2h from Hobart plus significant walk-in. Check swell and spray – sea conditions affect climbability.',
+    sunOnWall: 'Mixed – depends on sub-crag',
     bestIn: 'mild',
   },
   {
@@ -3052,7 +3052,7 @@ export const CRAGS = [
   },
 
 
-  // — Blue Mountains sub-crags (Medlow Bath / Blackheath / Katoomba) —
+  // – Blue Mountains sub-crags (Medlow Bath / Blackheath / Katoomba) – 
   {
     id: 'bluemtns-medlowbath',
     name: 'Medlow Bath',
@@ -3071,10 +3071,10 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Diverse cluster of crags a short walk from Medlow Bath station. Sub-areas include The Sunbath (beginner sport, grades 4–25), Reservoir Dogs/Sporting Complex (abseil-in sport 15–22), and The Underworld (steep hard routes). NOTE: many sectors are on Hydro Majestic Hotel private land — access not guaranteed. The Sunbath gets afternoon sun; shade sectors available for hot days.",
+    notes: "Diverse cluster of crags a short walk from Medlow Bath station. Sub-areas include The Sunbath (beginner sport, grades 4–25), Reservoir Dogs/Sporting Complex (abseil-in sport 15–22), and The Underworld (steep hard routes). NOTE: many sectors are on Hydro Majestic Hotel private land – access not guaranteed. The Sunbath gets afternoon sun; shade sectors available for hot days.",
     sunOnWall: 'The Sunbath: afternoon sun. Reservoir Dogs/Sporting Complex: from ~1pm in summer',
     bestIn: 'mild',
-    closures: 'Hydro Majestic Hotel owns several sectors — access not guaranteed. BMCC manages The Block, Katoomba Bros, Sandpit, Valley Farm, Sooty Crag but access via private land.',
+    closures: 'Hydro Majestic Hotel owns several sectors – access not guaranteed. BMCC manages The Block, Katoomba Bros, Sandpit, Valley Farm, Sooty Crag but access via private land.',
   },
   {
     id: 'bluemtns-wavewall',
@@ -3094,7 +3094,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "The standout wall in Centennial Glen — steep, juggy climbing on immaculate orange sandstone. Shaded until ~2:45pm in mid-summer, sun until ~5pm. Orange rock stays dry in light rain. Grades 21–32. Classic routes: Jaws (21), Split Wave (23), Rubber Lover (25/26).",
+    notes: "The standout wall in Centennial Glen – steep, juggy climbing on immaculate orange sandstone. Shaded until ~2:45pm in mid-summer, sun until ~5pm. Orange rock stays dry in light rain. Grades 21–32. Classic routes: Jaws (21), Split Wave (23), Rubber Lover (25/26).",
     sunOnWall: 'Shaded until ~2:45pm; sun until ~5pm',
     bestIn: 'mild',
   },
@@ -3116,7 +3116,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: 'One of few spots in Centennial Glen with winter sun — a rare warm-up option when the Glen floor is cold and dark. Orange buttress on a high ledge. Routes 18–32+. Best in cool/winter conditions when morning sun is the priority.',
+    notes: 'One of few spots in Centennial Glen with winter sun – a rare warm-up option when the Glen floor is cold and dark. Orange buttress on a high ledge. Routes 18–32+. Best in cool/winter conditions when morning sun is the priority.',
     sunOnWall: 'Winter sun from morning; shaded for much of summer',
     bestIn: 'cool',
   },
@@ -3138,7 +3138,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Cirque of orange rock beneath Centennial Glen, split either side of a creek. Shady and cool until ~1:30pm in summer — a good hot-weather option. Technical face climbing and steep canyon walls, grades 19–34. Famous routes: Black Heathen (25), Legoland (23), Little Empty Boat (34). Includes Sail Away Wall (SW aspect, sun from ~2:45pm).",
+    notes: "Cirque of orange rock beneath Centennial Glen, split either side of a creek. Shady and cool until ~1:30pm in summer – a good hot-weather option. Technical face climbing and steep canyon walls, grades 19–34. Famous routes: Black Heathen (25), Legoland (23), Little Empty Boat (34). Includes Sail Away Wall (SW aspect, sun from ~2:45pm).",
     sunOnWall: 'Afternoon sun',
     bestIn: 'warm',
   },
@@ -3160,7 +3160,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "One of the biggest and best crags in the Blue Mountains — ~174 routes, wide grade range, closely spaced bolts. Main sectors (Arrivals, Departures, Devils Circus) offer all-day shade and good rain shelter. Sunnyside sector on opposite side of gully for cold days. 25–30 min walk in via fixed ropes and rungs. No dogs.",
+    notes: "One of the biggest and best crags in the Blue Mountains – ~174 routes, wide grade range, closely spaced bolts. Main sectors (Arrivals, Departures, Devils Circus) offer all-day shade and good rain shelter. Sunnyside sector on opposite side of gully for cold days. 25–30 min walk in via fixed ropes and rungs. No dogs.",
     sunOnWall: 'Main sectors: all-day shade. Sunnyside sector: sun-facing',
     bestIn: 'hot (main sectors) or cool (Sunnyside)',
   },
@@ -3182,13 +3182,13 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Classic mixed trad/sport crag near Bell on Bells Line of Road — cooler and more exposed than Katoomba proper. Excellent moderate splitter cracks, grades 17–25. Sectors include Railway Cliffs, The Freezer (40-min walk-in), Memory Lane. Famous routes: Interstate 31, Gentlemans Drag, Barbarossa. Bring a single rack.",
-    sunOnWall: 'Variable; Bell plateau conditions — cool and exposed',
+    notes: "Classic mixed trad/sport crag near Bell on Bells Line of Road – cooler and more exposed than Katoomba proper. Excellent moderate splitter cracks, grades 17–25. Sectors include Railway Cliffs, The Freezer (40-min walk-in), Memory Lane. Famous routes: Interstate 31, Gentlemans Drag, Barbarossa. Bring a single rack.",
+    sunOnWall: 'Variable; Bell plateau conditions – cool and exposed',
     bestIn: 'cool',
   },
   {
     id: 'bluemtns-mtyork-sunny',
-    name: 'Mt York — Sunny Side',
+    name: 'Mt York – Sunny Side',
     area: 'Blue Mountains',
     lat: -33.553,
     lon: 150.2225,
@@ -3204,13 +3204,13 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Sun-facing side of Mt York peninsula — best in cool/winter conditions. Little Triggers Wall is the pick: best moderate sport in the Blue Mountains (grades 15–24), consistently praised. Mezzaluna (16) is hugely popular. The Soft Parade is beginner-friendly (grades 8–23, NE aspect). Camping on site.",
+    notes: "Sun-facing side of Mt York peninsula – best in cool/winter conditions. Little Triggers Wall is the pick: best moderate sport in the Blue Mountains (grades 15–24), consistently praised. Mezzaluna (16) is hugely popular. The Soft Parade is beginner-friendly (grades 8–23, NE aspect). Camping on site.",
     sunOnWall: 'Most of the day (north-facing)',
     bestIn: 'cool',
   },
   {
     id: 'bluemtns-mtyork-shady',
-    name: 'Mt York — Shady Side',
+    name: 'Mt York – Shady Side',
     area: 'Blue Mountains',
     lat: -33.5536,
     lon: 150.2236,
@@ -3226,13 +3226,13 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "South-facing side of the Mt York peninsula — shaded most of the day, ideal in summer heat. Galactic Gully and Masterplan Area. Exhibition Wall (1979) is the birthplace of Australian sport climbing. Historic carrot-bolt routes, bring hangers.",
+    notes: "South-facing side of the Mt York peninsula – shaded most of the day, ideal in summer heat. Galactic Gully and Masterplan Area. Exhibition Wall (1979) is the birthplace of Australian sport climbing. Historic carrot-bolt routes, bring hangers.",
     sunOnWall: 'Shaded most of the day',
     bestIn: 'warm',
   },
   {
     id: 'bluemtns-diamondfalls-access',
-    name: 'Diamond Falls — Access Ledge',
+    name: 'Diamond Falls – Access Ledge',
     area: 'Blue Mountains',
     lat: -33.7396,
     lon: 150.2776,
@@ -3248,13 +3248,13 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Lower sector of Diamond Falls — sport and easy multi-pitch trad, low-mid 20s. Sun from ~11am. Good entry point before committing to Mr Wall. Access via locked gate on Glenraphael Drive, Narrow Neck Plateau.",
+    notes: "Lower sector of Diamond Falls – sport and easy multi-pitch trad, low-mid 20s. Sun from ~11am. Good entry point before committing to Mr Wall. Access via locked gate on Glenraphael Drive, Narrow Neck Plateau.",
     sunOnWall: 'Sun from ~11am',
     bestIn: 'cool',
   },
   {
     id: 'bluemtns-diamondfalls-mrwall',
-    name: 'Diamond Falls — Mr Wall',
+    name: 'Diamond Falls – Mr Wall',
     area: 'Blue Mountains',
     lat: -33.7396,
     lon: 150.2770,
@@ -3270,7 +3270,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "The jewel of Blue Mountains sport climbing. Steep, immaculate sandstone, routes 26–35. Sun doesn't hit until after 2pm — needs a warm afternoon to work at this level. Can be very cold even in summer. Famous routes: Hairline2000 (28), Fantastic Mr Fox (33), Mr Pinky (34), Diamond Jack (25).",
+    notes: "The jewel of Blue Mountains sport climbing. Steep, immaculate sandstone, routes 26–35. Sun doesn't hit until after 2pm – needs a warm afternoon to work at this level. Can be very cold even in summer. Famous routes: Hairline2000 (28), Fantastic Mr Fox (33), Mr Pinky (34), Diamond Jack (25).",
     sunOnWall: 'Sun from ~2pm on steeper routes',
     bestIn: 'cool with warm afternoon',
   },
@@ -3314,7 +3314,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Remote, serious Grose Valley multi-pitch crag. Best accessed by abseil — walking in is tricky on loose ledges. Routes up to 7 pitches. East-facing walls (Regular Route, Orange Jam) shaded after 12–1pm; most routes get sun from dawn until ~4pm in winter. Famous routes: Scurvy (7 pitches, 30), Regular Route (25), Orange Jam (27), Parched (29).",
+    notes: "Remote, serious Grose Valley multi-pitch crag. Best accessed by abseil – walking in is tricky on loose ledges. Routes up to 7 pitches. East-facing walls (Regular Route, Orange Jam) shaded after 12–1pm; most routes get sun from dawn until ~4pm in winter. Famous routes: Scurvy (7 pitches, 30), Regular Route (25), Orange Jam (27), Parched (29).",
     sunOnWall: 'Most routes: dawn to ~4pm in winter. E-facing walls: shaded after noon',
     bestIn: 'cool, sunny days (dawn starts)',
   },
@@ -3337,8 +3337,8 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Narrow Neck Plateau crag, reached from the same locked gate as Diamond Falls — 15–20min walk down the fire road then a cairned trail with a fixed rope/rungs section. Sheltered pocket with a mix of aspects across the main wall. Popular for hard sport routes. Can be cold and windy in winter given the plateau exposure.",
-    sunOnWall: 'Mixed — varies by sector across the main wall',
+    notes: "Narrow Neck Plateau crag, reached from the same locked gate as Diamond Falls – 15–20min walk down the fire road then a cairned trail with a fixed rope/rungs section. Sheltered pocket with a mix of aspects across the main wall. Popular for hard sport routes. Can be cold and windy in winter given the plateau exposure.",
+    sunOnWall: 'Mixed – varies by sector across the main wall',
     bestIn: 'mild, calm days',
   },
   {
@@ -3381,7 +3381,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "One of the premier hard sport cliffs in the Blue Mountains, on the Narrow Neck Plateau near Diamond Falls and Farside. Steep, sustained climbing that shines in warm conditions — regarded as one of the best 8a-grade cliffs in the region. Sheltered enough to be workable outside peak summer heat.",
+    notes: "One of the premier hard sport cliffs in the Blue Mountains, on the Narrow Neck Plateau near Diamond Falls and Farside. Steep, sustained climbing that shines in warm conditions – regarded as one of the best cliffs for grade 29 climbing in the region. Sheltered enough to be workable outside peak summer heat.",
     sunOnWall: 'Mixed exposure across sectors',
     bestIn: 'warm',
   },
@@ -3403,8 +3403,8 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Shipley Plateau crag out past Centennial Glen — park near the second power pole on Shipley Road (signed to Hargraves Lookout) and walk in ~10–15min. Southeast-facing wall of 10–25 routes from 6c–8a. Cooler and shadier than the west-facing Blackheath crags, good for warmer days.",
-    sunOnWall: 'SE-facing — morning sun, shaded by early afternoon',
+    notes: "Shipley Plateau crag out past Centennial Glen – park near the second power pole on Shipley Road (signed to Hargraves Lookout) and walk in ~10–15min. Southeast-facing wall with 10–25 routes, approximately grades 22–29. Cooler and shadier than the west-facing Blackheath crags, good for warmer days.",
+    sunOnWall: 'SE-facing – morning sun, shaded by early afternoon',
     bestIn: 'mild to warm',
   },
   {
@@ -3447,7 +3447,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Mt Victoria-area sport crag documented in the Best of the Blue guide. High elevation keeps conditions cool — pairs well with a Mt York or Mt Piddington day when the lower Blackheath crags are too hot.",
+    notes: "Mt Victoria-area sport crag documented in the Best of the Blue guide. High elevation keeps conditions cool – pairs well with a Mt York or Mt Piddington day when the lower Blackheath crags are too hot.",
     sunOnWall: 'Morning sun; shaded later in the day',
     bestIn: 'cool',
   },
@@ -3469,7 +3469,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Mt York-area sport crag, among the higher-elevation and cooler Blue Mountains venues. Best on mild days — can be genuinely cold in winter given the exposure this far out toward Mt York.",
+    notes: "Mt York-area sport crag, among the higher-elevation and cooler Blue Mountains venues. Best on mild days – can be genuinely cold in winter given the exposure this far out toward Mt York.",
     sunOnWall: 'Mixed exposure',
     bestIn: 'cool to mild',
   },
@@ -3491,7 +3491,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Near Mt York at the far western end of the Blue Mountains climbing area. One of the coolest, highest-elevation venues in the region — good choice on a hot day when Blackheath crags are baking.",
+    notes: "Near Mt York at the far western end of the Blue Mountains climbing area. One of the coolest, highest-elevation venues in the region – good choice on a hot day when Blackheath crags are baking.",
     sunOnWall: 'Afternoon sun',
     bestIn: 'warm summer days (cool refuge)',
   },
@@ -3513,7 +3513,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Remote wilderness sport crag off Bells Line Rd — park on the road (do not drive the fire trail) and follow it to the end, then descend under the powerlines for Main Wall/Bull Crag, or cut left after ~25min for the other sectors. Sunny from ~9am onwards in winter; Main Wall stays shaded until 2pm in summer. Soft sandstone with older 8mm ringbolts — check bolts carefully. One of the most comprehensive sport venues in the region for a big day out.",
+    notes: "Remote wilderness sport crag off Bells Line Rd – park on the road (do not drive the fire trail) and follow it to the end, then descend under the powerlines for Main Wall/Bull Crag, or cut left after ~25min for the other sectors. Sunny from ~9am onwards in winter; Main Wall stays shaded until 2pm in summer. Soft sandstone with older 8mm ringbolts – check bolts carefully. One of the most comprehensive sport venues in the region for a big day out.",
     sunOnWall: 'Winter: sun from ~9am. Summer: Main Wall shaded until 2pm',
     bestIn: 'cool, sunny winter days',
   },
@@ -3535,14 +3535,14 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "South-facing sector in the Bowens Creek system — the name says it all, this stays cold and shaded even when it's hot everywhere else in the mountains. Excellent summer heatwave option when every west-facing Blackheath crag is unclimbable.",
-    sunOnWall: 'South-facing — shaded almost all day',
+    notes: "South-facing sector in the Bowens Creek system – the name says it all, this stays cold and shaded even when it's hot everywhere else in the mountains. Excellent summer heatwave option when every west-facing Blackheath crag is unclimbable.",
+    sunOnWall: 'South-facing – shaded almost all day',
     bestIn: 'hot summer days',
   },
 
   // ─── NEW SOUTH WALES ────────────────────────────────────────────────────────
 
-  // — Nowra —
+  // – Nowra – 
   {
     id: 'nowra-main',
     name: 'Nowra',
@@ -3559,7 +3559,7 @@ export const CRAGS = [
     baseCity: 'Sydney',
     trip: 'both',
     state: 'NSW',
-    notes: "Australia's premier sport climbing hub. 1500+ bolted routes on steep Shoalhaven River sandstone. Short approaches (often under 5 min). DO NOT climb on wet sandstone — Shoalhaven sandstone weakens when wet and holds damage easily. Seasonal heat can make south-facing shade crags preferable in summer.",
+    notes: "Australia's premier sport climbing hub. 1500+ bolted routes on steep Shoalhaven River sandstone. Short approaches (often under 5 min). DO NOT climb on wet sandstone – Shoalhaven sandstone weakens when wet and holds damage easily. Seasonal heat can make south-facing shade crags preferable in summer.",
     sunOnWall: 'Variable by sector',
     bestIn: 'cool',
   },
@@ -3603,7 +3603,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'nowra-main',
-    notes: 'Large north-facing cave — prime bouldering venue. Never receives direct sun so stays humid and greasy outside winter. Best in cold dry weather when the compression problems come alive. Gets slick and sweaty Nov–Apr.',
+    notes: 'Large north-facing cave – prime bouldering venue. Never receives direct sun so stays humid and greasy outside winter. Best in cold dry weather when the compression problems come alive. Gets slick and sweaty Nov–Apr.',
     sunOnWall: 'No direct sun at any time',
     bestIn: 'cool',
   },
@@ -3647,12 +3647,12 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'nowra-main',
-    notes: 'Small, sunny, family-friendly crag with a high concentration of easy-moderate routes (9–20+), a rarity for Nowra. North-facing — full sun all day, ideal in cool weather.',
+    notes: 'Small, sunny, family-friendly crag with a high concentration of easy-moderate routes (9–20+), a rarity for Nowra. North-facing – full sun all day, ideal in cool weather.',
     sunOnWall: 'Most of the day (north-facing)',
     bestIn: 'cool',
   },
 
-  // — Blue Mountains —
+  // – Blue Mountains – 
   {
     id: 'bluemtns-main',
     name: 'Blue Mountains',
@@ -3669,7 +3669,7 @@ export const CRAGS = [
     baseCity: 'Sydney',
     trip: 'both',
     state: 'NSW',
-    notes: "NSW's largest climbing region spanning Blackheath, Katoomba and Mt Victoria. Triassic Blue Mountains sandstone — softer than Nowra, so avoid climbing when wet. Multiple aspects mean you can chase sun or shade year-round. Sub-crags span from sheltered gorges to exposed escarpment edges.",
+    notes: "NSW's largest climbing region spanning Blackheath, Katoomba and Mt Victoria. Triassic Blue Mountains sandstone – softer than Nowra, so avoid climbing when wet. Multiple aspects mean you can chase sun or shade year-round. Sub-crags span from sheltered gorges to exposed escarpment edges.",
     sunOnWall: 'Variable by sub-area',
     bestIn: 'mild',
   },
@@ -3713,7 +3713,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Most popular crag in the Blue Mountains. Magnificent views, mostly sport from mid-teens to early 30s. Strong all-day winter sun from 8:30am — a reliable warm-up crag in cold months. Can be a sauna on hot summer afternoons. Catches prevailing westerly winds. Orange rock stays nearly always dry; grey rock section wets but dries fast.",
+    notes: "Most popular crag in the Blue Mountains. Magnificent views, mostly sport from mid-teens to early 30s. Strong all-day winter sun from 8:30am – a reliable warm-up crag in cold months. Can be a sauna on hot summer afternoons. Catches prevailing westerly winds. Orange rock stays nearly always dry; grey rock section wets but dries fast.",
     sunOnWall: 'Most of the day; strong all-day winter sun',
     bestIn: 'cool',
   },
@@ -3735,7 +3735,7 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Historic home of trad climbing in NSW. Splitter cracks, flakes, technical roofs and carrot-bolt slabs. West-facing — shaded mornings, afternoon sun. Best climbed in the morning before the heat builds. NSW's closest analogue to Arapiles-style moderate trad volume.",
+    notes: "Historic home of trad climbing in NSW. Splitter cracks, flakes, technical roofs and carrot-bolt slabs. West-facing – shaded mornings, afternoon sun. Best climbed in the morning before the heat builds. NSW's closest analogue to Arapiles-style moderate trad volume.",
     sunOnWall: 'Afternoon sun from midday',
     bestIn: 'cool',
   },
@@ -3757,8 +3757,8 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Popular camping hub. Sunny Side and Shady Side sectors on a peninsula let you move between sun and shade through the day — ideal year-round flexibility. Mix of sport and older bolted trad. Good base for a Blue Mountains climbing trip.",
-    sunOnWall: 'Flexible — Sunny Side all day; Shady Side sheltered',
+    notes: "Popular camping hub. Sunny Side and Shady Side sectors on a peninsula let you move between sun and shade through the day – ideal year-round flexibility. Mix of sport and older bolted trad. Good base for a Blue Mountains climbing trip.",
+    sunOnWall: 'Flexible – Sunny Side all day; Shady Side sheltered',
     bestIn: 'all seasons',
   },
   {
@@ -3779,12 +3779,12 @@ export const CRAGS = [
     trip: 'both',
     state: 'NSW',
     parentId: 'bluemtns-main',
-    notes: "Remote Narrow Neck Plateau crag with some of Australia's hardest sport routes across ~2500 routes. Morning shade, sun from ~2pm, catches wind — can be cold even in summer. Effectively avoids mid-winter (Jun–Aug) except on unusually warm days.",
+    notes: "Remote Narrow Neck Plateau crag with some of Australia's hardest sport routes across ~2500 routes. Morning shade, sun from ~2pm, catches wind – can be cold even in summer. Effectively avoids mid-winter (Jun–Aug) except on unusually warm days.",
     sunOnWall: 'Afternoon sun from ~2pm',
     bestIn: 'cool',
   },
 
-  // — Booroomba —
+  // – Booroomba – 
   {
     id: 'booroomba-main',
     name: 'Booroomba Rocks',
@@ -3801,7 +3801,7 @@ export const CRAGS = [
     baseCity: 'Sydney',
     trip: 'both',
     state: 'ACT',
-    notes: "Australia's premier granite slab venue, in Namadgi NP south of Canberra. Long run-out friction slabs and crack lines — a trad climber's mecca. Granite dries very fast (among quickest in the country). At 1200m+ elevation: mild springs/autumns ideal, very cold in winter, hot summer days possible. Fire ban closures possible in extreme summer heat.",
+    notes: "Australia's premier granite slab venue, in Namadgi NP south of Canberra. Long run-out friction slabs and crack lines – a trad climber's mecca. Granite dries very fast (among quickest in the country). At 1200m+ elevation: mild springs/autumns ideal, very cold in winter, hot summer days possible. Fire ban closures possible in extreme summer heat.",
     sunOnWall: 'Morning sun (east-facing)',
     bestIn: 'mild',
   },
@@ -3850,7 +3850,7 @@ export const CRAGS = [
     bestIn: 'mild',
   },
 
-  // — Bungonia —
+  // – Bungonia – 
   {
     id: 'bungonia-main',
     name: 'Bungonia Gorge',
@@ -3868,12 +3868,12 @@ export const CRAGS = [
     baseCity: 'Sydney',
     trip: 'day',
     state: 'NSW',
-    notes: "Australia's best limestone climbing in a dramatic 300m-deep gorge. Multi-pitch mixed bolt/trad routes up to 300m — unique in Australia. Limestone retains moisture and has loose sections; avoid after rain. Approach is a steep 30-min descent into the gorge — slippery in wet. Both gorge walls offer alternating sun depending on time of day.",
-    sunOnWall: 'Variable — one gorge wall in sun while opposite is shaded',
+    notes: "Australia's best limestone climbing in a dramatic 300m-deep gorge. Multi-pitch mixed bolt/trad routes up to 300m – unique in Australia. Limestone retains moisture and has loose sections; avoid after rain. Approach is a steep 30-min descent into the gorge – slippery in wet. Both gorge walls offer alternating sun depending on time of day.",
+    sunOnWall: 'Variable – one gorge wall in sun while opposite is shaded',
     bestIn: 'mild',
   },
 
-  // — Point Perpendicular —
+  // – Point Perpendicular – 
   {
     id: 'pointperp-main',
     name: 'Point Perpendicular',
@@ -3890,7 +3890,7 @@ export const CRAGS = [
     baseCity: 'Sydney',
     trip: 'day',
     state: 'NSW',
-    notes: "NSW's premier sea-cliff trad destination. 70–95m sandstone cliffs above the Pacific at the northern head of Jervis Bay. ALWAYS call NPWS Ranger (02 4448 3411) before visiting — access road closes when the adjacent Navy bombing range is active. Nearly all routes are abseil-access from the top. Sea breeze moderates summer heat.",
+    notes: "NSW's premier sea-cliff trad destination. 70–95m sandstone cliffs above the Pacific at the northern head of Jervis Bay. ALWAYS call NPWS Ranger (02 4448 3411) before visiting – access road closes when the adjacent Navy bombing range is active. Nearly all routes are abseil-access from the top. Sea breeze moderates summer heat.",
     sunOnWall: 'Variable by cliff section',
     bestIn: 'mild',
   },
@@ -3912,7 +3912,7 @@ export const CRAGS = [
     trip: 'day',
     state: 'NSW',
     parentId: 'pointperp-main',
-    notes: "Classic sea-cliff trad on solid east-facing sandstone. Vertical face climbing, cracks and corners. Top fully exposed to sun and wind; lower ledge systems often shaded by the headland. Not beginner-friendly — abseil-in approach only. Navy range closure applies.",
+    notes: "Classic sea-cliff trad on solid east-facing sandstone. Vertical face climbing, cracks and corners. Top fully exposed to sun and wind; lower ledge systems often shaded by the headland. Not beginner-friendly – abseil-in approach only. Navy range closure applies.",
     sunOnWall: 'Morning sun; lower cliff sections often shaded by headland',
     bestIn: 'mild',
   },
@@ -3939,7 +3939,7 @@ export const CRAGS = [
     bestIn: 'cool',
   },
 
-  // — Lindfield —
+  // – Lindfield – 
   {
     id: 'lindfield-main',
     name: 'Lindfield Rocks',
@@ -3959,12 +3959,12 @@ export const CRAGS = [
     baseCity: 'Sydney',
     trip: 'day',
     state: 'NSW',
-    notes: "Historic Sydney bouldering venue, 15–20 min walk from Lindfield station. Shaded year-round by large gum trees — holds dampness longer after rain. Problems from V0 to V7+. Casual after-work venue rather than a destination crag. Watch for red-bellied black snakes.",
-    sunOnWall: 'Minimal — shaded by tree canopy',
+    notes: "Historic Sydney bouldering venue, 15–20 min walk from Lindfield station. Shaded year-round by large gum trees – holds dampness longer after rain. Problems from V0 to V7+. Casual after-work venue rather than a destination crag. Watch for red-bellied black snakes.",
+    sunOnWall: 'Minimal – shaded by tree canopy',
     bestIn: 'any',
   },
 
-  // — Sydney North Shore & Northern Beaches —
+  // – Sydney North Shore & Northern Beaches – 
   {
     id: 'sissy-crag',
     name: 'Sissy Crag',
@@ -3984,8 +3984,8 @@ export const CRAGS = [
     baseCity: 'Sydney',
     trip: 'day',
     state: 'NSW',
-    notes: "Steep bouldering overlooking Middle Harbour, off Ryrie Ave near Roseville Bridge. Best in winter — summer humidity leaves holds greasy. Seeps a few hours after rain (Travis area stays driest). Mostly powerful, overhanging problems V1–V13+.",
-    sunOnWall: 'Limited — SW-facing cave, gets afternoon sun',
+    notes: "Steep bouldering overlooking Middle Harbour, off Ryrie Ave near Roseville Bridge. Best in winter – summer humidity leaves holds greasy. Seeps a few hours after rain (Travis area stays driest). Mostly powerful, overhanging problems V1–V13+.",
+    sunOnWall: 'Limited – SW-facing cave, gets afternoon sun',
     bestIn: 'cool',
   },
   {
@@ -4008,7 +4008,7 @@ export const CRAGS = [
     trip: 'day',
     state: 'NSW',
     notes: "Popular north-facing sandstone crag above Berowra Valley, end of Wideview Rd. Excellent winter sun-trap; roasts on hot summer days though climbable until mid-morning. Mixed trad and sport, grades 4–28. Watch for brown snakes on the approach.",
-    sunOnWall: 'Full sun most of the day — north-facing',
+    sunOnWall: 'Full sun most of the day – north-facing',
     bestIn: 'cool',
   },
   {
@@ -4053,8 +4053,8 @@ export const CRAGS = [
     baseCity: 'Sydney',
     trip: 'day',
     state: 'NSW',
-    notes: "South-facing slabs on the Wakehurst Parkway near Narrabeen Lakes. Shady and cool — a good summer venue, but seeps badly for days after heavy winter rain (the roofs at the far end stay dry regardless). Mostly slab and juggy-pocket trad, grades 5.10–5.12.",
-    sunOnWall: 'Minimal — shady, south-facing',
+    notes: "South-facing slabs on the Wakehurst Parkway near Narrabeen Lakes. Shady and cool – a good summer venue, but seeps badly for days after heavy winter rain (the roofs at the far end stay dry regardless). Mostly slab and juggy-pocket trad from approximately grades 18–28.",
+    sunOnWall: 'Minimal – shady, south-facing',
     bestIn: 'warm',
   },
   {
@@ -4076,8 +4076,8 @@ export const CRAGS = [
     baseCity: 'Sydney',
     trip: 'day',
     state: 'NSW',
-    notes: "Classic North Shore sandstone at Cliff Oval, offering trad, mixed, sport, top-rope and bouldering. Mostly low-to-mid grades. Quiet, casual venue — good after-work option when the harder North Shore crags are too crowded.",
-    sunOnWall: 'Mixed — varies by wall',
+    notes: "Classic North Shore sandstone at Cliff Oval, offering trad, mixed, sport, top-rope and bouldering. Mostly low-to-mid grades. Quiet, casual venue – good after-work option when the harder North Shore crags are too crowded.",
+    sunOnWall: 'Mixed – varies by wall',
     bestIn: 'any',
   },
   {
@@ -4099,8 +4099,8 @@ export const CRAGS = [
     baseCity: 'Sydney',
     trip: 'day',
     state: 'NSW',
-    notes: "Small harbourside bouldering venue at Tunks Park oval, Northbridge. Easy walk-up access near the boat ramp. Low-commitment, casual problems — a quick after-work or lunchtime session spot rather than a destination.",
-    sunOnWall: 'Minimal — shaded by harbourside trees',
+    notes: "Small harbourside bouldering venue at Tunks Park oval, Northbridge. Easy walk-up access near the boat ramp. Low-commitment, casual problems – a quick after-work or lunchtime session spot rather than a destination.",
+    sunOnWall: 'Minimal – shaded by harbourside trees',
     bestIn: 'any',
   },
   {
@@ -4146,7 +4146,7 @@ export const CRAGS = [
     trip: 'day',
     state: 'NSW',
     notes: "Sydney's biggest bouldering venue, tucked into bushland at North Rocks with 200+ problems across a wide grade spread. Shaded gully keeps it climbable even on warmer days. The go-to weekend bouldering destination for Sydney locals.",
-    sunOnWall: 'Minimal — shaded bushland gully',
+    sunOnWall: 'Minimal – shaded bushland gully',
     bestIn: 'any',
   },
   {
@@ -4168,8 +4168,8 @@ export const CRAGS = [
     baseCity: 'Sydney',
     trip: 'day',
     state: 'NSW',
-    notes: "South-west Sydney sport crag above the Georges River near Ingleburn — a good local alternative to a full day at Nowra. Water-washed sandstone, 10–20m sport routes across several caves and sectors. Access via a locked-gate walk-in.",
-    sunOnWall: 'Mixed — varies by sector',
+    notes: "South-west Sydney sport crag above the Georges River near Ingleburn – a good local alternative to a full day at Nowra. Water-washed sandstone, 10–20m sport routes across several caves and sectors. Access via a locked-gate walk-in.",
+    sunOnWall: 'Mixed – varies by sector',
     bestIn: 'cool',
   },
   {
@@ -4198,7 +4198,7 @@ export const CRAGS = [
 
 // ─── SOUTH AUSTRALIA ────────────────────────────────────────────────────────
 
-  // — Morialta —
+  // – Morialta – 
   {
     id: 'morialta-main',
     name: 'Morialta',
@@ -4216,14 +4216,14 @@ export const CRAGS = [
     baseCity: 'Adelaide',
     trip: 'day',
     state: 'SA',
-    notes: "Adelaide's most popular crag — quartzite gorge in Morialta Conservation Park, 20–25 min from the CBD. Southern-side crags face north into the gorge (good winter sun); northern-side crags are shaded. Multiple sectors with very different characters. Best Apr–Oct; summers are brutal. Thorn Buttress and Far Crag are the standout walls. No dogs in the park.",
+    notes: "Adelaide's most popular crag – quartzite gorge in Morialta Conservation Park, 20–25 min from the CBD. Southern-side crags face north into the gorge (good winter sun); northern-side crags are shaded. Multiple sectors with very different characters. Best Apr–Oct; summers are brutal. Thorn Buttress and Far Crag are the standout walls. No dogs in the park.",
     sunOnWall: 'N-facing walls: winter sun most of the day. S-facing: afternoon shade',
     bestIn: 'cool',
   },
   {
     id: 'morialta-farcrag',
     parentId: 'morialta-main',
-    name: 'Morialta — Far Crag',
+    name: 'Morialta – Far Crag',
     area: 'Adelaide Hills',
     lat: -34.9060,
     lon: 138.7120,
@@ -4245,7 +4245,7 @@ export const CRAGS = [
   {
     id: 'morialta-thornbuttress',
     parentId: 'morialta-main',
-    name: 'Morialta — Thorn Buttress',
+    name: 'Morialta – Thorn Buttress',
     area: 'Adelaide Hills',
     lat: -34.9020,
     lon: 138.7090,
@@ -4266,7 +4266,7 @@ export const CRAGS = [
     closures: 'Peregrine falcon nesting closures possible Jul–Dec. Check SA National Parks.',
   },
 
-  // — Norton Summit —
+  // – Norton Summit – 
   {
     id: 'norton-summit',
     name: 'Norton Summit',
@@ -4284,13 +4284,13 @@ export const CRAGS = [
     baseCity: 'Adelaide',
     trip: 'day',
     state: 'SA',
-    notes: "Popular Adelaide Hills crag with a notable cave/overhang feature — above-cave climbing is closed. Quartzite, dries relatively quickly. Grades spread 10–28. Peregrine falcon closures common Jul–Dec (confirm before visiting). Fire-ban days: avoid entirely — park closes on days of Total Fire Ban. Best Apr–Jun and Sep–Oct.",
+    notes: "Popular Adelaide Hills crag with a notable cave/overhang feature – above-cave climbing is closed. Quartzite, dries relatively quickly. Grades spread 10–28. Peregrine falcon closures common Jul–Dec (confirm before visiting). Fire-ban days: avoid entirely – park closes on days of Total Fire Ban. Best Apr–Jun and Sep–Oct.",
     sunOnWall: 'Variable by sector',
     bestIn: 'cool',
     closures: 'Peregrine falcon nesting closures Jul–Dec. No climbing on Total Fire Ban days.',
   },
 
-  // — Onkaparinga —
+  // – Onkaparinga – 
   {
     id: 'onkaparinga-main',
     name: 'Onkaparinga',
@@ -4308,14 +4308,14 @@ export const CRAGS = [
     baseCity: 'Adelaide',
     trip: 'day',
     state: 'SA',
-    notes: "Onkaparinga River gorge — two distinct cliff lines (Top Cliff and Red Cliff) on opposite sides of the river. Proterozoic meta-sedimentary sandstone/siltstone. Rock holds moisture and needs 3+ dry days after rain. Gorge base accessed via 15–20 min walk down. Decent grades spread 12–26. Best autumn through spring.",
+    notes: "Onkaparinga River gorge – two distinct cliff lines (Top Cliff and Red Cliff) on opposite sides of the river. Proterozoic meta-sedimentary sandstone/siltstone. Rock holds moisture and needs 3+ dry days after rain. Gorge base accessed via 15–20 min walk down. Decent grades spread 12–26. Best autumn through spring.",
     sunOnWall: 'Top Cliff: more sheltered. Red Cliff: open and sun-exposed',
     bestIn: 'mild',
   },
   {
     id: 'onkaparinga-topcliff',
     parentId: 'onkaparinga-main',
-    name: 'Onkaparinga — Top Cliff',
+    name: 'Onkaparinga – Top Cliff',
     area: 'Adelaide Hills',
     lat: -35.1610,
     lon: 138.5670,
@@ -4330,14 +4330,14 @@ export const CRAGS = [
     baseCity: 'Adelaide',
     trip: 'day',
     state: 'SA',
-    notes: "The more sheltered of the two Onkaparinga walls — south-facing, gets afternoon shade. Better summer option than Red Cliff. Routes 12–25, mix of sport and trad. Rock needs time to dry after rain — slow-drying sandstone/siltstone. Good moderate circuit.",
+    notes: "The more sheltered of the two Onkaparinga walls – south-facing, gets afternoon shade. Better summer option than Red Cliff. Routes 12–25, mix of sport and trad. Rock needs time to dry after rain – slow-drying sandstone/siltstone. Good moderate circuit.",
     sunOnWall: 'Morning sun, shaded from ~noon',
     bestIn: 'mild',
   },
   {
     id: 'onkaparinga-redcliff',
     parentId: 'onkaparinga-main',
-    name: 'Onkaparinga — Red Cliff',
+    name: 'Onkaparinga – Red Cliff',
     area: 'Adelaide Hills',
     lat: -35.1635,
     lon: 138.5660,
@@ -4352,12 +4352,12 @@ export const CRAGS = [
     baseCity: 'Adelaide',
     trip: 'day',
     state: 'SA',
-    notes: "Open, sun-exposed north-facing river cliff — great in cool conditions, miserable in summer (thecrag description: 'you'll melt'). Grades 14–26. Loose blocks reported on some lines — check local beta before pulling on anything new. 15–20 min walk down to the gorge base.",
+    notes: "Open, sun-exposed north-facing river cliff – great in cool conditions, miserable in summer (thecrag description: 'you'll melt'). Grades 14–26. Loose blocks reported on some lines – check local beta before pulling on anything new. 15–20 min walk down to the gorge base.",
     sunOnWall: 'Full sun most of the day (N-facing, open gorge)',
     bestIn: 'cool',
   },
 
-  // — Flinders Ranges —
+  // – Flinders Ranges – 
   {
     id: 'moonarie-main',
     name: 'Moonarie',
@@ -4375,15 +4375,15 @@ export const CRAGS = [
     baseCity: 'Adelaide',
     trip: 'both',
     state: 'SA',
-    notes: "SA's premier crag — on the rim of Wilpena Pound in the Flinders Ranges, 4.5–5.5h from Adelaide. Rawnsley Quartzite: hard, well-cemented, yellow to crimson/orange-red rock similar in feel to Arapiles. Multiple sectors (Great Wall, Ramparts, Flying Buttress, Great Chimneys, Checkers Wall) with different aspects — choose sun or shade for the season. Dries fast: quartzite sheds water quickly. 35–50 min walk-in on exposed ridgeline. No phone reception. Closest fuel and supplies at Hawker (30 min). Camping at Rawnsley Park or Wilpena Pound Resort. Traditional Owners: Adnyamathanha — welcome ceremony protocols observed at events. Peregrine falcon closures possible Sep–Dec.",
-    sunOnWall: 'Mixed by sector — Great Wall open/exposed, Ramparts more sheltered',
+    notes: "SA's premier crag – on the rim of Wilpena Pound in the Flinders Ranges, 4.5–5.5h from Adelaide. Rawnsley Quartzite: hard, well-cemented, yellow to crimson/orange-red rock similar in feel to Arapiles. Multiple sectors (Great Wall, Ramparts, Flying Buttress, Great Chimneys, Checkers Wall) with different aspects – choose sun or shade for the season. Dries fast: quartzite sheds water quickly. 35–50 min walk-in on exposed ridgeline. No phone reception. Closest fuel and supplies at Hawker (30 min). Camping at Rawnsley Park or Wilpena Pound Resort. Traditional Owners: Adnyamathanha – welcome ceremony protocols observed at events. Peregrine falcon closures possible Sep–Dec.",
+    sunOnWall: 'Mixed by sector – Great Wall open/exposed, Ramparts more sheltered',
     bestIn: 'cool',
-    closures: 'Some trail closures in effect since 2025 — confirm access at Rawnsley Park. Peregrine falcon closures Sep–Dec.',
+    closures: 'Some trail closures in effect since 2025 – confirm access at Rawnsley Park. Peregrine falcon closures Sep–Dec.',
   },
   {
     id: 'moonarie-greatwall',
     parentId: 'moonarie-main',
-    name: 'Moonarie — Great Wall',
+    name: 'Moonarie – Great Wall',
     area: 'Flinders Ranges',
     lat: -31.6100,
     lon: 138.6220,
@@ -4419,12 +4419,12 @@ export const CRAGS = [
     baseCity: 'Adelaide',
     trip: 'both',
     state: 'SA',
-    notes: "Compact Flinders Ranges quartzite gorge near Hawker — the most accessible Flinders crag with no walk-in (climb straight from the road). Front wall faces roughly east (morning sun); Lepus Wall and west wall on opposite side of road. Very popular with families and beginners — grades 6–22, short routes 8–20m. Also has a dedicated bouldering area. Yellow-footed rock wallabies frequently spotted. No dogs. Camping at Warren Gorge campground on site. Closest fuel: Hawker (15 min).",
+    notes: "Compact Flinders Ranges quartzite gorge near Hawker – the most accessible Flinders crag with no walk-in (climb straight from the road). Front wall faces roughly east (morning sun); Lepus Wall and west wall on opposite side of road. Very popular with families and beginners – grades 6–22, short routes 8–20m. Also has a dedicated bouldering area. Yellow-footed rock wallabies frequently spotted. No dogs. Camping at Warren Gorge campground on site. Closest fuel: Hawker (15 min).",
     sunOnWall: 'Front wall: morning sun, afternoon shade. West wall: afternoon sun',
     bestIn: 'cool to mild',
   },
 
-  // — Fleurieu Peninsula —
+  // – Fleurieu Peninsula – 
   {
     id: 'waitpinga',
     name: 'Waitpinga Cliffs',
@@ -4445,7 +4445,7 @@ export const CRAGS = [
     notes: 'Southern Ocean sea cliffs near Victor Harbor with dramatic climbing on south-east-facing walls. Morning sun, wind and sea spray are major condition factors. Access can involve private land, so check current CCSA arrangements before visiting.',
     sunOnWall: 'Morning sun',
     bestIn: 'warm (summer/autumn for fewer storms)',
-    closures: 'Private land access — confirm with CCSA before visiting.',
+    closures: 'Private land access – confirm with CCSA before visiting.',
   },
   {
     id: 'second-valley',
@@ -4467,11 +4467,11 @@ export const CRAGS = [
     notes: 'Fleurieu Peninsula sea-cliff climbing across several distinct sectors. The complex folded rock and headland geometry produce different wall orientations, so sun and wind exposure vary by sector. Access conditions should be checked before visiting.',
     sunOnWall: 'Variable by sector',
     bestIn: 'mild',
-    closures: 'Private land access — confirm with CCSA before visiting.',
+    closures: 'Private land access – confirm with CCSA before visiting.',
   },
 // ─── WESTERN AUSTRALIA ──────────────────────────────────────────────────────
 
-  // — Perth Hills —
+  // – Perth Hills – 
   {
     id: 'wa-mountain-quarry',
     name: 'Mountain Quarry',
@@ -4489,8 +4489,8 @@ export const CRAGS = [
     baseCity: 'Perth',
     trip: 'day',
     state: 'WA',
-    notes: "Perth's most popular crag by a wide margin (8,300+ logged ascents on thecrag). Quarried volcanic dolerite bowl with multiple walls — rough, featured rock that grips well. Wide grade spread 5–30, excellent for all levels. Multiple aspects mean you can chase shade in summer (Dec–Feb is brutal) or sun in winter. Best May–Oct. Short approach directly from carpark.",
-    sunOnWall: 'Multiple aspects — choose sun or shade by sector',
+    notes: "Perth's most popular crag by a wide margin (8,300+ logged ascents on thecrag). Quarried volcanic dolerite bowl with multiple walls – rough, featured rock that grips well. Wide grade spread 5–30, excellent for all levels. Multiple aspects mean you can chase shade in summer (Dec–Feb is brutal) or sun in winter. Best May–Oct. Short approach directly from carpark.",
+    sunOnWall: 'Multiple aspects – choose sun or shade by sector',
     bestIn: 'cool to mild',
   },
   {
@@ -4510,8 +4510,8 @@ export const CRAGS = [
     baseCity: 'Perth',
     trip: 'day',
     state: 'WA',
-    notes: "Second most popular Perth crag (3,400+ ascents). Valley terrain with slab and buttress sectors on granite. Good mix of sport and trad, grades 8–26. Valley floor retains moisture — needs 2–3 dry days after significant rain. Multiple sector aspects allow sun/shade selection. Best May–Oct.",
-    sunOnWall: 'Valley — variable by sector and time of day',
+    notes: "Second most popular Perth crag (3,400+ ascents). Valley terrain with slab and buttress sectors on granite. Good mix of sport and trad, grades 8–26. Valley floor retains moisture – needs 2–3 dry days after significant rain. Multiple sector aspects allow sun/shade selection. Best May–Oct.",
+    sunOnWall: 'Valley – variable by sector and time of day',
     bestIn: 'cool to mild',
   },
   {
@@ -4531,7 +4531,7 @@ export const CRAGS = [
     baseCity: 'Perth',
     trip: 'day',
     state: 'WA',
-    notes: "Popular Perth Hills granite crag (2,000+ ascents). Mix of sport and bouldering, grades 10–28. Granite dries reasonably quickly. Multiple walls and aspects — check local beta for best sectors by season. Best May–Oct; hot Dec–Feb.",
+    notes: "Popular Perth Hills granite crag (2,000+ ascents). Mix of sport and bouldering, grades 10–28. Granite dries reasonably quickly. Multiple walls and aspects – check local beta for best sectors by season. Best May–Oct; hot Dec–Feb.",
     sunOnWall: 'Variable by wall',
     bestIn: 'cool to mild',
   },
@@ -4552,12 +4552,12 @@ export const CRAGS = [
     baseCity: 'Perth',
     trip: 'day',
     state: 'WA',
-    notes: "Highest peak in the Perth Hills (582m) with an exposed granite ridge and boulder field offering multiple aspects. Sport and trad, grades 10–25. Higher elevation means noticeably cooler than Roleystone/Wungong — more viable in warmer months. 1h from Perth via Albany Highway. Best Apr–Nov.",
-    sunOnWall: 'Exposed ridge — multiple aspects',
+    notes: "Highest peak in the Perth Hills (582m) with an exposed granite ridge and boulder field offering multiple aspects. Sport and trad, grades 10–25. Higher elevation means noticeably cooler than Roleystone/Wungong – more viable in warmer months. 1h from Perth via Albany Highway. Best Apr–Nov.",
+    sunOnWall: 'Exposed ridge – multiple aspects',
     bestIn: 'cool to mild',
   },
 
-  // — South West —
+  // – South West – 
   {
     id: 'wa-wilyabrup',
     name: 'Wilyabrup',
@@ -4575,7 +4575,7 @@ export const CRAGS = [
     baseCity: 'Perth',
     trip: 'both',
     state: 'WA',
-    notes: "WA's premier climbing destination — spectacular west-facing granite sea cliffs above the Indian Ocean near Margaret River. 3,200+ logged ascents on thecrag. Orange granite, near-vertical to slightly overhanging, grades 10–28. Mainly multi-pitch trad with some sport. Morning shade, dramatic afternoon light. Granite dries fast after rain — one of WA's most reliable post-rain crags. Camping nearby at Contos Beach or Margaret River town. Best year-round except peak summer (Dec–Feb) when afternoon sun is intense. Famous routes: Transylvania (15, 5 pitches), Deceptive (18), The Flake (20), Rock Lobster (23).",
+    notes: "WA's premier climbing destination – spectacular west-facing granite sea cliffs above the Indian Ocean near Margaret River. 3,200+ logged ascents on thecrag. Orange granite, near-vertical to slightly overhanging, grades 10–28. Mainly multi-pitch trad with some sport. Morning shade, dramatic afternoon light. Granite dries fast after rain – one of WA's most reliable post-rain crags. Camping nearby at Contos Beach or Margaret River town. Best year-round except peak summer (Dec–Feb) when afternoon sun is intense. Famous routes: Transylvania (15, 5 pitches), Deceptive (18), The Flake (20), Rock Lobster (23).",
     sunOnWall: 'Morning shade; sun from ~1pm (W-facing)',
     bestIn: 'mild (Apr–Nov)',
   },
@@ -4596,7 +4596,7 @@ export const CRAGS = [
     baseCity: 'Perth',
     trip: 'both',
     state: 'WA',
-    notes: "The only significant limestone climbing in WA — near Contos Beach, south of Margaret River. West-facing coastal cliffs, 3,300+ logged ascents (thecrag's most popular SW crag). Sport climbing, grades 12–30, excellent steep pocketed limestone. Limestone holds moisture longer than granite — needs 3+ dry days. Best Mar–Nov. Camping at Contos Beach campground nearby.",
+    notes: "The only significant limestone climbing in WA – near Contos Beach, south of Margaret River. West-facing coastal cliffs, 3,300+ logged ascents (thecrag's most popular SW crag). Sport climbing, grades 12–30, excellent steep pocketed limestone. Limestone holds moisture longer than granite – needs 3+ dry days. Best Mar–Nov. Camping at Contos Beach campground nearby.",
     sunOnWall: 'Morning shade; afternoon sun (W-facing)',
     bestIn: 'mild',
   },
@@ -4617,13 +4617,13 @@ export const CRAGS = [
     baseCity: 'Perth',
     trip: 'both',
     state: 'WA',
-    notes: "Excellent granite dome in Mt Frankland NP near Walpole. Multi-pitch slab and crack climbing, grades 8–25. Dome aspects vary by route — some faces get good winter sun, others shaded. IMPORTANT: mandatory DPaW (Dept of Biodiversity Conservation and Attractions) permit required before climbing or abseiling — obtain by emailing walpole.office@dbca.wa.gov.au. No permit, no climb. Best Apr–Oct.",
-    sunOnWall: 'Dome — varies by route/face',
+    notes: "Excellent granite dome in Mt Frankland NP near Walpole. Multi-pitch slab and crack climbing, grades 8–25. Dome aspects vary by route – some faces get good winter sun, others shaded. IMPORTANT: mandatory DPaW (Dept of Biodiversity Conservation and Attractions) permit required before climbing or abseiling – obtain by emailing walpole.office@dbca.wa.gov.au. No permit, no climb. Best Apr–Oct.",
+    sunOnWall: 'Dome – varies by route/face',
     bestIn: 'cool to mild',
     closures: 'Mandatory DBCA permit required. Email walpole.office@dbca.wa.gov.au before visiting.',
   },
 
-  // — Albany / South Coast —
+  // – Albany / South Coast – 
   {
     id: 'wa-albany',
     name: 'Albany',
@@ -4641,7 +4641,7 @@ export const CRAGS = [
     baseCity: 'Perth',
     trip: 'both',
     state: 'WA',
-    notes: "Albany has WA's largest and most varied south-coast granite climbing (4,500+ ascents). City-area crags: Mt Melville (short sport/trad, urban), Mushroom Rock, Wagon Hill (bouldering), Blow Holes. Granite dries quickly. Albany's Southern Ocean influence keeps temps moderate year-round — WA's best summer climbing destination when Perth is too hot. Best Oct–Apr for warmth, May–Sep cooler but still climbable. Albany is also the gateway to West Cape Howe NP.",
+    notes: "Albany has WA's largest and most varied south-coast granite climbing (4,500+ ascents). City-area crags: Mt Melville (short sport/trad, urban), Mushroom Rock, Wagon Hill (bouldering), Blow Holes. Granite dries quickly. Albany's Southern Ocean influence keeps temps moderate year-round – WA's best summer climbing destination when Perth is too hot. Best Oct–Apr for warmth, May–Sep cooler but still climbable. Albany is also the gateway to West Cape Howe NP.",
     sunOnWall: 'Multiple aspects across city crags',
     bestIn: 'mild to warm',
   },
@@ -4683,12 +4683,12 @@ export const CRAGS = [
     baseCity: 'Perth',
     trip: 'both',
     state: 'WA',
-    notes: "Ancient granite domes and boulders in the Porongurup Range NP (670m) — 50 min from Albany, 4.5h from Perth. 400+ logged ascents. Mix of trad crack climbing, sport, and bouldering on excellent granite. Higher elevation than Albany crags — noticeably cooler. Multiple faces/aspects. Karri forest setting. Famous area: Castle Rock (easy multi-pitch, grades 10–18). Best Oct–May.",
-    sunOnWall: 'Dome and ridge terrain — variable by route',
+    notes: "Ancient granite domes and boulders in the Porongurup Range NP (670m) – 50 min from Albany, 4.5h from Perth. 400+ logged ascents. Mix of trad crack climbing, sport, and bouldering on excellent granite. Higher elevation than Albany crags – noticeably cooler. Multiple faces/aspects. Karri forest setting. Famous area: Castle Rock (easy multi-pitch, grades 10–18). Best Oct–May.",
+    sunOnWall: 'Dome and ridge terrain – variable by route',
     bestIn: 'mild',
   },
 
-  // — Wheatbelt / Remote —
+  // – Wheatbelt / Remote – 
   {
     id: 'wa-stirling-ranges',
     name: 'Stirling Ranges',
@@ -4729,8 +4729,8 @@ export const CRAGS = [
     baseCity: 'Perth',
     trip: 'both',
     state: 'WA',
-    notes: "Most popular Wheatbelt crag (800+ ascents) — exposed granite domes and boulders near Merredin. Dries extremely fast (dryRating 5) due to low rainfall and open exposure. Grades 8–24, mix of bouldering, sport, and trad. Very hot Nov–Feb (Wheatbelt climate is hotter and drier than Perth). Best Apr–Oct. Camping on site. Worth combining with a Wheatbelt road trip.",
-    sunOnWall: 'Exposed dome — significant sun most of the day',
+    notes: "Most popular Wheatbelt crag (800+ ascents) – exposed granite domes and boulders near Merredin. Dries extremely fast (dryRating 5) due to low rainfall and open exposure. Grades 8–24, mix of bouldering, sport, and trad. Very hot Nov–Feb (Wheatbelt climate is hotter and drier than Perth). Best Apr–Oct. Camping on site. Worth combining with a Wheatbelt road trip.",
+    sunOnWall: 'Exposed dome – significant sun most of the day',
     bestIn: 'cool to mild',
   },
   {
@@ -4750,14 +4750,14 @@ export const CRAGS = [
     baseCity: 'Perth',
     trip: 'both',
     state: 'WA',
-    notes: "Remote gorge sandstone climbing in Kalbarri NP, 600km north of Perth. Entirely different climate to Perth — semi-arid, much hotter in summer (Jan tMax ~37°C). Red sandstone gorge walls, multiple aspects. Sport and trad, grades 8–28. Murchison River gorge setting. Best May–Sep (winter) — Jun–Aug tMax 20–22°C, ideal. Avoid Oct–Apr: extreme heat. Limited services in Kalbarri town — fuel and supplies available.",
-    sunOnWall: 'Gorge terrain — variable by wall and time of day',
+    notes: "Remote gorge sandstone climbing in Kalbarri NP, 600km north of Perth. Entirely different climate to Perth – semi-arid, much hotter in summer (Jan tMax ~37°C). Red sandstone gorge walls, multiple aspects. Sport and trad, grades 8–28. Murchison River gorge setting. Best May–Sep (winter) – Jun–Aug tMax 20–22°C, ideal. Avoid Oct–Apr: extreme heat. Limited services in Kalbarri town – fuel and supplies available.",
+    sunOnWall: 'Gorge terrain – variable by wall and time of day',
     bestIn: 'cool (May–Sep)',
   },
 
   // ─── Queensland ────────────────────────────────────────────────────────────
 
-  // — Frog Buttress (Mt French) —
+  // – Frog Buttress (Mt French) – 
   {
     id: 'frog-main',
     name: 'Frog Buttress',
@@ -4775,7 +4775,7 @@ export const CRAGS = [
     baseCity: 'Brisbane',
     trip: 'both',
     state: 'QLD',
-    notes: "Australia's most celebrated trad crag. Rhyolite columns on the NW face of Mt French — shade until mid-morning, then full sun. Best Apr–Oct (autumn through spring). Avoid Dec–Feb: temps regularly exceed 35°C and humidity is brutal. Check sub-crags for specific wall aspect.",
+    notes: "Australia's most celebrated trad crag. Rhyolite columns on the NW face of Mt French – shade until mid-morning, then full sun. Best Apr–Oct (autumn through spring). Avoid Dec–Feb: temps regularly exceed 35°C and humidity is brutal. Check sub-crags for specific wall aspect.",
     sunOnWall: 'Afternoon (NW face catches sun from midday onward)',
     bestIn: 'cool (Apr–Oct)',
   },
@@ -4811,12 +4811,12 @@ export const CRAGS = [
     idealTemp: [12, 25],
     shade: 'morning',
     state: 'QLD',
-    notes: 'Base of the buttress. More sheltered from wind. Shaded longer into the morning than Upper Tier — better choice on a warm day.',
+    notes: 'Base of the buttress. More sheltered from wind. Shaded longer into the morning than Upper Tier – better choice on a warm day.',
     sunOnWall: 'Afternoon sun from ~2pm',
     bestIn: 'cool',
   },
 
-  // — Glass House Mountains —
+  // – Glass House Mountains – 
   {
     id: 'glasshouse-main',
     name: 'Glass House Mountains',
@@ -4833,7 +4833,7 @@ export const CRAGS = [
     baseCity: 'Brisbane',
     trip: 'both',
     state: 'QLD',
-    notes: 'Volcanic plug peaks north of Brisbane. Tibrogargan, Beerwah and Ngungun are open to climbing; Coonowrin is permanently closed. Exposed ridge climbing — check wind carefully. Rhyolite dries fast. Best Apr–Oct.',
+    notes: 'Volcanic plug peaks north of Brisbane. Tibrogargan, Beerwah and Ngungun are open to climbing; Coonowrin is permanently closed. Exposed ridge climbing – check wind carefully. Rhyolite dries fast. Best Apr–Oct.',
     sunOnWall: 'Variable by peak and face',
     bestIn: 'cool (Apr–Oct)',
   },
@@ -4892,7 +4892,7 @@ export const CRAGS = [
     bestIn: 'cool',
   },
 
-  // — Girraween National Park —
+  // – Girraween National Park – 
   {
     id: 'girraween-main',
     name: 'Girraween NP',
@@ -4910,8 +4910,8 @@ export const CRAGS = [
     baseCity: 'Brisbane',
     trip: 'both',
     state: 'QLD',
-    notes: 'Premier granite climbing in SE QLD, 260km SW of Brisbane near Stanthorpe. High elevation (900m+) means cooler, drier conditions than the coast — often climbable year-round. Slabs, cracks, and multi-pitch on The Pyramids and Sphinx Rock. Best Apr–Oct; summers mild compared to coastal QLD.',
-    sunOnWall: 'Variable by face — pyramids catch sun most of the day',
+    notes: 'Premier granite climbing in SE QLD, 260km SW of Brisbane near Stanthorpe. High elevation (900m+) means cooler, drier conditions than the coast – often climbable year-round. Slabs, cracks, and multi-pitch on The Pyramids and Sphinx Rock. Best Apr–Oct; summers mild compared to coastal QLD.',
+    sunOnWall: 'Variable by face – pyramids catch sun most of the day',
     bestIn: 'cool (Apr–Oct)',
   },
   {
@@ -4928,7 +4928,7 @@ export const CRAGS = [
     idealTemp: [10, 26],
     shade: 'afternoon',
     state: 'QLD',
-    notes: 'The iconic granite dome — most recognisable feature in Girraween. N-facing main face gets morning sun. Long multi-pitch slabs and crack lines. The walk to the summit is also a scramble. Classic destination.',
+    notes: 'The iconic granite dome – most recognisable feature in Girraween. N-facing main face gets morning sun. Long multi-pitch slabs and crack lines. The walk to the summit is also a scramble. Classic destination.',
     sunOnWall: 'Morning sun, afternoon shade',
     bestIn: 'cool',
   },
@@ -4946,12 +4946,12 @@ export const CRAGS = [
     idealTemp: [10, 26],
     shade: 'morning',
     state: 'QLD',
-    notes: 'Steeper sport and trad on west-facing granite walls. Shaded until midday — good choice on warmer days. Quality friction climbing and crack lines.',
+    notes: 'Steeper sport and trad on west-facing granite walls. Shaded until midday – good choice on warmer days. Quality friction climbing and crack lines.',
     sunOnWall: 'Afternoon sun',
     bestIn: 'cool',
   },
 
-  // — Kangaroo Point —
+  // – Kangaroo Point – 
   {
     id: 'kangaroopoint-main',
     name: 'Kangaroo Point',
@@ -4974,7 +4974,7 @@ export const CRAGS = [
     bestIn: 'evenings year-round',
   },
 
-  // — Mt Coolum —
+  // – Mt Coolum – 
   {
     id: 'coolum-main',
     name: 'Mt Coolum',
@@ -6921,14 +6921,14 @@ export const AREAS = {
   'Mt Arapiles': ['arap-main', 'arap-cgleft', 'arap-cgright', 'arap-bard', 'arap-fang', 'arap-organpipes', 'arap-atridae', 'arap-watchtower', 'arap-kingrat', 'arap-piloterror', 'arap-tigerwall', 'arap-pinnacleface', 'arap-pharos-front', 'arap-pharos-back', 'arap-bluffmajor', 'arap-bluffs', 'arap-mitre', 'arap-northern', 'arap-henrybolte', 'arap-bushranger', 'arap-declaration', 'arap-colosseum', 'arap-castle', 'arap-grotto', 'arap-voodoo', 'arap-farnorth', 'arap-western'],
   'Grampians': ['gramps-main', 'gramps-stapylton', 'gramps-taipan', 'gramps-dreamtime', 'gramps-bundaleer', 'gramps-muline', 'gramps-vicrange', 'gramps-guardhouse', 'gramps-rosea', 'gramps-westflank', 'gramps-iforget', 'gramps-ravine', 'gramps-vandiemens', 'gramps-hallsgap', 'gramps-hollowmtn', 'gramps-stapylton-amph', 'gramps-lowertaipan', 'gramps-malta', 'gramps-tribute', 'gramps-centurion-lower', 'gramps-centurion-upper', 'gramps-watchtower', 'gramps-trackside', 'gramps-andersens-west', 'gramps-venus-baths', 'gramps-bad-moon', 'gramps-grey-green'],
   'Mt Buffalo': ['buffalo-main', 'buffalo-cathedral', 'buffalo-hump', 'buffalo-eurobin', 'buffalo-mackeys', 'buffalo-mcleod', 'buffalo-gorge-south', 'buffalo-gorge-north', 'buffalo-reservoir', 'buffalo-catani', 'buffalo-lesouef', 'buffalo-buckland', 'buffalo-tatra', 'buffalo-backwall', 'buffalo-horn'],
-  // — Tasmania —
+  // – Tasmania – 
   'Ben Lomond': ['ben-lomond-main', 'ben-lomond-snake', 'ben-lomond-pavilion', 'ben-lomond-local-loser', 'ben-lomond-frews', 'ben-lomond-robins', 'ben-lomond-heathcliffe'],
   'Freycinet': ['freycinet-main', 'freycinet-southern', 'freycinet-northern', 'freycinet-white-stack', 'freycinet-friendly-point', 'freycinet-hazards', 'freycinet-star-factory', 'freycinet-gonk', 'freycinet-flowstone', 'freycinet-inchman', 'freycinet-gracelands', 'freycinet-sow-spur', 'freycinet-mt-amos'],
   'Mt Wellington': ['mtwellington-main', 'mtwellington-uni-buttress', 'mtwellington-ssssi', 'mtwellington-bulging', 'mtwellington-teardrop', 'mtwellington-step-tier', 'mtwellington-great-tier', 'mtwellington-central-buttress', 'mtwellington-circus', 'mtwellington-flange', 'mtwellington-columns', 'mtwellington-amphitheatre', 'mtwellington-northern-buttress', 'mtwellington-lost-world'],
   'Sand River': ['sand-river-main', 'sand-river-shadow', 'sand-river-firewall', 'sand-river-eldorado', 'sand-river-plebians', 'sand-river-colosseum-cave', 'sand-river-colosseum-orange', 'sand-river-superunknown', 'sand-river-terrace', 'sand-river-panopticon-east', 'sand-river-panopticon-central', 'sand-river-panopticon-south'],
   'Fortescue Bay': ['fortescue-main', 'fortescue-totem-pole', 'fortescue-candlestick', 'fortescue-moai'],
   'Cape Raoul': ['cape-raoul-main'],
-  // — Western Australia —
+  // – Western Australia – 
   'Perth Hills': ['wa-mountain-quarry', 'wa-wungong', 'wa-roleystone', 'wa-mt-cooke'],
   'Margaret River': ['wa-wilyabrup', 'wa-bobs-hollow'],
   'Walpole': ['wa-mt-frankland'],
@@ -6936,7 +6936,7 @@ export const AREAS = {
   'Stirling Ranges': ['wa-stirling-ranges'],
   'Wheatbelt': ['wa-eaglestone'],
   'Kalbarri': ['wa-kalbarri'],
-  // — South Australia —
+  // – South Australia – 
   'Morialta': ['morialta-main', 'morialta-farcrag', 'morialta-thornbuttress'],
   'Norton Summit': ['norton-summit'],
   'Onkaparinga': ['onkaparinga-main', 'onkaparinga-topcliff', 'onkaparinga-redcliff'],
@@ -6944,14 +6944,14 @@ export const AREAS = {
   'Warren Gorge': ['warren-gorge'],
   'Waitpinga': ['waitpinga'],
   'Second Valley': ['second-valley'],
-  // — New South Wales —
-  // — Queensland —
+  // – New South Wales – 
+  // – Queensland – 
   'Frog Buttress': ['frog-main', 'frog-upper', 'frog-lower'],
   'Glass House Mountains': ['glasshouse-main', 'glasshouse-tibrogargan', 'glasshouse-beerwah', 'glasshouse-ngungun'],
   'Girraween NP': ['girraween-main', 'girraween-pyramid1', 'girraween-sphinx'],
   'Kangaroo Point': ['kangaroopoint-main'],
   'Mt Coolum': ['coolum-main'],
-  // — New South Wales —
+  // – New South Wales – 
   'Nowra': ['nowra-main', 'nowra-thompsons', 'nowra-lot33', 'nowra-grotto', 'nowra-lair'],
   'Blue Mountains': ['bluemtns-main', 'bluemtns-centennial', 'bluemtns-shipley', 'bluemtns-piddington', 'bluemtns-yorke', 'bluemtns-diamond', 'bluemtns-medlowbath', 'bluemtns-wavewall', 'bluemtns-junketpumper', 'bluemtns-porterspass', 'bluemtns-bellsupercrag', 'bluemtns-cosmiccounty', 'bluemtns-mtyork-sunny', 'bluemtns-mtyork-shady', 'bluemtns-diamondfalls-access', 'bluemtns-diamondfalls-mrwall', 'bluemtns-sublimepoint', 'bluemtns-perrys', 'bluemtns-farside', 'bluemtns-theegg', 'bluemtns-thepit', 'bluemtns-loganbrae', 'bluemtns-jimmycliff', 'bluemtns-boronia', 'bluemtns-zapcrag', 'bluemtns-bardenslookout', 'bluemtns-bowenscreek', 'bluemtns-thefreezer'],
   'Booroomba': ['booroomba-main', 'booroomba-north', 'booroomba-south'],

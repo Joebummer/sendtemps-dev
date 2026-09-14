@@ -146,3 +146,21 @@ test('failed weather fetches never populate the regional cache', async () => {
   await harness.flush();
   assert.equal(harness.entries.size, 0);
 });
+
+test('heat exposure scales heat-cap penalties and preserves the legacy default', async () => {
+  const harness = await loadWorker(async url => Response.json(weatherFixture(url)));
+  const forecast = (await harness.forecasts.fetchAllForecasts('VIC'))['mt-beckworth'];
+  const day = structuredClone(forecast.days.find(item => item.date === '2026-09-13'));
+  day.climbTemps.maxApparent = 26;
+  day.sunshine = 7 * 3600;
+  const penalty = heatExposure => {
+    const result = harness.forecasts.scoreDay(
+      { ...forecast.crag, heatCap: 20, heatExposure }, day, null, null,
+    );
+    return result.contributions.find(item => item.label === 'Sun-trap × heat')?.delta;
+  };
+  assert.equal(penalty('exposed'), -23);
+  assert.equal(penalty('partial'), -16);
+  assert.equal(penalty('sheltered'), -9);
+  assert.equal(penalty(undefined), -23);
+});

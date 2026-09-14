@@ -151,7 +151,7 @@ test('heat exposure scales only solar heat and preserves ambient heat in shade',
   const harness = await loadWorker(async url => Response.json(weatherFixture(url)));
   const forecast = (await harness.forecasts.fetchAllForecasts('VIC'))['mt-beckworth'];
   const day = structuredClone(forecast.days.find(item => item.date === '2026-09-13'));
-  day.climbTemps.temperatureSamples = [{ apparent: 26, solarFraction: 1 }];
+  day.climbTemps.temperatureSamples = [{ air: 26, apparent: 18, solarFraction: 1 }];
   const penalties = heatExposure => {
     const result = harness.forecasts.scoreDay(
       { ...forecast.crag, heatCap: 20, heatExposure }, day, null, null,

@@ -1200,7 +1200,6 @@ export const CRAGS = [
       26
     ],
     "shade": "all-day",
-    "warmWeatherRelief": "light",
     "notes": "Shady upper buttress on the right side of Central Gully, with convenient single-pitch climbing and lower-offs. Mostly shaded through the day and useful in warmer conditions.",
     "sunOnWall": "Mostly shaded throughout the day",
     "bestIn": "warm"
@@ -1224,7 +1223,6 @@ export const CRAGS = [
       26
     ],
     "shade": "all-day",
-    "warmWeatherRelief": "light",
     "notes": "Compact shady wall left of Fang Buttress, best known for Morfydd and several harder single-pitch routes. Sheltered character makes it useful when the more exposed faces are hot.",
     "sunOnWall": "Mostly shaded throughout the day",
     "bestIn": "warm"

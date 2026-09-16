@@ -898,6 +898,19 @@ function melbourneOffsetMinutes(date) {
   return (localMs - date.getTime()) / 60000;
 }
 
+function closureLabelForDate(crag, dateStr) {
+  if (crag.closedAll) {
+    return crag.closureReason ? `closed – ${crag.closureReason}` : 'currently closed';
+  }
+  if (Array.isArray(crag.closedMonths) && crag.closedMonths.length) {
+    const month = new Date(dateStr + 'T12:00:00').getMonth() + 1;
+    if (crag.closedMonths.includes(month)) {
+      return crag.closureReason ? `closed – ${crag.closureReason}` : 'closed (seasonal)';
+    }
+  }
+  return null;
+}
+
 // Build hourly strip data for a given crag and date. Array of objects
 // { hour, isoHour, temp, wind, precip, precipProb, cloud, weatherCode, dryness,
 //   sunAlt, sunAz, sunOnWall, score, isNow } limited to climbable hours
@@ -960,7 +973,13 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
   const peakDayProb   = Math.max(...out.map(h => h.precipProb ?? 0));
   const meanDayCloud  = out.length ? out.reduce((s, h) => s + (h.cloud ?? 0), 0) / out.length : 0;
 
+  const closed = closureLabelForDate(crag, dateStr);
   for (let i = 0; i < out.length; i++) {
+    if (closed) {
+      out[i].score = 0;
+      out[i].closure = closed;
+      continue;
+    }
     const nearby = out.slice(Math.max(0, i - 2), Math.min(out.length, i + 3));
     const rainNeighbours = nearby.filter(n => n !== out[i] && n.precipProb > 30).length;
     out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb, meanDayCloud);
@@ -1126,69 +1145,32 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
 //
 // Returns the highest-scoring window, or null if no run is long enough.
 export function bestWindow(hourly) {
-  if (!hourly || hourly.length < 2) return null;
-  const threshold = 60;
-  const MIN_HOURS = 2;
-  const MAX_HOURS = 5;
+  if (!hourly || hourly.length === 0) return null;
 
-  // Step 1: collect every contiguous run of qualifying hours.
-  const runs = [];
-  let cur = null;
-  const closeRun = () => {
-    if (cur && cur.hours.length >= MIN_HOURS) runs.push(cur);
-    cur = null;
+  // A climbing day is represented by the strongest usable session, not one
+  // isolated peak hour and not an all-day average. Prefer a five-hour window;
+  // shorten only when fewer hours remain today.
+  const count = Math.min(5, hourly.length);
+  let bestStart = 0;
+  let bestSum = -Infinity;
+  for (let i = 0; i + count <= hourly.length; i++) {
+    let sum = 0;
+    for (let j = 0; j < count; j++) sum += hourly[i + j].score;
+    if (sum > bestSum) {
+      bestSum = sum;
+      bestStart = i;
+    }
+  }
+
+  const hours = hourly.slice(bestStart, bestStart + count);
+  return {
+    start: hours[0].hour,
+    end: hours[hours.length - 1].hour + 1,
+    sumScore: bestSum,
+    count,
+    hours,
+    avg: bestSum / count,
   };
-  for (const h of hourly) {
-    if (h.score >= threshold) {
-      if (!cur) cur = { hours: [h] };
-      else cur.hours.push(h);
-    } else {
-      closeRun();
-    }
-  }
-  closeRun();
-  if (runs.length === 0) return null;
-
-  // Step 2: within each run, find the best fixed-width sub-window.
-  // For runs shorter than MAX_HOURS we just use the whole run.
-  // We also carry forward the *full* run's bounds and average so the UI can
-  // upgrade the label to "Good all day" when one run blankets the climbable day.
-  let bestRun = null;
-  for (const run of runs) {
-    const n = run.hours.length;
-    const winLen = Math.min(MAX_HOURS, n);
-    let bestStart = 0;
-    let bestSum = -Infinity;
-    for (let i = 0; i + winLen <= n; i++) {
-      let sum = 0;
-      for (let j = 0; j < winLen; j++) sum += run.hours[i + j].score;
-      // Prefer earlier starts on ties so callers get a stable, intuitive pick
-      // ("start at 9am" beats "start at 10am" if both averages match).
-      if (sum > bestSum) { bestSum = sum; bestStart = i; }
-    }
-    const slice = run.hours.slice(bestStart, bestStart + winLen);
-    const avg = bestSum / winLen;
-    const runSum = run.hours.reduce((a, h) => a + h.score, 0);
-    const candidate = {
-      start: slice[0].hour,
-      end: slice[slice.length - 1].hour + 1,
-      sumScore: bestSum,
-      count: winLen,
-      hours: slice,
-      avg,
-      // Full underlying run — used by callers to detect "good all day" cases.
-      runStart: run.hours[0].hour,
-      runEnd: run.hours[run.hours.length - 1].hour + 1,
-      runHours: n,
-      runAvg: runSum / n,
-    };
-    // Pick the highest-avg sub-window across all runs; tie-break by length.
-    if (!bestRun || candidate.avg > bestRun.avg ||
-        (candidate.avg === bestRun.avg && candidate.count > bestRun.count)) {
-      bestRun = candidate;
-    }
-  }
-  return bestRun;
 }
 
 // Map a 0–100 dryness number to a category + label + colour band.
@@ -1472,24 +1454,13 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // Crags may set `closedMonths: [8, 9, 10, 11]` for wildlife or access closures.
   // We short-circuit with score 0 and a clear reason so the card surfaces the closure
   // instead of a misleading conditions score.
-  if (crag.closedAll) {
-    const label = crag.closureReason ? `closed – ${crag.closureReason}` : 'currently closed';
+  const closureLabel = closureLabelForDate(crag, day.date);
+  if (closureLabel) {
     return {
       score: 0,
-      reasons: [label],
-      contributions: [{ category: 'closure', label, delta: -100, detail: label }],
+      reasons: [closureLabel],
+      contributions: [{ category: 'closure', label: closureLabel, delta: -100, detail: closureLabel }],
     };
-  }
-  if (Array.isArray(crag.closedMonths) && crag.closedMonths.length) {
-    const month = new Date(day.date + 'T12:00:00').getMonth() + 1; // 1–12
-    if (crag.closedMonths.includes(month)) {
-      const label = crag.closureReason ? `closed – ${crag.closureReason}` : 'closed (seasonal)';
-      return {
-        score: 0,
-        reasons: [label],
-        contributions: [{ category: 'closure', label, delta: -100, detail: label }],
-      };
-    }
   }
   let score = 100;
   const reasons = [];
@@ -2133,10 +2104,20 @@ export function rankByDay(forecasts, dayDates) {
         : date === fc.tomorrowDate ? fc.tomorrowBestWindow
         : null;
       const isClosed = contributions.some(c => c.category === 'closure');
+      const isHourlyDate = date === fc.todayDate || date === fc.tomorrowDate;
+      let scoreBasis = 'daily-estimate';
+      let scoreWindow = null;
       if (hourlyWindow && !isClosed) {
         const windowScore = Math.max(0, Math.min(100, Math.round(hourlyWindow.avg)));
         const delta = windowScore - score;
         score = windowScore;
+        scoreBasis = 'best-hourly-window';
+        scoreWindow = {
+          start: hourlyWindow.start,
+          end: hourlyWindow.end,
+          hours: hourlyWindow.count,
+          average: windowScore,
+        };
         contributions = [...contributions, {
           category: 'window',
           label: 'Best climbing window',
@@ -2144,6 +2125,10 @@ export function rankByDay(forecasts, dayDates) {
           detail: `${hourlyWindow.start}:00–${hourlyWindow.end}:00 average across ${hourlyWindow.count} hours`,
         }];
         reasons = [...reasons, `best window avg ${windowScore}`];
+      } else if (isHourlyDate && isClosed) {
+        scoreBasis = 'closure';
+      } else if (isHourlyDate) {
+        scoreBasis = 'daily-estimate-no-hourly-data';
       }
 
       rows.push({
@@ -2151,6 +2136,8 @@ export function rankByDay(forecasts, dayDates) {
         day,
         prevDay,
         score,
+        scoreBasis,
+        scoreWindow,
         reasons,
         contributions,
         seasonalContext,

@@ -511,3 +511,34 @@ test('brief feels-like heat is averaged per hour and does not cancel against coo
   assert.equal(all.contributions.find(x => x.label === 'Feels-like heat').delta, -20);
   assert.ok(m.score > all.score);
 });
+
+test('Falcons Lookout allows 18C peak performance and 20C cragging', async () => {
+  const { forecasts: f } = await loadWorker();
+  const crags = await loadCrags('worker/src/lib/crags.js');
+  const crag = crags.find(c => c.id === 'falcons-lookout');
+  assert.deepEqual(Array.from(crag.idealTemp), [8, 20]);
+  assert.equal(f.peakTemperatureUpper(crag), 18);
+  assert.equal(f.temperaturePenalty(crag, 18, 18, 12), 0);
+  assert.ok(f.temperaturePenalty(crag, 18.1, 18.1, 12) > 0);
+  assert.equal(f.heatPenalty(crag, 20, 1).ambient, 0);
+  assert.equal(f.heatPenalty(crag, 20, 1).solar, 0);
+  assert.ok(f.heatPenalty(crag, 20.1, 1).ambient > 0);
+  assert.ok(f.scoreHour(crag, hourAt(19)) <= 90);
+  const daily = f.scoreDay(crag, dayFor(f, crag, 19));
+  assert.ok(daily.score <= 90);
+  for (const other of crags.filter(c => c.id !== crag.id)) {
+    const [lo, hi] = other.idealTemp;
+    const relief = other.warmWeatherRelief === 'light' || other.shade === 'all-day' || other.heatExposure === 'sheltered';
+    assert.equal(f.peakTemperatureUpper(other), Math.min(hi, Math.max(16, lo + 6) + (relief ? 2 : 0)), other.id);
+  }
+});
+
+test('The Balcony retains hot-weather relief throughout its shaded day', async () => {
+  const { forecasts: f } = await loadWorker();
+  const crag = (await loadCrags('worker/src/lib/crags.js')).find(c => c.id === 'cathedral-balcony');
+  assert.equal(crag.shade, 'all-day');
+  assert.equal(crag.warmWeatherRelief, 'light');
+  for (const hour of [8, 12, 16]) {
+    assert.ok(f.feelsLikeHeatPenalty(crag, 24, hour) < f.feelsLikeHeatPenalty({ ...crag, warmWeatherRelief: undefined }, 24, hour));
+  }
+});

@@ -413,6 +413,8 @@ function warmReliefApplies(crag, hour) {
 
 export function peakTemperatureUpper(crag, hour) {
   const [lo, hi] = crag.idealTemp;
+  // Explicit local calibration takes priority over the default peak band.
+  if (Number.isFinite(crag.peakTempMax)) return Math.min(hi, crag.peakTempMax);
   const relief = warmReliefApplies(crag, hour) || crag.shade === 'all-day' ||
     crag.heatExposure === 'sheltered';
   return Math.min(hi, Math.max(16, lo + 6) + (relief ? 2 : 0));

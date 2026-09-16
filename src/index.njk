@@ -119,6 +119,37 @@ eleventyComputed:
   </div>
 </section>
 
+<!-- ============ DAILY SCORE GUIDE ============ -->
+<section id="daily-score-guide" class="section" aria-labelledby="daily-score-heading">
+  <div class="wrap daily-score-layout">
+    <div class="daily-score-intro">
+      <div class="section-tag">Score guide</div>
+      <h2 id="daily-score-heading" class="section-heading">Understanding the Climbable daily score</h2>
+      <div class="daily-score-explainer">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><circle cx="14" cy="14" r="10" stroke="currentColor" stroke-width="1.8"/><path d="M14 7v7h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <p>Daily scores are calculated from the average of the <strong>best five-hour climbing window.</strong></p>
+      </div>
+    </div>
+    <dl class="daily-score-bands">
+      {% set bands = [
+        ['95–100', 'Peak hard-climbing conditions', 'peak'],
+        ['91–94', 'Very good, with a minor compromise', 'good'],
+        ['80–90', 'Strong general cragging conditions', 'good'],
+        ['65–79', 'Worth climbing, but with noticeable compromises', 'good'],
+        ['50–64', 'Marginal or highly dependent on timing/sector', 'marginal'],
+        ['30–49', 'Generally unfavourable', 'marginal'],
+        ['0–29', 'Not realistically climbable or closed', 'poor']
+      ] %}
+      {% for band in bands %}
+      <div class="daily-score-band">
+        <dt class="daily-score-pill daily-score-pill--{{ band[2] }}">{{ band[0] }}</dt>
+        <dd>{{ band[1] }}</dd>
+      </div>
+      {% endfor %}
+    </dl>
+  </div>
+</section>
+
 <!-- ============ 4. WHAT IT ACTUALLY SCORES ============ -->
 <section id="scores" class="section">
   <div class="wrap">

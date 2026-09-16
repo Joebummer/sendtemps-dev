@@ -677,3 +677,62 @@
 .map-act-callout text { fill: var(--color-primary); stroke: none; }
 .map-act-label { font-size: 5px; font-weight: 700; }
 .map-act-count { font-size: 3.4px; }
+
+/* Daily score guide: score colours mirror the in-app guide. */
+.daily-score-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: var(--space-16);
+  align-items: start;
+}
+.daily-score-explainer {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+  line-height: 1.6;
+}
+.daily-score-explainer svg { flex: 0 0 28px; margin-top: 3px; color: var(--color-primary); }
+.daily-score-explainer p { margin: 0; }
+.daily-score-explainer strong { color: var(--color-text); font-weight: 600; }
+.daily-score-bands {
+  margin: 0;
+  padding: var(--space-2) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xl);
+}
+.daily-score-band {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5) 0;
+}
+.daily-score-band + .daily-score-band { border-top: 1px solid var(--color-divider); }
+.daily-score-band dd { margin: 0; font-size: var(--text-base); line-height: 1.45; }
+.daily-score-pill {
+  padding: 9px 8px;
+  border-radius: var(--radius-full);
+  color: #fff;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.daily-score-pill--peak { background: #257c35; }
+.daily-score-pill--good { background: #5e803a; }
+.daily-score-pill--marginal { background: #b88427; }
+.daily-score-pill--poor { background: #b95438; }
+@media (max-width: 800px) {
+  .daily-score-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
+  .daily-score-explainer { margin-top: var(--space-5); }
+}
+@media (max-width: 400px) {
+  .daily-score-bands { padding: var(--space-2) var(--space-4); }
+  .daily-score-band { grid-template-columns: 80px minmax(0, 1fr); gap: var(--space-3); }
+  .daily-score-pill { font-size: 15px; }
+}

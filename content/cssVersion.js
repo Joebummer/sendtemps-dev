@@ -1,1 +1,1 @@
-module.exports = "act-coverage-1";
+module.exports = "daily-score-guide-1";

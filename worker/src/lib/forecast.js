@@ -290,15 +290,50 @@ function daytimeWindExposure(crag, hourly, dateStr) {
 // hour clips into the range. A 3°C–12°C day with idealTemp [10,24] passes the
 // old "tFeel inside range" check but practically only spends 1–2 hours in-range.
 // Shared temperature model for hourly scores and climbing-hour daily averages.
+// idealTemp remains the broad "good cragging" band. A narrower peak band inside
+// it reserves 95+ scores for genuinely crisp hard-climbing conditions, while a
+// gradual shoulder keeps warmer days useful. Bouldering declines faster because
+// skin friction is more temperature-sensitive. Verified shade/warm-weather
+// relief shifts the peak shoulder two degrees warmer.
+function warmReliefApplies(crag, hour) {
+  const validHour = Number.isFinite(hour) && hour >= 0 && hour < 24;
+  return crag.warmWeatherRelief === 'light' ||
+    (crag.warmWeatherRelief === 'morning' && validHour && hour < 12) ||
+    (crag.warmWeatherRelief === 'evening' && validHour && hour >= 17) ||
+    (crag.warmWeatherRelief === 'afternoon' && validHour && hour >= 12) ||
+    (crag.warmWeatherRelief === 'late-afternoon' && validHour && hour >= 16);
+}
+
+export function peakTemperatureUpper(crag, hour) {
+  const [lo, hi] = crag.idealTemp;
+  const relief = warmReliefApplies(crag, hour) || crag.shade === 'all-day' ||
+    crag.heatExposure === 'sheltered';
+  return Math.min(hi, Math.max(16, lo + 6) + (relief ? 2 : 0));
+}
+
+function warmPerformancePenalty(crag, hotTemp, hour) {
+  if (!Number.isFinite(hotTemp)) return 0;
+  const over = Math.max(0, hotTemp - peakTemperatureUpper(crag, hour));
+  if (over === 0) return 0;
+  const routeCurve = [0, 1, 3, 5, 7, 10, 14];
+  const boulderCurve = [0, 2, 4, 7, 10, 14, 19];
+  const curve = crag.discipline === 'bouldering' ? boulderCurve : routeCurve;
+  const whole = Math.floor(over);
+  if (whole >= curve.length - 1) {
+    return Math.min(40, curve[curve.length - 1] + (over - (curve.length - 1)) * 4);
+  }
+  return curve[whole] + (curve[whole + 1] - curve[whole]) * (over - whole);
+}
+
 // The first 5 degrees below ideal are tolerable; sustained deeper cold ramps up.
 // These are product calibration curves, not physiological temperature limits.
-export function temperaturePenalty(crag, apparent, air = apparent) {
-  const [lo, hi] = crag.idealTemp;
+export function temperaturePenalty(crag, apparent, air = apparent, hour) {
+  const [lo] = crag.idealTemp;
   const coldTemp = Number.isFinite(apparent) ? apparent : air;
   const hotTemp = Number.isFinite(air) ? air : apparent;
   const below = Number.isFinite(coldTemp) ? Math.max(0, lo - coldTemp) : 0;
   const cold = Math.min(80, Math.min(5, below) * 2.5 + Math.max(0, below - 5) * 6);
-  const hot = Number.isFinite(hotTemp) ? Math.min(40, Math.max(0, hotTemp - hi) * 4) : 0;
+  const hot = warmPerformancePenalty(crag, hotTemp, hour);
   return cold + hot;
 }
 
@@ -323,13 +358,8 @@ export function heatPenalty(crag, air, solarFraction = 0) {
 export function feelsLikeHeatPenalty(crag, apparent, hour) {
   if (!Number.isFinite(apparent)) return 0;
   const over = Math.max(0, apparent - 21);
-  const validHour = Number.isFinite(hour) && hour >= 0 && hour < 24;
   // Conservative local-time windows; missing/invalid time receives no relief.
-  const light = crag.warmWeatherRelief === 'light' ||
-    (crag.warmWeatherRelief === 'morning' && validHour && hour < 12) ||
-    (crag.warmWeatherRelief === 'evening' && validHour && hour >= 17) ||
-    (crag.warmWeatherRelief === 'afternoon' && validHour && hour >= 12) ||
-    (crag.warmWeatherRelief === 'late-afternoon' && validHour && hour >= 16);
+  const light = warmReliefApplies(crag, hour);
   return Math.min(40, light
     ? Math.min(5, over) * 1.5 + Math.max(0, over - 5) * 4
     : over * 4);
@@ -337,8 +367,7 @@ export function feelsLikeHeatPenalty(crag, apparent, hour) {
 
 function additionalFeelsLikeHeat(crag, apparent, air, hour) {
   const hotAir = Number.isFinite(air) ? air : apparent;
-  const airDistance = Number.isFinite(hotAir)
-    ? Math.min(40, Math.max(0, hotAir - crag.idealTemp[1]) * 4) : 0;
+  const airDistance = warmPerformancePenalty(crag, hotAir, hour);
   const ambient = heatPenalty(crag, hotAir, 0).ambient;
   // Count overlapping air/comfort heat once; solar and cold remain independent.
   return Math.max(0, feelsLikeHeatPenalty(crag, apparent, hour) - airDistance - ambient);
@@ -1093,7 +1122,7 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   const tFeel = h.apparentTemp ?? h.temp;
   const tAir = Number.isFinite(h.temp) ? h.temp : tFeel;
   const thermal = heatPenalty(crag, tAir, hourSolarFraction(crag, h));
-  const thermalPenalty = temperaturePenalty(crag, tFeel, tAir) + thermal.ambient + thermal.solar +
+  const thermalPenalty = temperaturePenalty(crag, tFeel, tAir, h.hour) + thermal.ambient + thermal.solar +
     additionalFeelsLikeHeat(crag, tFeel, tAir, h.hour);
   penalize(thermalPenalty);
 
@@ -1542,15 +1571,18 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   const samples = Array.isArray(ct.temperatureSamples)
     ? ct.temperatureSamples.filter(sample => Number.isFinite(sample.apparent)) : [];
   const tempDistance = samples.length
-    ? samples.reduce((sum, sample) => sum + temperaturePenalty(crag, sample.apparent, sample.air), 0) / samples.length
+    ? samples.reduce((sum, sample) => sum + temperaturePenalty(crag, sample.apparent, sample.air, sample.hour), 0) / samples.length
     : temperaturePenalty(crag, tFeel, tAir);
   let protectedTemperaturePenalty = tempDistance + dwellPen;
   if (protectedTemperaturePenalty > 0) {
+    const peakMax = peakTemperatureUpper(crag);
     score -= protectedTemperaturePenalty;
     reasons.push(t < idealMin ? `cold (${Math.round(t)}°C avg)`
-      : t > idealMax ? `hot (${Math.round(t)}°C avg)` : 'temperature varies through the day');
+      : t > idealMax ? `hot (${Math.round(t)}°C avg)`
+        : tAir > peakMax ? `warm for hard climbing (${Math.round(tAir)}°C avg)`
+          : 'temperature varies through the day');
     add('temp', 'Temperature', -protectedTemperaturePenalty,
-      `${Math.round(tAir)}°C air / ${Math.round(tFeel)}°C feels-like climbing average; ideal ${idealMin}–${idealMax}°C` +
+      `${Math.round(tAir)}°C air / ${Math.round(tFeel)}°C feels-like climbing average; peak up to ${peakMax}°C, good cragging ${idealMin}–${idealMax}°C` +
       (climbHours > 0 ? `; ${ct.hoursInRange}/${climbHours}h in range` : ''));
   } else {
     reasons.push(`temp ideal (${Math.round(t)}°C)`);

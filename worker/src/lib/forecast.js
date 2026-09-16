@@ -1163,13 +1163,22 @@ export function bestWindow(hourly) {
   }
 
   const hours = hourly.slice(bestStart, bestStart + count);
+  const start = hours[0].hour;
+  const end = hours[hours.length - 1].hour + 1;
+  const avg = bestSum / count;
   return {
-    start: hours[0].hour,
-    end: hours[hours.length - 1].hour + 1,
+    start,
+    end,
     sumScore: bestSum,
     count,
     hours,
-    avg: bestSum / count,
+    avg,
+    // Wire compatibility for current native clients. These mirror the selected
+    // session and are not an all-day average.
+    runStart: start,
+    runEnd: end,
+    runHours: count,
+    runAvg: avg,
   };
 }
 

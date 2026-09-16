@@ -52,6 +52,25 @@ function heatTotal(result) {
     .reduce((sum, c) => sum + c.delta, 0);
 }
 
+test('warm-performance callouts are concise, unambiguous and cannot score 99', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const route = { idealTemp: [8, 22], discipline: 'routes', shade: 'mixed' };
+  const boulder = { ...route, discipline: 'bouldering' };
+
+  assert.equal(f.scoreHour(route, hourAt(16)), 100);
+  assert.ok(f.scoreHour(route, hourAt(17)) <= 98);
+  assert.ok(f.scoreHour(boulder, hourAt(17)) < f.scoreHour(route, hourAt(17)));
+
+  const warm = f.scoreDay(route, dayFor(f, route, 17), null, null);
+  assert.ok(warm.score <= 98);
+  assert.ok(warm.reasons.some(reason => reason.startsWith('too warm for hard climbing')));
+  assert.ok(!warm.reasons.some(reason => reason.startsWith('warm for hard climbing')));
+
+  const varied = f.scoreDay(route, dayFor(f, route, h => h % 2 ? 16.5 : 15.5), null, null);
+  assert.ok(varied.reasons.includes('temp varies'));
+  assert.ok(!varied.reasons.includes('temperature varies through the day'));
+});
+
 for (const file of ['worker/src/lib/forecast.js']) {
   test(file + ': all Blue Mountains records, -5 to 25 degrees and bonus protection', async () => {
     const f = await loadForecast(file);

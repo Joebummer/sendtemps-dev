@@ -58,17 +58,33 @@ test('warm-performance callouts are concise, unambiguous and cannot score 99', a
   const boulder = { ...route, discipline: 'bouldering' };
 
   assert.equal(f.scoreHour(route, hourAt(16)), 100);
-  assert.ok(f.scoreHour(route, hourAt(17)) <= 98);
+  assert.ok(f.scoreHour(route, hourAt(17)) <= 90);
+  assert.ok(f.scoreHour(boulder, hourAt(17)) <= 88);
   assert.ok(f.scoreHour(boulder, hourAt(17)) < f.scoreHour(route, hourAt(17)));
 
   const warm = f.scoreDay(route, dayFor(f, route, 17), null, null);
-  assert.ok(warm.score <= 98);
+  assert.ok(warm.score <= 90);
   assert.ok(warm.reasons.some(reason => reason.startsWith('too warm for hard climbing')));
   assert.ok(!warm.reasons.some(reason => reason.startsWith('warm for hard climbing')));
 
   const varied = f.scoreDay(route, dayFor(f, route, h => h % 2 ? 16.5 : 15.5), null, null);
   assert.ok(varied.reasons.includes('temp varies'));
   assert.ok(!varied.reasons.includes('temperature varies through the day'));
+
+  const window = { start: 10, end: 15, count: 5, avg: 100 };
+  const rankedWarm = f.rankByDay({ warm: {
+    crag: route, days: [dayFor(f, route, 17)], todayDate: date,
+    todayBestWindow: window, nowDryness: 100, pastPrecip: [],
+  } }, [date])[date][0];
+  assert.equal(rankedWarm.score, 90);
+  assert.ok(!rankedWarm.reasons.some(reason => reason.startsWith('best window avg')));
+
+  const rankedVaried = f.rankByDay({ varied: {
+    crag: route, days: [dayFor(f, route, h => h % 2 ? 16.5 : 15.5)], todayDate: date,
+    todayBestWindow: window, nowDryness: 100, pastPrecip: [],
+  } }, [date])[date][0];
+  assert.equal(rankedVaried.score, 98);
+  assert.ok(!rankedVaried.reasons.some(reason => reason.startsWith('best window avg')));
 });
 
 for (const file of ['worker/src/lib/forecast.js']) {

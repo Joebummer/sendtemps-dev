@@ -39,6 +39,9 @@ function validateCrags(crags) {
     if (crag.heatExposure != null && !['exposed', 'partial', 'sheltered'].includes(crag.heatExposure)) {
       errors.push(`${label}: invalid heatExposure`);
     }
+    if (crag.marineHazard != null && !['high', 'extreme'].includes(crag.marineHazard)) {
+      errors.push(`${label}: invalid marineHazard`);
+    }
   }
   const byId = new Map(crags.filter(Boolean).map(crag => [crag.id, crag]));
   for (const crag of crags.filter(Boolean)) {

@@ -3409,9 +3409,10 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'Iconic freestanding dolerite sea stack with routes moving across several faces and arêtes. Sun exposure varies by line, while swell, spray and wind are major condition factors.',
+    notes: 'Iconic freestanding dolerite sea stack with routes moving across several faces and arêtes. Sun exposure varies by line, while swell, spray and wind are major condition factors. A highly committing sea-stack objective with a long approach, exposed abseil access and complex retreat. Wind, swell and tide can make access or escape dangerous, with limited options once committed.',
     sunOnWall: 'Variable by route and face',
     bestIn: 'warm',
+    marineHazard: 'extreme',
   },
   {
     id: 'fortescue-candlestick',
@@ -3430,9 +3431,10 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'Large freestanding dolerite sea stack with established routes on multiple faces, including the North West Route and West Wall. SSW winds funnel through the chasm and become disruptive from about 15 knots.',
+    notes: 'Large freestanding dolerite sea stack with established routes on multiple faces, including the North West Route and West Wall. SSW winds funnel through the chasm and become disruptive from about 15 knots. A remote and highly committing sea-stack objective. Access and retreat can involve abseiling, exposed scrambling or climbing directly above the sea, with wind and swell capable of changing conditions quickly.',
     sunOnWall: 'Variable by route and face',
     bestIn: 'mild',
+    marineHazard: 'extreme',
     windHazard: {
       bearing: 202.5,
       tolerance: 22.5,
@@ -3521,9 +3523,10 @@ export const CRAGS = [
     baseCity: 'Hobart',
     trip: 'both',
     state: 'TAS',
-    notes: 'Remote Tasman Peninsula sea-cliff climbing. The established East Face contains the dominant classic climbing and gets morning sun, so E is the most useful default aspect. A less-developed west face also exists. Check swell, spray and wind carefully.',
+    notes: 'Remote Tasman Peninsula sea-cliff climbing. The established East Face contains the dominant classic climbing and gets morning sun, so E is the most useful default aspect. A less-developed west face also exists. Check swell, spray and wind carefully. A remote sea-cliff area where many routes involve long approaches, exposed access and limited retreat options. Some sectors begin near sea level and can be significantly affected by wind and swell.',
     sunOnWall: 'Morning sun on the dominant East Face',
     bestIn: 'mild',
+    marineHazard: 'high',
   },
 
 

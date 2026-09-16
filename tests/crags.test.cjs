@@ -38,6 +38,17 @@ test('West Flank uses a broad mild band rather than hot-weather-only settings', 
   assert.equal(westFlank.shade, 'morning');
 });
 
+test('committing Tasman sea cliffs carry marine profiles and commitment warnings', async () => {
+  const byId = new Map((await loadCrags('worker/src/lib/crags.js')).map(crag => [crag.id, crag]));
+  for (const id of ['fortescue-totem-pole', 'fortescue-candlestick']) {
+    assert.equal(byId.get(id).marineHazard, 'extreme', id);
+    assert.match(byId.get(id).notes, /committing/, id);
+  }
+  assert.equal(byId.get('cape-raoul-main').marineHazard, 'high');
+  assert.match(byId.get('cape-raoul-main').notes, /limited retreat options/);
+  assert.equal(byId.get('fortescue-main').marineHazard, undefined);
+});
+
 test('former 10–24 temperature bands are recalibrated by exposure', async () => {
   const server = await loadCrags('worker/src/lib/crags.js');
   const byId = new Map(server.map(crag => [crag.id, crag]));

@@ -243,7 +243,7 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
       assert.deepEqual(actual.byDate, body.byDate);
     }
     assert.equal(calls, expectedCalls, 'trip changes must not download or score regional weather again');
-    assert.equal(harness.entries.size, 1, 'query variants must share the same regional cache key');
+    assert.equal(harness.entries.size, 2, 'query variants share one fresh and one fallback regional cache key');
   });
 }
 
@@ -311,4 +311,44 @@ test('heat exposure scales only solar heat and preserves ambient heat in shade',
   assert.equal(penalties(undefined)['Solar heat'], -9);
   for (const exposure of ['exposed', 'partial', 'sheltered', undefined])
     assert.equal(penalties(exposure)['Ambient heat'], -9);
+});
+
+test('weather requests deduplicate coordinates while preserving every crag', async () => {
+  const crags = (await loadCrags('worker/src/lib/crags.js')).filter(c => c.state === 'VIC');
+  const unique = new Set(crags.map(c => `${c.lat},${c.lon}`));
+  assert.ok(unique.size < crags.length);
+  const harness = await loadWorker(async url => {
+    const params = new URL(url).searchParams;
+    const coords = params.get('latitude').split(',').map((lat, i) => `${lat},${params.get('longitude').split(',')[i]}`);
+    assert.equal(coords.length, unique.size);
+    assert.deepEqual(new Set(coords), unique);
+    return Response.json(weatherFixture(url));
+  });
+  const forecasts = await harness.forecasts.fetchAllForecasts('VIC');
+  assert.equal(Object.keys(forecasts).length, crags.length);
+  for (const crag of crags) assert.ok(forecasts[crag.id].todayHourly.length, crag.id);
+});
+
+test('provider rate limits use a bounded fallback without extending its age', async () => {
+  let unavailable = false;
+  const harness = await loadWorker(async url => unavailable
+    ? new Response('rate limited', { status: 429 })
+    : Response.json(weatherFixture(url)));
+  const req = new Request('https://api.test/forecast/scored?region=NT');
+  const fresh = await harness.worker.fetch(req, {}, harness.ctx);
+  assert.equal(fresh.status, 200);
+  const original = await fresh.json();
+  await harness.flush();
+  unavailable = true;
+  harness.setNow('2026-09-13T02:16:00Z');
+  const fallback = await harness.worker.fetch(req, {}, harness.ctx);
+  assert.equal(fallback.status, 200);
+  assert.equal(fallback.headers.get('X-SendTemps-Cache'), 'STALE');
+  assert.ok(fallback.headers.get('Warning').includes('stale'));
+  assert.deepEqual(await fallback.json(), original);
+  await harness.flush();
+  harness.setNow('2026-09-13T03:01:00Z');
+  const expired = await harness.worker.fetch(req, {}, harness.ctx);
+  assert.equal(expired.status, 502);
+  assert.match((await expired.json()).error, /429/);
 });

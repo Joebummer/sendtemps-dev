@@ -29,8 +29,10 @@ test('best window prefers five hours, supports poor days and short late-day stri
   assert.equal(window.start, 11);
   assert.equal(window.end, 16);
   assert.equal(Math.round(window.avg), 53);
-  assert.equal('runAvg' in window, false);
-  assert.equal('runHours' in window, false);
+  assert.equal(window.runAvg, window.avg);
+  assert.equal(window.runHours, window.count);
+  assert.equal(window.runStart, window.start);
+  assert.equal(window.runEnd, window.end);
 
   const late = bestWindow([{ score: 72, hour: 18 }]);
   assert.equal(late.count, 1);
@@ -104,7 +106,10 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
         assert.equal(todayRow.scoreBasis, 'best-hourly-window');
         assert.equal(todayRow.scoreWindow.average, todayRow.score);
         assert.ok(todayRow.contributions.some(c => c.category === 'window'));
-        assert.equal('runAvg' in todayWindow, false);
+        assert.equal(todayWindow.runAvg, todayWindow.avg);
+        assert.equal(todayWindow.runHours, todayWindow.count);
+        assert.equal(todayWindow.runStart, todayWindow.start);
+        assert.equal(todayWindow.runEnd, todayWindow.end);
       } else if (todayClosed) {
         assert.equal(todayRow.scoreBasis, 'closure');
         assert.ok(body.today[crag.id].todayHourly.every(hour => hour.score === 0));
@@ -118,7 +123,10 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
         assert.equal(tomorrowRow.scoreBasis, 'best-hourly-window');
         assert.equal(tomorrowRow.scoreWindow.average, tomorrowRow.score);
         assert.ok(tomorrowRow.contributions.some(c => c.category === 'window'));
-        assert.equal('runAvg' in tomorrowWindow, false);
+        assert.equal(tomorrowWindow.runAvg, tomorrowWindow.avg);
+        assert.equal(tomorrowWindow.runHours, tomorrowWindow.count);
+        assert.equal(tomorrowWindow.runStart, tomorrowWindow.start);
+        assert.equal(tomorrowWindow.runEnd, tomorrowWindow.end);
       } else if (tomorrowClosed) {
         assert.equal(tomorrowRow.scoreBasis, 'closure');
         assert.ok(body.today[crag.id].tomorrowHourly.every(hour => hour.score === 0));

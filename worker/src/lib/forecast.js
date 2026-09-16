@@ -19,13 +19,34 @@ import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 const API = 'https://api.open-meteo.com/v1/forecast';
 const MARINE_API = 'https://marine-api.open-meteo.com/v1/marine';
 
+// Read the key from Worker secrets per request; never include it in payloads.
+export async function fetchOpenMeteo(input, apiKey = '') {
+  const url = new URL(input);
+  if (!['api.open-meteo.com', 'marine-api.open-meteo.com'].includes(url.hostname)) {
+    throw new Error('Invalid weather provider');
+  }
+  url.searchParams.delete('apikey');
+  const key = apiKey.trim();
+  if (key) {
+    url.hostname = `customer-${url.hostname}`;
+    url.searchParams.set('apikey', key);
+  }
+  try {
+    return await fetch(url.toString());
+  } catch {
+    // Network errors can contain the requested URL, including credentials.
+    throw new Error('Weather provider request failed');
+  }
+}
+
+
 // 3-letter month abbreviations matching the keys used in CLIMATE_PROFILES
 // (climateBaseline.js). Deliberately NOT derived from Intl/toLocaleString —
 // see the note at the scoreDay() call site below. Kept identical to the
 // root forecast.js copy (not an intentional diff).
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-async function fetchMarineForecasts(crags) {
+async function fetchMarineForecasts(crags, apiKey) {
   const targets = crags.filter(crag => crag.marineHazard);
   if (!targets.length) return {};
 
@@ -48,7 +69,7 @@ async function fetchMarineForecasts(crags) {
   let res;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise(resolve => setTimeout(resolve, attempt * 1500));
-    res = await fetch(`${MARINE_API}?${params}`);
+    res = await fetchOpenMeteo(`${MARINE_API}?${params}`, apiKey);
     if (res.status !== 429) break;
   }
   if (!res.ok) throw new Error(`Marine API error ${res.status}`);
@@ -97,13 +118,13 @@ function mergeMarineHourly(weatherHourly, marineHourly) {
 // or 'ALL' for every crag nationwide. Scoping to one state cuts the request
 // (and the edge-cached response) down to roughly a fifth of the full payload
 // for most states, which is where most of the load-time cost was coming from.
-export async function fetchAllForecasts(region = 'ALL') {
+export async function fetchAllForecasts(region = 'ALL', apiKey = '') {
   const scoped = region === 'ALL' ? CRAGS : CRAGS.filter(c => c.state === region);
   // Safety net: never send an empty request (e.g. an unrecognised region code).
   const targetCrags = scoped.length ? scoped : CRAGS;
   // Marine data is only requested for explicitly configured sea cliffs. It is
   // optional: a marine-provider outage must not take the whole forecast down.
-  const marinePromise = fetchMarineForecasts(targetCrags).catch(() => ({}));
+  const marinePromise = fetchMarineForecasts(targetCrags, apiKey).catch(() => ({}));
   // Multiple sectors share coordinates. Request each weather location once,
   // then retain each crag's own elevation correction and scoring below.
   const locationIndex = new Map();
@@ -155,7 +176,7 @@ export async function fetchAllForecasts(region = 'ALL') {
   let res;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500));
-    res = await fetch(url);
+    res = await fetchOpenMeteo(url, apiKey);
     if (res.status !== 429) break;
   }
   if (!res.ok) throw new Error(`Forecast API error ${res.status}`);

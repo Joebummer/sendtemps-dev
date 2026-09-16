@@ -84,3 +84,17 @@ test('forecast proxy preserves upstream failure status and does not cache it', a
   await harness.flush();
   assert.equal(harness.entries.size, 0);
 });
+
+test('forecast proxy uses only the configured paid key and redacts upstream errors', async () => {
+  const key = 'server-only-key';
+  const harness = await loadWorker(async input => {
+    const url = new URL(input);
+    assert.equal(url.hostname, 'customer-api.open-meteo.com');
+    assert.equal(url.searchParams.get('apikey'), key);
+    return new Response(`Bad request ${key}`, { status: 401 });
+  });
+  const response = await harness.worker.fetch(request('/forecast?apikey=client-key'),
+    { OPEN_METEO_API_KEY: key }, harness.ctx);
+  assert.equal(response.status, 401);
+  assert.ok(!(await response.text()).includes(key));
+});

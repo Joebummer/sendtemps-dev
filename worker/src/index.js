@@ -12,7 +12,7 @@
  *     2. Checks each subscriber's favourited crags against their score threshold
  */
 
-import { fetchAllForecasts, rankByDay, rankWeekendTrip, weekDates, weekendDates } from './lib/forecast.js';
+import { fetchOpenMeteo, fetchAllForecasts, rankByDay, rankWeekendTrip, weekDates, weekendDates } from './lib/forecast.js';
 import { CRAGS } from './lib/crags.js';
 
 // ─── VAPID helpers (Web Push without npm) ────────────────────────────────────
@@ -283,12 +283,12 @@ function seasonalAdjust(normTMax) {
   return normTMax + offset;
 }
 
-async function checkRareWindows() {
+async function checkRareWindows(env) {
   const windows = [];
 
   for (const crag of VIC_CRAGS) {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${crag.lat}&longitude=${crag.lon}&daily=temperature_2m_max,relative_humidity_2m_mean,wind_speed_10m_max&forecast_days=7&timezone=Australia%2FMelbourne`;
-    const res = await fetch(url);
+    const res = await fetchOpenMeteo(url, env.OPEN_METEO_API_KEY);
     const data = await res.json();
     const { time, temperature_2m_max, relative_humidity_2m_mean, wind_speed_10m_max } = data.daily;
 
@@ -369,7 +369,7 @@ async function handleRedeem(env, url, corsHeaders, ctx) {
 
 const FORECAST_CACHE_TTL = 900; // 15 minutes — forecasts don't need to be fresher than this
 
-async function handleForecastProxy(request, url, corsHeaders, ctx) {
+async function handleForecastProxy(request, url, corsHeaders, ctx, env) {
   const cache = caches.default;
   // The query string (batched crag lat/lons) is identical for every client
   // viewing the same region filter on the same app version, so this key is
@@ -389,12 +389,12 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
   }
 
   const upstreamUrl = `https://api.open-meteo.com/v1/forecast?${url.searchParams.toString()}`;
-  const upstream = await fetch(upstreamUrl);
+  const upstream = await fetchOpenMeteo(upstreamUrl, env.OPEN_METEO_API_KEY);
 
   if (!upstream.ok) {
     // Upstream is failing (e.g. 429) and we have nothing cached yet — pass the
     // status through so the client's existing retry/backoff still applies.
-    return new Response(await upstream.text(), { status: upstream.status, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: `Forecast API error ${upstream.status}` }), { status: upstream.status, headers: corsHeaders });
   }
 
   const body = await upstream.text();
@@ -481,7 +481,7 @@ function normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip, 
   return { region, dates, tripDates, crags, byDate, weekendTrip: weekendTripOut, today };
 }
 
-async function handleScoredForecast(request, url, corsHeaders, ctx) {
+async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
   const region = (url.searchParams.get('region') || 'ALL').toUpperCase();
   if (!SCORED_REGIONS.has(region)) {
     return new Response(JSON.stringify({ error: 'invalid region' }), {
@@ -512,7 +512,7 @@ async function handleScoredForecast(request, url, corsHeaders, ctx) {
       regional = await cached.json();
     } else {
       try {
-        const forecasts = await fetchAllForecasts(region);
+        const forecasts = await fetchAllForecasts(region, env.OPEN_METEO_API_KEY);
         const ranked = rankByDay(forecasts, dates);
         regional = {
           payload: normalizeScoredResponse(region, dates, [], ranked, [], forecasts),
@@ -621,7 +621,7 @@ async function handleRequest(request, env, ctx) {
   // here means every client shares one cached response per ~15 min window,
   // fetched from Cloudflare's own IPs instead of the client's.
   if (pathname === '/forecast' && request.method === 'GET') {
-    return handleForecastProxy(request, url, corsHeaders, ctx);
+    return handleForecastProxy(request, url, corsHeaders, ctx, env);
   }
 
   // GET /forecast/scored?region=VIC — full server-side scoring pipeline.
@@ -630,7 +630,7 @@ async function handleRequest(request, env, ctx) {
   // copy — see lib/README.md), so both platforms get identical scores from
   // one implementation. Edge-cached per region same as /forecast.
   if (pathname === '/forecast/scored' && request.method === 'GET') {
-    return handleScoredForecast(request, url, corsHeaders, ctx);
+    return handleScoredForecast(request, url, corsHeaders, ctx, env);
   }
 
   // GET /redeem?code=XXXX — validates a beta-access code against the
@@ -667,7 +667,7 @@ async function handleRequest(request, env, ctx) {
       const coords = CRAG_COORDS[cragId];
       if (!coords) { results.push({ cragId, status: 'unknown id' }); continue; }
       const threshold = thresholds[cragId] ?? 75;
-      const score = await getCragScoreToday(coords.lat, coords.lon);
+      const score = await getCragScoreToday(coords.lat, coords.lon, env);
       results.push({ cragId, name: coords.name, score, threshold, willAlert: score >= threshold });
     }
 
@@ -744,10 +744,10 @@ async function handleRequest(request, env, ctx) {
 // Simplified scoring proxy: fetch today's tMax, precip, wind for a crag lat/lon
 // and produce a rough 0-100 score comparable to the app's scoring model.
 // Not a full replica — used only to detect threshold crossings.
-async function getCragScoreToday(lat, lon) {
+async function getCragScoreToday(lat, lon, env) {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,precipitation_sum,precipitation_probability_max,windspeed_10m_max&forecast_days=1&timezone=Australia%2FMelbourne`;
-    const res = await fetch(url);
+    const res = await fetchOpenMeteo(url, env.OPEN_METEO_API_KEY);
     const data = await res.json();
     const d = data.daily;
     const tMax = d.temperature_2m_max[0];
@@ -896,7 +896,7 @@ async function handleCron(env) {
   const subscriptions = await getAllSubscriptions(env);
 
   // 1. Rare window alerts (VIC state-wide)
-  const windows = await checkRareWindows();
+  const windows = await checkRareWindows(env);
   if (windows.length > 0) {
     const title = '✦ Rare window in Victoria';
     const body = windows.join('\n') + '\n\nCheck climbable.app for the full forecast.';
@@ -923,7 +923,7 @@ async function handleCron(env) {
       const coords = CRAG_COORDS[cragId];
       if (!coords) continue;
       const threshold = thresholds[cragId] ?? 75;
-      const score = await getCragScoreToday(coords.lat, coords.lon);
+      const score = await getCragScoreToday(coords.lat, coords.lon, env);
       if (score !== null && score >= threshold) {
         hits.push(`${coords.name} — scoring ${score}/100 today`);
       }

@@ -418,6 +418,7 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
 
 // ─── Scored forecast (server-side scoring pipeline) ──────────────────────────
 
+const SCORED_FALLBACK_TTL = 3600; // at most one hour old, same local date and scoring version
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
@@ -500,28 +501,48 @@ async function handleScoredForecast(request, url, corsHeaders, ctx) {
   cacheUrl.searchParams.set('date', dates[0]);
   cacheUrl.searchParams.set('_cv', SCORED_CACHE_VERSION);
   const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
+  cacheUrl.pathname = '/_cache/scored-fallback';
+  const fallbackKey = new Request(cacheUrl.toString(), { method: 'GET' });
 
   try {
     const cached = await cache.match(cacheKey);
     let regional;
+    let cacheStatus = cached ? 'HIT' : 'MISS';
     if (cached) {
       regional = await cached.json();
     } else {
-      const forecasts = await fetchAllForecasts(region);
-      const ranked = rankByDay(forecasts, dates);
-      regional = {
-        payload: normalizeScoredResponse(region, dates, [], ranked, [], forecasts),
-        // Preserve stable trip-score ties in the original forecast order.
-        cragOrder: Object.keys(forecasts),
-      };
-      const edgeResponse = new Response(JSON.stringify(regional), {
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': `public, max-age=${SCORED_CACHE_TTL}`,
-        },
-      });
-      if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, edgeResponse));
-      else await cache.put(cacheKey, edgeResponse);
+      try {
+        const forecasts = await fetchAllForecasts(region);
+        const ranked = rankByDay(forecasts, dates);
+        regional = {
+          payload: normalizeScoredResponse(region, dates, [], ranked, [], forecasts),
+          // Preserve stable trip-score ties in the original forecast order.
+          cragOrder: Object.keys(forecasts),
+        };
+        const edgeResponse = new Response(JSON.stringify(regional), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': `public, max-age=${SCORED_CACHE_TTL}`,
+          },
+        });
+        const fallbackResponse = new Response(edgeResponse.clone().body, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': `public, max-age=${SCORED_FALLBACK_TTL}`,
+          },
+        });
+        const writes = Promise.all([
+          cache.put(cacheKey, edgeResponse),
+          cache.put(fallbackKey, fallbackResponse),
+        ]);
+        if (ctx?.waitUntil) ctx.waitUntil(writes);
+        else await writes;
+      } catch (error) {
+        const fallback = await cache.match(fallbackKey);
+        if (!fallback) throw error;
+        regional = await fallback.json();
+        cacheStatus = 'STALE';
+      }
     }
     const { payload, cragOrder } = regional;
     const tripDates = (() => {
@@ -546,7 +567,8 @@ async function handleScoredForecast(request, url, corsHeaders, ctx) {
       headers: {
         ...corsHeaders,
         'Cache-Control': 'no-store',
-        'X-SendTemps-Cache': cached ? 'HIT' : 'MISS',
+        'X-SendTemps-Cache': cacheStatus,
+        ...(cacheStatus === 'STALE' ? { Warning: '110 - "Response is stale"' } : {}),
       },
     });
     return response;

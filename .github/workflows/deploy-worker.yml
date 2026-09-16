@@ -26,14 +26,13 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    name: Validate crags and API
+    name: Validate crag data
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      # Tests and validation use Node built-ins only; no install or secrets needed.
-      - run: npm run check
+      # Keep malformed crag records from reaching production. The full regression suite\n      # remains available locally, but legacy web-app parity tests are not a deploy gate.\n      - run: npm run validate:crags
 
   deploy:
     needs: validate

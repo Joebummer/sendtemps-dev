@@ -3,6 +3,23 @@ const assert = require('node:assert/strict');
 const { loadWorker } = require('./helpers.cjs');
 const { loadCrags, validateCrags } = require('../scripts/validate-crags.cjs');
 
+test('Candlestick chasm penalty starts gently below 15 knots and escalates in SSW winds', async () => {
+  const harness = await loadWorker();
+  const candlestick = {
+    id: 'fortescue-candlestick',
+    windHazard: { bearing: 202.5, tolerance: 22.5 },
+  };
+  const penalty = harness.forecasts.directionalWindPenalty;
+
+  assert.equal(penalty(candlestick, 202.5, 12 * 1.852), 0);
+  assert.equal(penalty(candlestick, 202.5, 14 * 1.852), 2);
+  assert.equal(penalty(candlestick, 202.5, 15 * 1.852), 8);
+  assert.equal(penalty(candlestick, 202.5, 18 * 1.852), 10);
+  assert.equal(penalty(candlestick, 202.5, 20 * 1.852), 15);
+  assert.equal(penalty(candlestick, 90, 25 * 1.852), 0);
+  assert.equal(penalty({ id: 'fortescue-moai' }, 202.5, 25 * 1.852), 0);
+});
+
 function weatherFixture(url) {
   const params = new URL(url).searchParams;
   const dates = Array.from({ length: 14 }, (_, i) =>

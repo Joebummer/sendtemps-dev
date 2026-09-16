@@ -919,6 +919,20 @@ function melbourneHourNow() {
 // rainNeighbours: count of hours within ±2h that also have precipProb > 30%.
 // Used to scale up the probability penalty for sustained rain windows vs
 // isolated single-hour showers.
+// Optional local wind hazards capture terrain effects that a wall's compass
+// aspect cannot describe, such as wind funnelling through a chasm.
+export function directionalWindPenalty(crag, windDir, windKmh) {
+  const hazard = crag?.windHazard;
+  if (!hazard || !Number.isFinite(windDir) || !Number.isFinite(windKmh)) return 0;
+  if (angularDistance(windDir, hazard.bearing) > hazard.tolerance) return 0;
+
+  const knots = windKmh / 1.852;
+  if (knots <= 12) return 0;
+  if (knots < 15) return Math.round(1 + ((knots - 12) / 3) * 2);
+  if (knots < 20) return Math.round(8 + ((knots - 15) / 5) * 4);
+  return Math.min(20, 15 + Math.floor((knots - 20) / 5) * 2);
+}
+
 export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 0, meanDayHumid = 0) {
   let s = 100;
   // Tracks whether any real penalty fired this hour (mirrors scoreDay's
@@ -997,6 +1011,11 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   else if (h.wind > 35) penalize(Math.round(5 * windMult));
   // Lee penalty — wall sheltered means slower drying; apply a small drag.
   else if (h.windExposure === 'lee' && h.wind > 15) penalize(2);
+
+  // Local terrain can amplify a particular wind direction independently of
+  // wall aspect. Apply this after the general wind penalty so both effects are
+  // represented when conditions are genuinely severe.
+  penalize(directionalWindPenalty(crag, h.windDir, h.wind));
 
   // Sun-on-wall interactions — use apparent temp for the threshold checks
   // so a cold-feeling 20°C day (windy, humid) doesn't falsely claim a sun bonus.
@@ -1831,6 +1850,15 @@ export function scoreDay(crag, day, prevDay, nextDay) {
       reasons.push('drying wind');
       add('wind', 'Drying wind', +bonus, `${Math.round(climbingWind)} km/h avg ${dirLabel}${exposureNote} — helps the rock dry`);
     }
+  }
+
+  const localWindPenalty = directionalWindPenalty(crag, day.windDir, climbingWind);
+  if (localWindPenalty > 0) {
+    score -= localWindPenalty;
+    reasons.push('chasm wind');
+    const hazard = crag.windHazard;
+    add('wind', hazard.label || 'Local wind exposure', -localWindPenalty,
+      `${Math.round(climbingWind / 1.852)} kn avg ${dirLabel} – ${hazard.detail || 'terrain amplifies the wind'}`);
   }
 
   // — Sunshine bonus on cool days, weighted by geometry —

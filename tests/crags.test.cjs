@@ -30,6 +30,14 @@ test('hot-weather sectors preserve hierarchy, catalogue parity and original ther
 });
 
 
+test('West Flank uses a broad mild band rather than hot-weather-only settings', async () => {
+  const server = await loadCrags('worker/src/lib/crags.js');
+  const westFlank = server.find(crag => crag.id === 'gramps-westflank');
+  assert.deepEqual(westFlank.idealTemp, [8, 22]);
+  assert.equal(westFlank.aspect, 'W');
+  assert.equal(westFlank.shade, 'morning');
+});
+
 test('former 10–24 temperature bands are recalibrated by exposure', async () => {
   const server = await loadCrags('worker/src/lib/crags.js');
   const byId = new Map(server.map(crag => [crag.id, crag]));

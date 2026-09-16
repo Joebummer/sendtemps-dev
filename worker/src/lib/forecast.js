@@ -315,8 +315,8 @@ function warmPerformancePenalty(crag, hotTemp, hour) {
   if (!Number.isFinite(hotTemp)) return 0;
   const over = Math.max(0, hotTemp - peakTemperatureUpper(crag, hour));
   if (over === 0) return 0;
-  const routeCurve = [0, 1, 3, 5, 7, 10, 14];
-  const boulderCurve = [0, 2, 4, 7, 10, 14, 19];
+  const routeCurve = [0, 2, 5, 8, 11, 15, 20];
+  const boulderCurve = [0, 3, 6, 10, 14, 19, 25];
   const curve = crag.discipline === 'bouldering' ? boulderCurve : routeCurve;
   const whole = Math.floor(over);
   if (whole >= curve.length - 1) {
@@ -381,7 +381,10 @@ function hourSolarFraction(crag, h) {
 }
 
 function temperatureScoreCeiling(penalty) {
-  return Math.max(0, 100 - penalty);
+  // Ignore trace-level floating-point penalties. Once temperature is material
+  // enough to surface as a callout, reserve 99+ for genuinely ideal conditions.
+  if (!Number.isFinite(penalty) || penalty < 0.5) return 100;
+  return Math.max(0, 100 - Math.max(2, penalty));
 }
 
 // Wet-bulb depression (commonly called delta T in Australian weather data)
@@ -1579,8 +1582,8 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     score -= protectedTemperaturePenalty;
     reasons.push(t < idealMin ? `cold (${Math.round(t)}°C avg)`
       : t > idealMax ? `hot (${Math.round(t)}°C avg)`
-        : tAir > peakMax ? `warm for hard climbing (${Math.round(tAir)}°C avg)`
-          : 'temperature varies through the day');
+        : tAir >= peakMax + 1 ? `too warm for hard climbing (${Math.round(tAir)}°C avg)`
+          : 'temp varies');
     add('temp', 'Temperature', -protectedTemperaturePenalty,
       `${Math.round(tAir)}°C air / ${Math.round(tFeel)}°C feels-like climbing average; peak up to ${peakMax}°C, good cragging ${idealMin}–${idealMax}°C` +
       (climbHours > 0 ? `; ${ct.hoursInRange}/${climbHours}h in range` : ''));

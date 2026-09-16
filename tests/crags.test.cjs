@@ -29,6 +29,24 @@ test('hot-weather sectors preserve hierarchy, catalogue parity and original ther
   }
 });
 
+
+test('former 10–24 temperature bands are recalibrated by exposure', async () => {
+  const server = await loadCrags('worker/src/lib/crags.js');
+  const byId = new Map(server.map(crag => [crag.id, crag]));
+
+  const warmWeather = ["cathedral-balcony","cathedral-sugarloaf","cathedral-northjawbone","cathedral-southjawbone","buffalo-backwall","sand-river-firewall","fortescue-totem-pole","fortescue-moai","cape-raoul-main","bluemtns-porterspass","bluemtns-sublimepoint","bluemtns-theegg","bluemtns-thepit","nowra-grotto","booroomba-north","red-rocks-main","kambah-rocks"];
+  const colderShaded = ["gramps-centurion-lower","booroomba-main","booroomba-south","orroral-main","orroral-tower-rocks","orroral-belfry","orroral-legoland","orroral-trojan-wall","orroral-cloisters","gibraltar-main","gibraltar-ape","gibraltar-nailbiter","coree-main","coree-wind-wall","coree-sun-wall","coree-the-lime"];
+  const sunnyExposed = ["arap-bushranger","sand-river-eldorado","sand-river-panopticon-south","snake-rock-main","snake-rock-tiers","snake-rock-amphitheatre","snake-rock-buttress"];
+  const changedIds = ["camels-hump","cathedral-balcony","cathedral-sugarloaf","cathedral-northjawbone","cathedral-southjawbone","arap-bushranger","arap-pharos-gully","arap-yesterday","gramps-main","gramps-hallsgap","gramps-centurion-lower","gramps-watchtower","buffalo-main","buffalo-backwall","sand-river-main","sand-river-firewall","sand-river-eldorado","sand-river-panopticon-south","fortescue-main","fortescue-totem-pole","fortescue-candlestick","fortescue-moai","cape-raoul-main","bluemtns-porterspass","bluemtns-sublimepoint","bluemtns-theegg","bluemtns-thepit","nowra-grotto","booroomba-main","booroomba-north","booroomba-south","bungonia-main","wa-wungong","wa-mt-frankland","beechworth-main","hillwood-main","warrumbungles-main","hillwood-matto-grosso","hillwood-rock-of-ages","hillwood-falcon-crag","hillwood-far-side","hillwood-cave-rock","orroral-main","orroral-tower-rocks","orroral-belfry","orroral-legoland","orroral-trojan-wall","orroral-cloisters","gibraltar-main","gibraltar-ape","gibraltar-nailbiter","snake-rock-main","snake-rock-tiers","snake-rock-amphitheatre","snake-rock-buttress","coree-main","coree-wind-wall","coree-sun-wall","coree-the-lime","red-rocks-main","kambah-rocks"];
+
+  for (const id of warmWeather) assert.deepEqual(byId.get(id).idealTemp, [10, 24], id);
+  for (const id of colderShaded) assert.deepEqual(byId.get(id).idealTemp, [10, 22], id);
+  for (const id of sunnyExposed) assert.deepEqual(byId.get(id).idealTemp, [8, 20], id);
+  for (const id of changedIds.filter(id =>
+    !warmWeather.includes(id) && !colderShaded.includes(id) && !sunnyExposed.includes(id)
+  )) assert.deepEqual(byId.get(id).idealTemp, [8, 22], id);
+});
+
 for (const file of ['worker/src/lib/crags.js', 'webapp/crags.js']) {
   test(`${file}: all records satisfy the data contract`, async () => {
     assert.deepEqual(validateCrags(await loadCrags(file)), []);

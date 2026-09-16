@@ -2176,7 +2176,6 @@ export function rankByDay(forecasts, dayDates) {
           delta,
           detail: `${hourlyWindow.start}:00–${hourlyWindow.end}:00 average across ${hourlyWindow.count} hours`,
         }];
-        reasons = [...reasons, `best window avg ${windowScore}`];
       } else if (isHourlyDate && isClosed) {
         scoreBasis = 'closure';
       } else if (isHourlyDate) {

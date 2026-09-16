@@ -315,8 +315,8 @@ function warmPerformancePenalty(crag, hotTemp, hour) {
   if (!Number.isFinite(hotTemp)) return 0;
   const over = Math.max(0, hotTemp - peakTemperatureUpper(crag, hour));
   if (over === 0) return 0;
-  const routeCurve = [0, 2, 5, 8, 11, 15, 20];
-  const boulderCurve = [0, 3, 6, 10, 14, 19, 25];
+  const routeCurve = [0, 10, 13, 16, 19, 23, 28];
+  const boulderCurve = [0, 12, 16, 20, 24, 29, 35];
   const curve = crag.discipline === 'bouldering' ? boulderCurve : routeCurve;
   const whole = Math.floor(over);
   if (whole >= curve.length - 1) {
@@ -1577,6 +1577,8 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     ? samples.reduce((sum, sample) => sum + temperaturePenalty(crag, sample.apparent, sample.air, sample.hour), 0) / samples.length
     : temperaturePenalty(crag, tFeel, tAir);
   let protectedTemperaturePenalty = tempDistance + dwellPen;
+  // Do not surface a temperature callout for trace-level interpolation noise.
+  if (protectedTemperaturePenalty < 0.5) protectedTemperaturePenalty = 0;
   if (protectedTemperaturePenalty > 0) {
     const peakMax = peakTemperatureUpper(crag);
     score -= protectedTemperaturePenalty;
@@ -2152,7 +2154,13 @@ export function rankByDay(forecasts, dayDates) {
       let scoreBasis = 'daily-estimate';
       let scoreWindow = null;
       if (hourlyWindow && !isClosed) {
-        const windowScore = Math.max(0, Math.min(100, Math.round(hourlyWindow.avg)));
+        let windowScore = Math.max(0, Math.min(100, Math.round(hourlyWindow.avg)));
+        // The headline and its callouts must tell the same story. Scores of 95+
+        // are reserved for genuinely ideal hard-climbing temperatures.
+        const tooWarm = reasons.some(reason => reason.startsWith('too warm for hard climbing'));
+        const tempVaries = reasons.includes('temp varies');
+        if (tooWarm) windowScore = Math.min(windowScore, 90);
+        else if (tempVaries) windowScore = Math.min(windowScore, 98);
         const delta = windowScore - score;
         score = windowScore;
         scoreBasis = 'best-hourly-window';

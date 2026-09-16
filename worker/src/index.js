@@ -421,7 +421,7 @@ async function handleForecastProxy(request, url, corsHeaders, ctx) {
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-09-16-best-window-daily';
+const SCORED_CACHE_VERSION = '2026-09-16-hourly-score-contract';
 const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 
 // Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw

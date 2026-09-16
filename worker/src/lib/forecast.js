@@ -94,14 +94,18 @@ export async function fetchAllForecasts(region = 'ALL') {
     const lapse = elevation > 400 ? -((elevation - 400) / 1000) * 6.5 : 0;
     const adjust = values => values?.map(value =>
       Number.isFinite(value) ? value + lapse : value);
+    const adjustedHourlyTemperature = adjust(rawForecast.hourly.temperature_2m);
+    const hourlyDeltaT = adjustedHourlyTemperature?.map((temp, hourIndex) =>
+      deltaT(temp, rawForecast.hourly.relative_humidity_2m?.[hourIndex]));
     // Clone per crag: forecast locations can be shared by several elevations.
     // Apply the existing correction once, before strips, bins and daily scoring.
     const f = {
       ...rawForecast,
       hourly: {
         ...rawForecast.hourly,
-        temperature_2m: adjust(rawForecast.hourly.temperature_2m),
+        temperature_2m: adjustedHourlyTemperature,
         apparent_temperature: adjust(rawForecast.hourly.apparent_temperature),
+        delta_t_2m: hourlyDeltaT,
       },
       daily: {
         ...rawForecast.daily,
@@ -159,10 +163,10 @@ export async function fetchAllForecasts(region = 'ALL') {
         sunWindow: computeSunWindow(crag, f.hourly, date),
         // Temperature distribution from the same corrected hours as the strip.
         climbTemps: _climbTemps,
-        // Humidity distribution across the climbing window. Lets scoreDay
-        // apply a per-crag-tuned penalty when the rock spends real hours in
-        // greasy/damp territory — weighted by rockType-driven dryRating.
-        climbHumidity: computeClimbHumidity(crag, f.hourly, date),
+        // Atmospheric-moisture distribution across the climbing window. This
+        // carries hourly delta T, temperature, wind and wet-rock suppression
+        // into the daily score without averaging the raw weather first.
+        climbHumidity: computeClimbHumidity(crag, f.hourly, drynessSeries, date),
         sunshine: f.daily.sunshine_duration[di], // seconds
         cloudMean: daytimeCloudMean(f.hourly, date), // mean daytime cloud cover %
         weatherCode: f.daily.weathercode[di],
@@ -351,6 +355,61 @@ function temperatureScoreCeiling(penalty) {
   return Math.max(0, 100 - penalty);
 }
 
+// Wet-bulb depression (commonly called delta T in Australian weather data)
+// combines air temperature and relative humidity into a measure of evaporative
+// capacity. Stull's approximation is accurate enough for the forecast ranges
+// encountered here and avoids requesting another Open-Meteo field.
+export function deltaT(air, relativeHumidity) {
+  if (!Number.isFinite(air) || !Number.isFinite(relativeHumidity)) return null;
+  const rh = Math.min(100, Math.max(1, relativeHumidity));
+  const wetBulb = air * Math.atan(0.151977 * Math.sqrt(rh + 8.313659)) +
+    Math.atan(air + rh) - Math.atan(rh - 1.676331) +
+    0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh) - 4.686035;
+  return Math.max(0, air - wetBulb);
+}
+
+function interpolate(points, value) {
+  if (value <= points[0][0]) return points[0][1];
+  for (let i = 1; i < points.length; i++) {
+    if (value <= points[i][0]) {
+      const [x0, y0] = points[i - 1];
+      const [x1, y1] = points[i];
+      return y0 + ((value - x0) / (x1 - x0)) * (y1 - y0);
+    }
+  }
+  return points[points.length - 1][1];
+}
+
+// Atmospheric "spooge" is most likely when warm skin/holds cannot shed
+// moisture. Delta T supplies the evaporative side; temperature supplies sweat
+// activation; wind clears the humid boundary layer. The maximum deduction is
+// deliberately conservative at six points. Actual wet rock is handled by the
+// stronger dryness penalty, so this contribution fades out below dryness 95.
+export function spoogePenalty(crag, hour) {
+  const air = Number.isFinite(hour?.temp) ? hour.temp : hour?.apparentTemp;
+  const dt = deltaT(air, hour?.humidity);
+  if (dt == null) return 0;
+
+  const evaporationRisk = interpolate([
+    [1, 1], [2, 0.75], [3, 0.45], [4, 0.20], [5, 0],
+  ], dt);
+  const heatActivation = interpolate([
+    [8, 0.30], [12, 0.50], [16, 0.75], [20, 1],
+  ], air);
+  const meanWind = Number.isFinite(hour?.wind) ? hour.wind : 0;
+  const gust = Number.isFinite(hour?.windGust) ? hour.windGust : meanWind;
+  const effectiveWind = Math.max(meanWind, gust * 0.7);
+  let windModifier = interpolate([
+    [5, 1], [10, 0.85], [20, 0.60], [30, 0.40],
+  ], effectiveWind);
+  if (hour?.windExposure === 'lee') windModifier = Math.min(1, windModifier + 0.15);
+  else if (hour?.windExposure === 'onshore') windModifier = Math.max(0.25, windModifier - 0.10);
+
+  const dryness = Number.isFinite(hour?.dryness) ? hour.dryness : 100;
+  const dryRockGate = interpolate([[85, 0], [95, 1]], dryness);
+  return Math.min(6, 6 * evaporationRisk * heatActivation * windModifier * dryRockGate);
+}
+
 export function computeClimbTemps(crag, hourly, dateStr) {
   const empty = {
     climbHours: 0, hoursInRange: 0, hoursCold: 0, hoursHot: 0,
@@ -404,27 +463,27 @@ export function computeClimbTemps(crag, hourly, dateStr) {
   };
 }
 
-// Compute the humidity distribution across the climbing window for a crag.
-// Returns `{ climbHours, hoursHumid, hoursModerate, hoursDry, meanRh, maxRh }`.
+// Compute atmospheric-moisture conditions across the climbing window.
+// Raw RH fields remain for climate anomaly reporting and response compatibility;
+// scoring uses the averaged hourly spooge penalty and mean delta T.
 //
 // Buckets per hour by relative humidity:
 //   <60%  → dry      (crisp rock, friction good)
 //   60–75% → moderate (climbable but rock starts to feel cooler/greasy)
 //   >75%  → humid    (rock feels damp, sandstone/conglomerate gets slimy)
 //
-// scoreDay uses this with the per-crag dryRating (1–5) to compute a sensitivity
-// multiplier: porous fast-drying rock (granite at 5) shrugs off humidity, while
-// slow-drying rock (conglomerate at 1–2) takes a real hit when RH stays high.
-function computeClimbHumidity(crag, hourly, dateStr) {
+function computeClimbHumidity(crag, hourly, drynessSeries, dateStr) {
   const empty = {
     climbHours: 0, hoursHumid: 0, hoursModerate: 0, hoursDry: 0,
-    meanRh: null, maxRh: null,
+    meanRh: null, maxRh: null, meanDeltaT: null, spoogePenalty: 0,
+    spoogeHours: 0, wetSuppressedHours: 0,
   };
   if (!hourly || !hourly.time) return empty;
   const startH = (crag.trip === 'weekend' || crag.trip === 'both') ? 8 : 9;
   const cutoffH = (crag.trip === 'weekend' || crag.trip === 'both') ? 20 : 18;
   let humid = 0, moderate = 0, dry = 0, count = 0;
-  let rhSum = 0, maxRh = -Infinity;
+  let rhSum = 0, maxRh = -Infinity, deltaTSum = 0, deltaTCount = 0;
+  let spoogeTotal = 0, spoogeHours = 0, wetSuppressedHours = 0;
   for (let i = 0; i < hourly.time.length; i++) {
     const t = hourly.time[i];
     if (!t.startsWith(dateStr)) continue;
@@ -432,8 +491,25 @@ function computeClimbHumidity(crag, hourly, dateStr) {
     if (hour < startH || hour >= cutoffH) continue;
     const rh = hourly.relative_humidity_2m?.[i];
     if (rh == null) continue;
+    const temp = hourly.temperature_2m?.[i];
+    const wind = hourly.windspeed_10m?.[i];
+    const gust = hourly.windgusts_10m?.[i] ?? wind;
+    const exposure = aspectWindFactor(
+      crag.aspect,
+      hourly.winddirection_10m?.[i] ?? null,
+      Math.max(wind ?? 0, (gust ?? 0) * 0.7),
+    ).exposure;
+    const dryness = drynessSeries?.[i]?.dryness ?? 100;
+    const dt = hourly.delta_t_2m?.[i] ?? deltaT(temp, rh);
+    const penalty = spoogePenalty(crag, {
+      temp, humidity: rh, wind, windGust: gust, windExposure: exposure, dryness,
+    });
     count++;
     rhSum += rh;
+    if (dt != null) { deltaTSum += dt; deltaTCount++; }
+    spoogeTotal += penalty;
+    if (penalty >= 2) spoogeHours++;
+    if (dryness < 95) wetSuppressedHours++;
     if (rh > maxRh) maxRh = rh;
     if (rh > 75) humid++;
     else if (rh >= 60) moderate++;
@@ -447,6 +523,10 @@ function computeClimbHumidity(crag, hourly, dateStr) {
     hoursDry: dry,
     meanRh: rhSum / count,
     maxRh,
+    meanDeltaT: deltaTCount ? deltaTSum / deltaTCount : null,
+    spoogePenalty: spoogeTotal / count,
+    spoogeHours,
+    wetSuppressedHours,
   };
 }
 
@@ -630,7 +710,7 @@ function computeDrynessSeries(crag, hourly) {
     }
 
     // 2) Apply drying. Effective drying rate per hour =
-    //    base_rate * sun_factor * wind_factor * humidity_factor * temp_factor
+    //    base_rate * sun_factor * wind_factor * evaporation_factor * cold_factor
     // where base_rate corresponds to the half-life:  rate = ln(2)/halfLife
     const baseRate = Math.LN2 / halfLife;
 
@@ -650,18 +730,16 @@ function computeDrynessSeries(crag, hourly) {
     // Onshore wind scours the wall; lee wind leaves it in shelter.
     const { factor: windFactor } = aspectWindFactor(crag.aspect, windDir, effectiveWind);
 
-    // Humidity — high humidity slows evaporation.
-    let humFactor = 1;
-    if (rh < 50) humFactor = 1.4;
-    else if (rh < 65) humFactor = 1.2;
-    else if (rh > 85) humFactor = 0.55;
-    else if (rh > 75) humFactor = 0.8;
-
-    // Temperature — cold rock dries much slower.
-    let tempFactor = 1;
-    if (t < 2) tempFactor = 0.5;
-    else if (t < 8) tempFactor = 0.7;
-    else if (t > 25) tempFactor = 1.25;
+    // Delta T replaces separate humidity and warm-temperature multipliers so
+    // those tightly coupled inputs are not counted twice. Cold rock retains a
+    // small independent constraint because low surface energy slows drying.
+    const dt = hourly.delta_t_2m?.[i] ?? deltaT(t, rh) ?? 3.5;
+    const evaporationFactor = interpolate([
+      [1, 0.55], [2.5, 0.80], [4, 1], [6, 1.20], [8, 1.35],
+    ], dt);
+    let coldFactor = 1;
+    if (t < 2) coldFactor = 0.6;
+    else if (t < 8) coldFactor = 0.8;
 
     // Nighttime suppression — between 8pm and 7am, drying slows significantly:
     // no solar contribution, dew formation, condensation on cold rock all
@@ -672,7 +750,7 @@ function computeDrynessSeries(crag, hourly) {
     const isNight = !isNaN(hour) && (hour >= 20 || hour < 7);
     const nightFactor = isNight ? (NIGHT_DRY_FACTOR[crag.rockType] ?? 0.50) : 1.0;
 
-    const dryRate = baseRate * sunFactor * windFactor * humFactor * tempFactor * nightFactor;
+    const dryRate = baseRate * sunFactor * windFactor * evaporationFactor * coldFactor * nightFactor;
     // Exponential decay toward zero across one hour.
     wetness = wetness * Math.exp(-dryRate);
     if (wetness < 0.001) wetness = 0;
@@ -856,6 +934,8 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
         Math.max(hourly.windspeed_10m?.[i] ?? 0, (hourly.windgusts_10m?.[i] ?? 0) * 0.7),
       ).exposure,
       humidity: hourly.relative_humidity_2m?.[i] ?? null,
+      deltaT: hourly.delta_t_2m?.[i] ??
+        deltaT(hourly.temperature_2m?.[i], hourly.relative_humidity_2m?.[i]),
       precip: hourly.precipitation?.[i] ?? 0,
       precipProb: hourly.precipitation_probability?.[i] ?? 0,
       cloud: hourly.cloudcover?.[i] ?? 0,
@@ -879,12 +959,11 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
   // a proportional shadow penalty to hours that individually look fine.
   const peakDayProb   = Math.max(...out.map(h => h.precipProb ?? 0));
   const meanDayCloud  = out.length ? out.reduce((s, h) => s + (h.cloud ?? 0), 0) / out.length : 0;
-  const meanDayHumid  = out.length ? out.reduce((s, h) => s + (h.humidity ?? 0), 0) / out.length : 0;
 
   for (let i = 0; i < out.length; i++) {
     const nearby = out.slice(Math.max(0, i - 2), Math.min(out.length, i + 3));
     const rainNeighbours = nearby.filter(n => n !== out[i] && n.precipProb > 30).length;
-    out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb, meanDayCloud, meanDayHumid);
+    out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb, meanDayCloud);
   }
   return out;
 }
@@ -919,21 +998,7 @@ function melbourneHourNow() {
 // rainNeighbours: count of hours within ±2h that also have precipProb > 30%.
 // Used to scale up the probability penalty for sustained rain windows vs
 // isolated single-hour showers.
-// Optional local wind hazards capture terrain effects that a wall's compass
-// aspect cannot describe, such as wind funnelling through a chasm.
-export function directionalWindPenalty(crag, windDir, windKmh) {
-  const hazard = crag?.windHazard;
-  if (!hazard || !Number.isFinite(windDir) || !Number.isFinite(windKmh)) return 0;
-  if (angularDistance(windDir, hazard.bearing) > hazard.tolerance) return 0;
-
-  const knots = windKmh / 1.852;
-  if (knots <= 12) return 0;
-  if (knots < 15) return Math.round(1 + ((knots - 12) / 3) * 2);
-  if (knots < 20) return Math.round(8 + ((knots - 15) / 5) * 4);
-  return Math.min(20, 15 + Math.floor((knots - 20) / 5) * 2);
-}
-
-export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 0, meanDayHumid = 0) {
+export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 0) {
   let s = 100;
   // Tracks whether any real penalty fired this hour (mirrors scoreDay's
   // `contributions.some(c => c.delta < 0)` check). Only actual non-zero
@@ -978,14 +1043,16 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
     penalize(Math.round(cloudPen * aspectMult));
   }
 
-  // Day-level humidity — mirrors scoreDay's humidity delta.
-  // Moist/muggy air hurts friction; crisp/dry air boosts it.
-  // Thresholds lowered slightly to lean pessimistic.
-  if (meanDayHumid >= 88) penalize(6);
-  else if (meanDayHumid >= 80) penalize(3);
-  else if (meanDayHumid >= 72) penalize(1);
-  else if (meanDayHumid < 50) s += 3;  // crisp air
-  else if (meanDayHumid < 60) s += 2;  // dry air
+  // Spooge replaces the old RH-only adjustment. It is hourly, temperature-
+  // aware and wind-aware, and is suppressed when the stronger wet-rock model
+  // already describes the problem.
+  const atmosphericPenalty = spoogePenalty(crag, h);
+  penalize(atmosphericPenalty);
+  const dt = Number.isFinite(h.deltaT) ? h.deltaT : deltaT(h.temp, h.humidity);
+  if (atmosphericPenalty === 0 && (h.dryness ?? 100) >= 95) {
+    if (dt >= 6) s += 3;
+    else if (dt >= 5) s += 2;
+  }
 
   // Cold discomfort uses feels-like; heat and friction use air temperature.
   // Missing readings fall back to the available temperature.
@@ -1011,11 +1078,6 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   else if (h.wind > 35) penalize(Math.round(5 * windMult));
   // Lee penalty — wall sheltered means slower drying; apply a small drag.
   else if (h.windExposure === 'lee' && h.wind > 15) penalize(2);
-
-  // Local terrain can amplify a particular wind direction independently of
-  // wall aspect. Apply this after the general wind penalty so both effects are
-  // represented when conditions are genuinely severe.
-  penalize(directionalWindPenalty(crag, h.windDir, h.wind));
 
   // Sun-on-wall interactions — use apparent temp for the threshold checks
   // so a cold-feeling 20°C day (windy, humid) doesn't falsely claim a sun bonus.
@@ -1495,34 +1557,29 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     reasons.push(`temp ideal (${Math.round(t)}°C)`);
   }
 
-  // — Humidity: descriptive label + score delta (v59.15) —
+  // — Atmospheric spooge: descriptive label + score delta —
   //
-  // Label is resolved here and pushed to reasons. The score delta is applied
-  // AFTER all other bonuses (just before finalScore) so it can't be offset
-  // by downstream bonuses pushing score back above 100.
+  // Replaces the RH-only humidity adjustment with the same delta-T,
+  // temperature and wind interaction used by hourly scores. Wet hours are
+  // suppressed upstream because rock dryness already carries a larger penalty.
+  // The delta is still applied last so later bonuses cannot hide it.
   let _humidLabel = null;
   let _humidDelta = 0;
   {
     const hum = day.climbHumidity || {};
     const humClimbHours = hum.climbHours || 0;
     if (humClimbHours >= 4) {
-      const hoursHumid = hum.hoursHumid || 0;
-      const hoursDry = hum.hoursDry || 0;
-      const meanRh = hum.meanRh ?? 70;
-      const muggyHours = hoursHumid + 0.4 * (hum.hoursModerate || 0);
-      // Baseline-adjusted dry threshold: if this crag normally sits at 80% RH,
-      // 65% is genuinely dry for it — raise the 'dry air' trigger accordingly.
-      const dryRhThresh = normRh != null ? Math.min(65, normRh - 15) : 55;
+      const meanDeltaT = hum.meanDeltaT;
+      const penalty = Math.min(6, Math.round(hum.spoogePenalty || 0));
+      const fullyDryWindow = (hum.wetSuppressedHours || 0) === 0;
 
-      if (climbHours > 0 && t >= 22 && hoursHumid >= 2) {
-        _humidLabel = 'muggy';     _humidDelta = -8;
-      } else if (t >= 18 && hoursHumid >= 4) {
-        _humidLabel = 'muggy';     _humidDelta = -8;
-      } else if (hoursHumid >= 3 || muggyHours >= 5) {
-        _humidLabel = 'moist air'; _humidDelta = -3;
-      } else if (hoursDry >= 6 && muggyHours === 0) {
+      if (penalty >= 4) {
+        _humidLabel = 'muggy';     _humidDelta = -penalty;
+      } else if (penalty >= 1) {
+        _humidLabel = 'moist air'; _humidDelta = -penalty;
+      } else if (fullyDryWindow && meanDeltaT >= 6) {
         _humidLabel = 'crisp air'; _humidDelta = +3;
-      } else if (meanRh < dryRhThresh) {
+      } else if (fullyDryWindow && meanDeltaT >= 5) {
         _humidLabel = 'dry air';   _humidDelta = +2;
       } else {
         _humidLabel = 'comfortable'; _humidDelta = 0;
@@ -1852,15 +1909,6 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     }
   }
 
-  const localWindPenalty = directionalWindPenalty(crag, day.windDir, climbingWind);
-  if (localWindPenalty > 0) {
-    score -= localWindPenalty;
-    reasons.push('chasm wind');
-    const hazard = crag.windHazard;
-    add('wind', hazard.label || 'Local wind exposure', -localWindPenalty,
-      `${Math.round(climbingWind / 1.852)} kn avg ${dirLabel} – ${hazard.detail || 'terrain amplifies the wind'}`);
-  }
-
   // — Sunshine bonus on cool days, weighted by geometry —
   // We already credited sun-trap walls above. Here we just give a small bonus
   // when the overall day is sunny AND it's a cool day where warmth is welcome.
@@ -1955,13 +2003,13 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     }
   }
 
-  // Apply humidity delta last so bonuses earlier in the function can't absorb it.
+  // Apply atmospheric-moisture delta last so earlier bonuses cannot absorb it.
   if (_humidDelta !== 0) {
     score += _humidDelta;
-    add('humidity', 'Humidity', _humidDelta,
+    add('humidity', 'Air moisture', _humidDelta,
       _humidDelta < 0
-        ? `${_humidLabel} — high RH${(_humidLabel === 'muggy') ? ' + warm temps' : ''} hurts friction`
-        : `${_humidLabel} — low RH boosts friction`);
+        ? `${_humidLabel} — low delta T limits evaporation and can make holds feel greasy`
+        : `${_humidLabel} — strong evaporative conditions should keep holds feeling crisp`);
   }
 
   // — Penalty integrity cap —

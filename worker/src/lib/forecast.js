@@ -2063,7 +2063,12 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // so the score honestly reflects that something is working against it.
   const hasPenalty = contributions.some(c => c.delta < 0);
   // Bonuses may improve other factors but cannot erase temperature severity.
-  const ceiling = temperatureScoreCeiling(protectedTemperaturePenalty);
+  const tooWarmForHardClimbing = reasons.some(reason =>
+    reason.startsWith('too warm for hard climbing'));
+  const ceiling = Math.min(
+    temperatureScoreCeiling(protectedTemperaturePenalty),
+    tooWarmForHardClimbing ? 90 : 100,
+  );
   if (protectedTemperaturePenalty > 0 && score > ceiling) {
     add('temp', 'Temperature limit', ceiling - score,
       'Sun and dry weather cannot offset the full temperature penalty');

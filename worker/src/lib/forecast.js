@@ -2123,7 +2123,29 @@ export function rankByDay(forecasts, dayDates) {
       const day = fc.days[dayIdx];
       const prevDay = dayIdx > 0 ? fc.days[dayIdx - 1] : null;
       const nextDay = dayIdx + 1 < fc.days.length ? fc.days[dayIdx + 1] : null;
-      const { score, reasons, contributions, seasonalContext } = scoreDay(fc.crag, day, prevDay, nextDay);
+      const dayResult = scoreDay(fc.crag, day, prevDay, nextDay);
+      let { score, reasons, contributions, seasonalContext } = dayResult;
+
+      // Keep the headline score aligned with the hour-by-hour strip for today
+      // and tomorrow. A multi-hour window is representative of a usable
+      // climbing session and avoids promoting one anomalously good hour.
+      const hourlyWindow = date === fc.todayDate ? fc.todayBestWindow
+        : date === fc.tomorrowDate ? fc.tomorrowBestWindow
+        : null;
+      const isClosed = contributions.some(c => c.category === 'closure');
+      if (hourlyWindow && !isClosed) {
+        const windowScore = Math.max(0, Math.min(100, Math.round(hourlyWindow.avg)));
+        const delta = windowScore - score;
+        score = windowScore;
+        contributions = [...contributions, {
+          category: 'window',
+          label: 'Best climbing window',
+          delta,
+          detail: `${hourlyWindow.start}:00–${hourlyWindow.end}:00 average across ${hourlyWindow.count} hours`,
+        }];
+        reasons = [...reasons, `best window avg ${windowScore}`];
+      }
+
       rows.push({
         crag: fc.crag,
         day,

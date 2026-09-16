@@ -258,6 +258,69 @@ test('Westside live evening air temperatures retain heat penalties despite coole
   }
 });
 
+test('delta T and spooge model distinguish warm clammy air from dry or genuinely wet rock', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  assert.ok(Math.abs(f.deltaT(20, 90) - 1.2) < 0.2);
+  assert.ok(Math.abs(f.deltaT(20, 50) - 6.3) < 0.2);
+
+  const crag = { idealTemp: [10, 24], aspect: 'S' };
+  const clammy = f.spoogePenalty(crag, hourAt(20, {
+    humidity: 90, wind: 5, windGust: 5, windExposure: 'lee', dryness: 100,
+  }));
+  const coolClammy = f.spoogePenalty(crag, hourAt(10, {
+    humidity: 90, wind: 5, windGust: 5, windExposure: 'lee', dryness: 100,
+  }));
+  const breezy = f.spoogePenalty(crag, hourAt(20, {
+    humidity: 90, wind: 20, windGust: 20, windExposure: 'onshore', dryness: 100,
+  }));
+  const dry = f.spoogePenalty(crag, hourAt(20, {
+    humidity: 50, wind: 5, windGust: 5, windExposure: 'lee', dryness: 100,
+  }));
+  const wetRock = f.spoogePenalty(crag, hourAt(20, {
+    humidity: 90, wind: 5, windGust: 5, windExposure: 'lee', dryness: 80,
+  }));
+
+  assert.ok(clammy > 5 && clammy <= 6, 'warm, still and saturated should approach the cap');
+  assert.ok(coolClammy > 0 && coolClammy < clammy, 'cool saturated air produces less sweat load');
+  assert.ok(breezy > 0 && breezy < clammy, 'exposed wind should clear some moisture');
+  assert.equal(dry, 0, 'adequate delta T should not be penalised');
+  assert.equal(wetRock, 0, 'wet-rock penalty owns materially wet conditions');
+});
+
+test('hourly scores use spooge instead of a day-average RH penalty', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const crag = { idealTemp: [10, 24], aspect: 'S' };
+  const base = { sunOnWall: null, sunAlt: 40, cloud: 20, dryness: 100,
+    wind: 5, windGust: 5, windExposure: 'lee' };
+  const dry = f.scoreHour(crag, hourAt(20, { ...base, humidity: 50 }), 0, 0, 20, 90);
+  const clammy = f.scoreHour(crag, hourAt(20, { ...base, humidity: 90 }), 0, 0, 20, 50);
+  assert.equal(dry, 100);
+  assert.equal(clammy, 94, 'the conservative first version is capped at six points');
+});
+
+test('daily air-moisture contribution uses averaged hourly spooge and respects wet suppression', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const crag = { id: 'test', name: 'Test', idealTemp: [10, 24], aspect: 'S', rockType: 'sandstone' };
+  const makeDay = climbHumidity => ({
+    date, tMin: 18, tMax: 20, tFeel: 20,
+    climbTemps: { climbHours: 10, hoursInRange: 10, meanTemp: 20, meanApparent: 20,
+      temperatureSamples: Array.from({ length: 10 }, (_, hour) => ({ hour: hour + 8, air: 20, apparent: 20, solarFraction: 0 })) },
+    climbHumidity, precipSum: 0, precipProb: 0, precipHours: 0,
+    rainWindows: [], wind: 5, windAvg: 5, cloudMean: 20, sunshine: 0,
+    morningDryness: 100, afternoonDryness: 100, dayDryness: 100,
+  });
+  const muggy = f.scoreDay(crag, makeDay({ climbHours: 10, meanDeltaT: 1.2,
+    spoogePenalty: 5.6, spoogeHours: 10, wetSuppressedHours: 0 }), null, null);
+  const crisp = f.scoreDay(crag, makeDay({ climbHours: 10, meanDeltaT: 6.3,
+    spoogePenalty: 0, spoogeHours: 0, wetSuppressedHours: 0 }), null, null);
+  const wetSuppressed = f.scoreDay(crag, makeDay({ climbHours: 10, meanDeltaT: 1.2,
+    spoogePenalty: 0, spoogeHours: 0, wetSuppressedHours: 10 }), null, null);
+
+  assert.equal(muggy.contributions.find(c => c.label === 'Air moisture')?.delta, -6);
+  assert.equal(crisp.contributions.find(c => c.label === 'Air moisture')?.delta, 3);
+  assert.ok(!wetSuppressed.contributions.some(c => c.label === 'Air moisture'));
+});
+
 test('heat uses air, cold retains wind chill, and missing readings fall back', async () => {
   const f = await loadForecast('worker/src/lib/forecast.js');
   const crag = { idealTemp: [10, 18], heatCap: 20, heatExposure: 'partial' };

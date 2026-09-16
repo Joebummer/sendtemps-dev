@@ -20,6 +20,25 @@ test('Candlestick chasm penalty starts gently below 15 knots and escalates in SS
   assert.equal(penalty({ id: 'fortescue-moai' }, 202.5, 25 * 1.852), 0);
 });
 
+test('best window prefers five hours, supports poor days and short late-day strips', async () => {
+  const harness = await loadWorker();
+  const bestWindow = harness.forecasts.bestWindow;
+  const hours = [40, 45, 50, 55, 58, 57, 30].map((score, hour) => ({ score, hour: hour + 10 }));
+  const window = bestWindow(hours);
+  assert.equal(window.count, 5);
+  assert.equal(window.start, 11);
+  assert.equal(window.end, 16);
+  assert.equal(Math.round(window.avg), 53);
+  assert.equal('runAvg' in window, false);
+  assert.equal('runHours' in window, false);
+
+  const late = bestWindow([{ score: 72, hour: 18 }]);
+  assert.equal(late.count, 1);
+  assert.equal(late.start, 18);
+  assert.equal(late.end, 19);
+  assert.equal(late.avg, 72);
+});
+
 function weatherFixture(url) {
   const params = new URL(url).searchParams;
   const dates = Array.from({ length: 14 }, (_, i) =>
@@ -82,7 +101,13 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
       const todayClosed = todayRow.contributions.some(c => c.category === 'closure');
       if (todayWindow && !todayClosed) {
         assert.equal(todayRow.score, Math.round(todayWindow.avg), `${crag.id} today score matches best window`);
+        assert.equal(todayRow.scoreBasis, 'best-hourly-window');
+        assert.equal(todayRow.scoreWindow.average, todayRow.score);
         assert.ok(todayRow.contributions.some(c => c.category === 'window'));
+        assert.equal('runAvg' in todayWindow, false);
+      } else if (todayClosed) {
+        assert.equal(todayRow.scoreBasis, 'closure');
+        assert.ok(body.today[crag.id].todayHourly.every(hour => hour.score === 0));
       }
 
       const tomorrowRow = body.byDate[body.dates[1]].find(row => row.cragId === crag.id);
@@ -90,7 +115,13 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
       const tomorrowClosed = tomorrowRow.contributions.some(c => c.category === 'closure');
       if (tomorrowWindow && !tomorrowClosed) {
         assert.equal(tomorrowRow.score, Math.round(tomorrowWindow.avg), `${crag.id} tomorrow score matches best window`);
+        assert.equal(tomorrowRow.scoreBasis, 'best-hourly-window');
+        assert.equal(tomorrowRow.scoreWindow.average, tomorrowRow.score);
         assert.ok(tomorrowRow.contributions.some(c => c.category === 'window'));
+        assert.equal('runAvg' in tomorrowWindow, false);
+      } else if (tomorrowClosed) {
+        assert.equal(tomorrowRow.scoreBasis, 'closure');
+        assert.ok(body.today[crag.id].tomorrowHourly.every(hour => hour.score === 0));
       }
     }
     assert.ok(body.weekendTrip.length > 0);

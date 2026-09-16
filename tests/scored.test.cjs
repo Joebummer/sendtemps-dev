@@ -76,6 +76,22 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
     for (const crag of expected) {
       assert.ok(body.today[crag.id]);
       assert.ok(Array.isArray(body.today[crag.id].tomorrowHourly));
+
+      const todayRow = body.byDate[body.dates[0]].find(row => row.cragId === crag.id);
+      const todayWindow = body.today[crag.id].todayBestWindow;
+      const todayClosed = todayRow.contributions.some(c => c.category === 'closure');
+      if (todayWindow && !todayClosed) {
+        assert.equal(todayRow.score, Math.round(todayWindow.avg), `${crag.id} today score matches best window`);
+        assert.ok(todayRow.contributions.some(c => c.category === 'window'));
+      }
+
+      const tomorrowRow = body.byDate[body.dates[1]].find(row => row.cragId === crag.id);
+      const tomorrowWindow = body.today[crag.id].tomorrowBestWindow;
+      const tomorrowClosed = tomorrowRow.contributions.some(c => c.category === 'closure');
+      if (tomorrowWindow && !tomorrowClosed) {
+        assert.equal(tomorrowRow.score, Math.round(tomorrowWindow.avg), `${crag.id} tomorrow score matches best window`);
+        assert.ok(tomorrowRow.contributions.some(c => c.category === 'window'));
+      }
     }
     assert.ok(body.weekendTrip.length > 0);
     for (const trip of body.weekendTrip) {

@@ -17,12 +17,80 @@ import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
 // protection this proxy exists for is still in place — just applied at the
 // /forecast/scored layer instead of at the Open-Meteo-call layer.
 const API = 'https://api.open-meteo.com/v1/forecast';
+const MARINE_API = 'https://marine-api.open-meteo.com/v1/marine';
 
 // 3-letter month abbreviations matching the keys used in CLIMATE_PROFILES
 // (climateBaseline.js). Deliberately NOT derived from Intl/toLocaleString —
 // see the note at the scoreDay() call site below. Kept identical to the
 // root forecast.js copy (not an intentional diff).
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+async function fetchMarineForecasts(crags) {
+  const targets = crags.filter(crag => crag.marineHazard);
+  if (!targets.length) return {};
+
+  const params = new URLSearchParams({
+    latitude: targets.map(crag => crag.lat).join(','),
+    longitude: targets.map(crag => crag.lon).join(','),
+    hourly: [
+      'wave_height',
+      'wave_period',
+      'swell_wave_height',
+      'swell_wave_period',
+      'swell_wave_direction',
+      'sea_level_height_msl',
+    ].join(','),
+    timezone: 'Australia/Melbourne',
+    forecast_days: '8',
+    cell_selection: 'sea',
+  });
+
+  let res;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise(resolve => setTimeout(resolve, attempt * 1500));
+    res = await fetch(`${MARINE_API}?${params}`);
+    if (res.status !== 429) break;
+  }
+  if (!res.ok) throw new Error(`Marine API error ${res.status}`);
+  const data = await res.json();
+  const list = Array.isArray(data) ? data : [data];
+  return Object.fromEntries(targets.flatMap((crag, index) =>
+    list[index]?.hourly?.time ? [[crag.id, list[index].hourly]] : []));
+}
+
+function mergeMarineHourly(weatherHourly, marineHourly) {
+  if (!marineHourly?.time?.length) return weatherHourly;
+  const marineIndex = new Map(marineHourly.time.map((time, index) => [time, index]));
+  const aligned = key => weatherHourly.time.map(time => {
+    const index = marineIndex.get(time);
+    return index == null ? null : (marineHourly[key]?.[index] ?? null);
+  });
+  const seaLevel = aligned('sea_level_height_msl');
+  const tideRanges = new Map();
+  for (let i = 0; i < weatherHourly.time.length; i++) {
+    if (!Number.isFinite(seaLevel[i])) continue;
+    const date = weatherHourly.time[i].slice(0, 10);
+    const range = tideRanges.get(date) || { min: Infinity, max: -Infinity };
+    range.min = Math.min(range.min, seaLevel[i]);
+    range.max = Math.max(range.max, seaLevel[i]);
+    tideRanges.set(date, range);
+  }
+  const tideLevel = seaLevel.map((value, index) => {
+    if (!Number.isFinite(value)) return null;
+    const range = tideRanges.get(weatherHourly.time[index].slice(0, 10));
+    return range && range.max > range.min ? (value - range.min) / (range.max - range.min) : 0.5;
+  });
+  return {
+    ...weatherHourly,
+    marine_wave_height: aligned('wave_height'),
+    marine_wave_period: aligned('wave_period'),
+    marine_swell_height: aligned('swell_wave_height'),
+    marine_swell_period: aligned('swell_wave_period'),
+    marine_swell_direction: aligned('swell_wave_direction'),
+    marine_sea_level: seaLevel,
+    marine_tide_level: tideLevel,
+  };
+}
 
 // Fetch one batched request for the crags in `region` at once — Open-Meteo
 // accepts comma-separated coords. `region` is a state code ('VIC', 'TAS', …)
@@ -33,6 +101,9 @@ export async function fetchAllForecasts(region = 'ALL') {
   const scoped = region === 'ALL' ? CRAGS : CRAGS.filter(c => c.state === region);
   // Safety net: never send an empty request (e.g. an unrecognised region code).
   const targetCrags = scoped.length ? scoped : CRAGS;
+  // Marine data is only requested for explicitly configured sea cliffs. It is
+  // optional: a marine-provider outage must not take the whole forecast down.
+  const marinePromise = fetchMarineForecasts(targetCrags).catch(() => ({}));
   const lats = targetCrags.map(c => c.lat).join(',');
   const lons = targetCrags.map(c => c.lon).join(',');
   const params = new URLSearchParams({
@@ -77,6 +148,7 @@ export async function fetchAllForecasts(region = 'ALL') {
   }
   if (!res.ok) throw new Error(`Forecast API error ${res.status}`);
   const data = await res.json();
+  const marineById = await marinePromise;
 
   // Open-Meteo returns either a single object (one location) or an array (multiple).
   const list = Array.isArray(data) ? data : [data];
@@ -94,15 +166,16 @@ export async function fetchAllForecasts(region = 'ALL') {
     const lapse = elevation > 400 ? -((elevation - 400) / 1000) * 6.5 : 0;
     const adjust = values => values?.map(value =>
       Number.isFinite(value) ? value + lapse : value);
-    const adjustedHourlyTemperature = adjust(rawForecast.hourly.temperature_2m);
+    const mergedHourly = mergeMarineHourly(rawForecast.hourly, marineById[crag.id]);
+    const adjustedHourlyTemperature = adjust(mergedHourly.temperature_2m);
     const hourlyDeltaT = adjustedHourlyTemperature?.map((temp, hourIndex) =>
-      deltaT(temp, rawForecast.hourly.relative_humidity_2m?.[hourIndex]));
+      deltaT(temp, mergedHourly.relative_humidity_2m?.[hourIndex]));
     // Clone per crag: forecast locations can be shared by several elevations.
     // Apply the existing correction once, before strips, bins and daily scoring.
     const f = {
       ...rawForecast,
       hourly: {
-        ...rawForecast.hourly,
+        ...mergedHourly,
         temperature_2m: adjustedHourlyTemperature,
         apparent_temperature: adjust(rawForecast.hourly.apparent_temperature),
         delta_t_2m: hourlyDeltaT,
@@ -167,6 +240,7 @@ export async function fetchAllForecasts(region = 'ALL') {
         // carries hourly delta T, temperature, wind and wet-rock suppression
         // into the daily score without averaging the raw weather first.
         climbHumidity: computeClimbHumidity(crag, f.hourly, drynessSeries, date),
+        climbMarine: computeClimbMarine(crag, f.hourly, date),
         sunshine: f.daily.sunshine_duration[di], // seconds
         cloudMean: daytimeCloudMean(f.hourly, date), // mean daytime cloud cover %
         weatherCode: f.daily.weathercode[di],
@@ -978,6 +1052,13 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
         hourly.winddirection_10m?.[i] ?? null,
         Math.max(hourly.windspeed_10m?.[i] ?? 0, (hourly.windgusts_10m?.[i] ?? 0) * 0.7),
       ).exposure,
+      waveHeight: hourly.marine_wave_height?.[i] ?? null,
+      wavePeriod: hourly.marine_wave_period?.[i] ?? null,
+      swellHeight: hourly.marine_swell_height?.[i] ?? null,
+      swellPeriod: hourly.marine_swell_period?.[i] ?? null,
+      swellDirection: hourly.marine_swell_direction?.[i] ?? null,
+      seaLevel: hourly.marine_sea_level?.[i] ?? null,
+      tideLevel: hourly.marine_tide_level?.[i] ?? null,
       humidity: hourly.relative_humidity_2m?.[i] ?? null,
       deltaT: hourly.delta_t_2m?.[i] ??
         deltaT(hourly.temperature_2m?.[i], hourly.relative_humidity_2m?.[i]),
@@ -1012,6 +1093,7 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
       out[i].closure = closed;
       continue;
     }
+    out[i].marineCondition = marineCondition(crag, out[i]);
     const nearby = out.slice(Math.max(0, i - 2), Math.min(out.length, i + 3));
     const rainNeighbours = nearby.filter(n => n !== out[i] && n.precipProb > 30).length;
     out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb, meanDayCloud);
@@ -1061,6 +1143,129 @@ export function directionalWindPenalty(crag, windDir, windKmh) {
   if (knots < 15) return Math.round(1 + ((knots - 12) / 3) * 2);
   if (knots < 20) return Math.round(8 + ((knots - 15) / 5) * 4);
   return Math.min(20, 15 + Math.floor((knots - 20) / 5) * 2);
+}
+
+// Commitment-sensitive sea-cliff adjustment. Wave height is the primary
+// signal; long-period swell and a high point in the local tide cycle make the
+// same nominal height more consequential at sea-level starts and transfers.
+// Wind is intentionally stricter here than at an ordinary roadside crag.
+export function marineCondition(crag, hour) {
+  if (!crag?.marineHazard) return { penalty: 0, cap: 100, label: null, detail: null };
+
+  const waveHeight = Math.max(
+    Number.isFinite(hour?.waveHeight) ? hour.waveHeight : 0,
+    Number.isFinite(hour?.swellHeight) ? hour.swellHeight : 0,
+  );
+  const wavePeriod = Math.max(
+    Number.isFinite(hour?.wavePeriod) ? hour.wavePeriod : 0,
+    Number.isFinite(hour?.swellPeriod) ? hour.swellPeriod : 0,
+  );
+  const longPeriodLift = wavePeriod >= 14 ? 0.35 : wavePeriod >= 11 ? 0.2 : 0;
+  const highTideLift = waveHeight >= 1 && hour?.tideLevel >= 0.75 ? 0.15 : 0;
+  const effectiveHeight = waveHeight + longPeriodLift + highTideLift;
+
+  let swellPenalty = 0;
+  let swellCap = 100;
+  let swellLabel = null;
+  if (effectiveHeight > 1 && effectiveHeight < 1.5) {
+    swellPenalty = Math.round(((effectiveHeight - 1) / 0.5) * 8);
+    swellCap = 95;
+    swellLabel = 'swell building';
+  } else if (effectiveHeight >= 1.5 && effectiveHeight < 2) {
+    swellPenalty = Math.round(8 + ((effectiveHeight - 1.5) / 0.5) * 12);
+    swellCap = 75;
+    swellLabel = 'swell building';
+  } else if (effectiveHeight >= 2 && effectiveHeight < 3) {
+    swellPenalty = Math.round(20 + (effectiveHeight - 2) * 10);
+    swellCap = 60;
+    swellLabel = 'high swell';
+  } else if (effectiveHeight >= 3) {
+    swellPenalty = Math.min(45, Math.round(32 + (effectiveHeight - 3) * 6));
+    swellCap = 35;
+    swellLabel = 'high swell';
+  }
+
+  const effectiveWind = Math.max(
+    Number.isFinite(hour?.wind) ? hour.wind : 0,
+    Number.isFinite(hour?.windGust) ? hour.windGust * 0.7 : 0,
+  );
+  const windKnots = effectiveWind / 1.852;
+  const profile = crag.marineHazard === 'extreme'
+    ? { start: 10, serious: 15, severe: 20, seriousCap: 70, severeCap: 45 }
+    : { start: 12, serious: 18, severe: 25, seriousCap: 75, severeCap: 50 };
+  let windPenalty = 0;
+  let windCap = 100;
+  let windLabel = null;
+  if (windKnots > profile.start && windKnots < profile.serious) {
+    windPenalty = Math.round(((windKnots - profile.start) / (profile.serious - profile.start)) * 8);
+    windCap = 90;
+    windLabel = 'exposed coastal wind';
+  } else if (windKnots >= profile.serious && windKnots < profile.severe) {
+    windPenalty = Math.round(8 + ((windKnots - profile.serious) / (profile.severe - profile.serious)) * 10);
+    windCap = profile.seriousCap;
+    windLabel = 'strong coastal wind';
+  } else if (windKnots >= profile.severe) {
+    windPenalty = Math.min(35, Math.round(20 + (windKnots - profile.severe) * 1.2));
+    windCap = profile.severeCap;
+    windLabel = 'strong coastal wind';
+  }
+
+  const label = swellLabel === 'high swell' ? swellLabel
+    : windLabel === 'strong coastal wind' ? windLabel
+      : swellLabel || windLabel;
+  const detail = label ? [
+    waveHeight > 0 ? `${waveHeight.toFixed(1)}m waves${wavePeriod ? ` at ${Math.round(wavePeriod)}s` : ''}` : null,
+    windKnots > profile.start ? `${Math.round(windKnots)} kn effective wind` : null,
+    highTideLift ? 'higher tide phase' : null,
+  ].filter(Boolean).join(' · ') : null;
+  return {
+    penalty: swellPenalty + windPenalty,
+    cap: Math.min(swellCap, windCap),
+    label,
+    detail: label ? `${label} – ${detail}` : null,
+    waveHeight: waveHeight || null,
+    wavePeriod: wavePeriod || null,
+    windKnots,
+  };
+}
+
+function computeClimbMarine(crag, hourly, dateStr) {
+  if (!crag?.marineHazard || !hourly?.time) return null;
+  const samples = [];
+  const start = climbStartHour(crag);
+  const cutoff = climbCutoffHour(crag);
+  for (let index = 0; index < hourly.time.length; index++) {
+    const time = hourly.time[index];
+    if (!time.startsWith(dateStr)) continue;
+    const hour = parseInt(time.slice(11, 13), 10);
+    if (hour < start || hour >= cutoff) continue;
+    samples.push(marineCondition(crag, {
+      waveHeight: hourly.marine_wave_height?.[index],
+      wavePeriod: hourly.marine_wave_period?.[index],
+      swellHeight: hourly.marine_swell_height?.[index],
+      swellPeriod: hourly.marine_swell_period?.[index],
+      tideLevel: hourly.marine_tide_level?.[index],
+      wind: hourly.windspeed_10m?.[index],
+      windGust: hourly.windgusts_10m?.[index],
+    }));
+  }
+  if (!samples.length) return null;
+
+  const count = Math.min(5, samples.length);
+  let best = null;
+  for (let index = 0; index + count <= samples.length; index++) {
+    const window = samples.slice(index, index + count);
+    const penalty = window.reduce((sum, sample) => sum + sample.penalty, 0) / count;
+    if (!best || penalty < best.penalty) best = { window, penalty };
+  }
+  const representative = best.window.reduce((worst, sample) =>
+    sample.penalty > worst.penalty ? sample : worst, best.window[0]);
+  return {
+    penalty: Math.round(best.penalty),
+    cap: Math.min(...best.window.map(sample => sample.cap)),
+    label: representative.label,
+    detail: representative.detail,
+  };
 }
 
 export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 0) {
@@ -1149,6 +1354,9 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   // represented when conditions are genuinely severe.
   penalize(directionalWindPenalty(crag, h.windDir, h.wind));
 
+  const marine = h.marineCondition ?? marineCondition(crag, h);
+  penalize(marine.penalty);
+
   // Sun-on-wall interactions — use apparent temp for the threshold checks
   // so a cold-feeling 20°C day (windy, humid) doesn't falsely claim a sun bonus.
   if (h.sunOnWall === true) {
@@ -1164,7 +1372,8 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   // any real penalty can't claim a perfect 100, even if bonuses clawed it
   // all the way back there. Keeps hour-by-hour scores honest relative to
   // the day score, which already applies this same cap.
-  const rawFinal = Math.max(0, Math.min(Math.floor(temperatureScoreCeiling(thermalPenalty)), Math.round(s)));
+  const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap);
+  const rawFinal = Math.max(0, Math.min(Math.floor(hourlyCeiling), Math.round(s)));
   return (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
 }
 
@@ -1504,6 +1713,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     };
   }
   let score = 100;
+  let marineScoreCap = 100;
   const reasons = [];
   // Each contribution: { category, label, delta, detail }
   // category: temp | aspect | bestIn | precip | dryness | wind | sun | climate
@@ -1954,6 +2164,14 @@ export function scoreDay(crag, day, prevDay, nextDay) {
       `${Math.round(climbingWind / 1.852)} kn avg ${dirLabel} – ${hazard.detail || 'terrain amplifies the wind'}`);
   }
 
+  const marine = day.climbMarine;
+  if (marine?.penalty > 0) {
+    score -= marine.penalty;
+    marineScoreCap = marine.cap;
+    reasons.push(marine.label);
+    add('marine', 'Marine conditions', -marine.penalty, marine.detail);
+  }
+
   // — Sunshine bonus on cool days, weighted by geometry —
   // We already credited sun-trap walls above. Here we just give a small bonus
   // when the overall day is sunny AND it's a cool day where warmth is welcome.
@@ -2068,6 +2286,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   const ceiling = Math.min(
     temperatureScoreCeiling(protectedTemperaturePenalty),
     tooWarmForHardClimbing ? 90 : 100,
+    marineScoreCap,
   );
   if (protectedTemperaturePenalty > 0 && score > ceiling) {
     add('temp', 'Temperature limit', ceiling - score,

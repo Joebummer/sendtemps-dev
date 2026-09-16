@@ -20,6 +20,25 @@ test('Candlestick chasm penalty starts gently below 15 knots and escalates in SS
   assert.equal(penalty({ id: 'fortescue-moai' }, 202.5, 25 * 1.852), 0);
 });
 
+test('marine conditions progressively penalise and cap committing sea cliffs', async () => {
+  const harness = await loadWorker();
+  const condition = harness.forecasts.marineCondition;
+  const extreme = { id: 'fortescue-totem-pole', marineHazard: 'extreme' };
+  const high = { id: 'cape-raoul-main', marineHazard: 'high' };
+
+  const ordinary = condition({ id: 'fortescue-main' }, { waveHeight: 4, wind: 60 });
+  assert.equal(ordinary.penalty, 0);
+  assert.equal(ordinary.cap, 100);
+  assert.equal(ordinary.label, null);
+  assert.equal(ordinary.detail, null);
+  assert.equal(condition(extreme, { waveHeight: 0.8, wavePeriod: 8, wind: 10 }).cap, 100);
+  assert.equal(condition(extreme, { waveHeight: 2.1, wavePeriod: 8, wind: 10 }).cap, 60);
+  assert.equal(condition(extreme, { waveHeight: 3.1, wavePeriod: 8, wind: 10 }).cap, 35);
+  assert.equal(condition(extreme, { waveHeight: 0.8, wind: 15 * 1.852 }).cap, 70);
+  assert.equal(condition(high, { waveHeight: 0.8, wind: 15 * 1.852 }).cap, 90);
+  assert.equal(condition(extreme, { waveHeight: 1.7, wavePeriod: 14, tideLevel: 0.9, wind: 5 }).cap, 60);
+});
+
 test('best window prefers five hours, supports poor days and short late-day strips', async () => {
   const harness = await loadWorker();
   const bestWindow = harness.forecasts.bestWindow;
@@ -62,13 +81,68 @@ function weatherFixture(url) {
   return params.get('latitude').split(',').map(() => forecast);
 }
 
+function marineFixture(url, overrides = {}) {
+  const params = new URL(url).searchParams;
+  const dates = Array.from({ length: 8 }, (_, i) =>
+    new Date(Date.UTC(2026, 8, 13 + i)).toISOString().slice(0, 10));
+  const hours = dates.flatMap(date => Array.from({ length: 24 }, (_, h) => `${date}T${String(h).padStart(2, '0')}:00`));
+  const values = {
+    wave_height: 0.8, wave_period: 8, swell_wave_height: 0.7,
+    swell_wave_period: 8, swell_wave_direction: 180, sea_level_height_msl: 0,
+    ...overrides,
+  };
+  const hourly = {
+    time: hours,
+    ...Object.fromEntries(params.get('hourly').split(',').map(key => [key, hours.map(() => values[key])])),
+  };
+  return params.get('latitude').split(',').map(() => ({ hourly }));
+}
+
+function fixtureForUrl(url, marineOverrides = {}) {
+  return new URL(url).hostname === 'marine-api.open-meteo.com'
+    ? marineFixture(url, marineOverrides)
+    : weatherFixture(url);
+}
+
+test('TAS pipeline applies high-swell caps only to configured marine crags', async () => {
+  const harness = await loadWorker(async url =>
+    Response.json(fixtureForUrl(url, { wave_height: 2.5, swell_wave_height: 2.3 })));
+  const forecasts = await harness.forecasts.fetchAllForecasts('TAS');
+  for (const id of ['fortescue-totem-pole', 'fortescue-candlestick', 'cape-raoul-main']) {
+    const forecast = forecasts[id];
+    assert.ok(forecast.todayHourly.length > 0, id);
+    assert.ok(forecast.todayHourly.every(hour => hour.score <= 60), id);
+    assert.ok(forecast.todayHourly.every(hour => hour.marineCondition.label === 'high swell'), id);
+    const dayIndex = forecast.days.findIndex(day => day.date === forecast.todayDate);
+    const daily = harness.forecasts.scoreDay(
+      forecast.crag,
+      forecast.days[dayIndex],
+      forecast.days[dayIndex - 1],
+      forecast.days[dayIndex + 1],
+    );
+    assert.ok(daily.score <= 60, id);
+    assert.ok(daily.reasons.includes('high swell'), id);
+  }
+  assert.ok(forecasts['fortescue-main'].todayHourly.some(hour => hour.score > 60));
+});
+
+test('marine provider failure leaves the weather forecast available', async () => {
+  const harness = await loadWorker(async url =>
+    new URL(url).hostname === 'marine-api.open-meteo.com'
+      ? new Response('unavailable', { status: 503 })
+      : Response.json(weatherFixture(url)));
+  const forecasts = await harness.forecasts.fetchAllForecasts('TAS');
+  assert.ok(forecasts['fortescue-totem-pole'].todayHourly.length > 0);
+  assert.ok(forecasts['fortescue-main'].todayHourly.length > 0);
+});
+
 for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
   test(`${region}: real scoring pipeline preserves the response contract and cache payload`, async () => {
     let calls = 0;
     const harness = await loadWorker(async url => {
-      assert.equal(new URL(url).hostname, 'api.open-meteo.com');
+      assert.ok(['api.open-meteo.com', 'marine-api.open-meteo.com'].includes(new URL(url).hostname));
       calls++;
-      return Response.json(weatherFixture(url));
+      return Response.json(fixtureForUrl(url));
     });
     const req = new Request(`https://api.test/forecast/scored?region=${region}&tripStart=2026-09-18&tripEnd=2026-09-20`);
     const first = await harness.worker.fetch(req, {}, harness.ctx);
@@ -146,11 +220,12 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
     assert.equal(second.headers.get('Cache-Control'), 'no-store');
     assert.equal(second.headers.get('X-SendTemps-Cache'), 'HIT');
     assert.deepEqual(await second.json(), body);
-    assert.equal(calls, 1);
+    const expectedCalls = ['TAS', 'ALL'].includes(region) ? 2 : 1;
+    assert.equal(calls, expectedCalls);
 
     // The unoptimised two-argument path remains our score-equivalence oracle.
     // Compare every trip field and ordering, not just the aggregate score.
-    const baseline = await loadWorker(async url => Response.json(weatherFixture(url)));
+    const baseline = await loadWorker(async url => Response.json(fixtureForUrl(url)));
     const forecasts = await baseline.forecasts.fetchAllForecasts(region);
     for (const query of [
       '', '&tripStart=2026-09-18&tripEnd=2026-09-20',
@@ -167,7 +242,7 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
       assert.deepEqual(actual.weekendTrip, JSON.parse(JSON.stringify(expectedTrip)));
       assert.deepEqual(actual.byDate, body.byDate);
     }
-    assert.equal(calls, 1, 'trip changes must not download or score regional weather again');
+    assert.equal(calls, expectedCalls, 'trip changes must not download or score regional weather again');
     assert.equal(harness.entries.size, 1, 'query variants must share the same regional cache key');
   });
 }
@@ -187,7 +262,7 @@ test('invalid regions are rejected before cache or network access', async () => 
 
 test('region separation, expiry and midnight rollover cannot reuse the wrong dataset', async () => {
   let calls = 0;
-  const harness = await loadWorker(async url => { calls++; return Response.json(weatherFixture(url)); });
+  const harness = await loadWorker(async url => { calls++; return Response.json(fixtureForUrl(url)); });
   async function get(region) {
     const response = await harness.worker.fetch(new Request(`https://api.test/forecast/scored?region=${region}`), {}, harness.ctx);
     assert.equal(response.status, 200);
@@ -196,19 +271,19 @@ test('region separation, expiry and midnight rollover cannot reuse the wrong dat
   }
   assert.equal((await get('NSW')).headers.get('X-SendTemps-Cache'), 'MISS');
   assert.equal((await get('TAS')).headers.get('X-SendTemps-Cache'), 'MISS');
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
   harness.setNow('2026-09-13T02:14:59Z');
   assert.equal((await get('NSW')).headers.get('X-SendTemps-Cache'), 'HIT');
   harness.setNow('2026-09-13T02:15:00Z');
   assert.equal((await get('NSW')).headers.get('X-SendTemps-Cache'), 'MISS');
-  assert.equal(calls, 3);
+  assert.equal(calls, 4);
   harness.setNow('2026-09-13T13:59:00Z'); // 23:59 Melbourne
   await get('NSW');
   harness.setNow('2026-09-13T14:01:00Z'); // next local day, still inside TTL
   const next = await get('NSW');
   assert.equal(next.headers.get('X-SendTemps-Cache'), 'MISS');
   assert.equal((await next.json()).dates[0], '2026-09-14');
-  assert.equal(calls, 5);
+  assert.equal(calls, 6);
 });
 
 test('failed weather fetches never populate the regional cache', async () => {

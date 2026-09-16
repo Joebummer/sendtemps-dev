@@ -64,8 +64,9 @@ test('warm-performance callouts are concise, unambiguous and cannot score 99', a
 
   const warm = f.scoreDay(route, dayFor(f, route, 17), null, null);
   assert.ok(warm.score <= 90);
-  assert.ok(warm.reasons.some(reason => reason.startsWith('too warm for hard climbing')));
+  assert.ok(warm.reasons.includes('too warm for hard climbing'));
   assert.ok(!warm.reasons.some(reason => reason.startsWith('warm for hard climbing')));
+  assert.ok(!warm.reasons.some(reason => reason.includes('°C avg')));
 
   const varied = f.scoreDay(route, dayFor(f, route, h => h % 2 ? 16.5 : 15.5), null, null);
   assert.ok(varied.reasons.includes('temp varies'));
@@ -85,6 +86,17 @@ test('warm-performance callouts are concise, unambiguous and cannot score 99', a
   } }, [date])[date][0];
   assert.equal(rankedVaried.score, 98);
   assert.ok(!rankedVaried.reasons.some(reason => reason.startsWith('best window avg')));
+
+  const parent = { ...route, id: 'parent' };
+  const child = { ...route, id: 'child', parentId: 'parent' };
+  const grouped = f.rankByDay({
+    parent: { crag: parent, days: [dayFor(f, parent, 17)], todayDate: 'other' },
+    child: { crag: child, days: [dayFor(f, child, 16)], todayDate: 'other' },
+  }, [date])[date];
+  const parentRow = grouped.find(row => row.crag.id === 'parent');
+  const childRow = grouped.find(row => row.crag.id === 'child');
+  assert.deepEqual(parentRow.reasons, childRow.reasons);
+  assert.ok(!parentRow.reasons.includes('too warm for hard climbing'));
 });
 
 for (const file of ['worker/src/lib/forecast.js']) {

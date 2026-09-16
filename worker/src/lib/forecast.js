@@ -1584,7 +1584,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     score -= protectedTemperaturePenalty;
     reasons.push(t < idealMin ? `cold (${Math.round(t)}°C avg)`
       : t > idealMax ? `hot (${Math.round(t)}°C avg)`
-        : tAir >= peakMax + 1 ? `too warm for hard climbing (${Math.round(tAir)}°C avg)`
+        : tAir >= peakMax + 1 ? 'too warm for hard climbing'
           : 'temp varies');
     add('temp', 'Temperature', -protectedTemperaturePenalty,
       `${Math.round(tAir)}°C air / ${Math.round(tFeel)}°C feels-like climbing average; peak up to ${peakMax}°C, good cragging ${idealMin}–${idealMax}°C` +
@@ -2202,6 +2202,24 @@ export function rankByDay(forecasts, dayDates) {
         pastPrecip: fc.pastPrecip,
       });
     }
+    // Destination cards display the best subcrag's score. Keep the parent
+    // card's tags aligned with that same subcrag so the score and callouts
+    // cannot describe different temperature profiles.
+    const rowById = new Map(rows.map(row => [row.crag.id, row]));
+    const childrenByParent = new Map();
+    for (const row of rows) {
+      if (!row.crag.parentId || !rowById.has(row.crag.parentId)) continue;
+      if (!childrenByParent.has(row.crag.parentId)) childrenByParent.set(row.crag.parentId, []);
+      childrenByParent.get(row.crag.parentId).push(row);
+    }
+    for (const [parentId, children] of childrenByParent) {
+      const best = children.reduce((current, candidate) =>
+        candidate.score > current.score ? candidate : current);
+      const parent = rowById.get(parentId);
+      parent.reasons = [...best.reasons];
+      parent.seasonalContext = best.seasonalContext;
+    }
+
     rows.sort((a, b) => b.score - a.score);
     ranked[date] = rows;
   }

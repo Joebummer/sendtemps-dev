@@ -104,8 +104,20 @@ export async function fetchAllForecasts(region = 'ALL') {
   // Marine data is only requested for explicitly configured sea cliffs. It is
   // optional: a marine-provider outage must not take the whole forecast down.
   const marinePromise = fetchMarineForecasts(targetCrags).catch(() => ({}));
-  const lats = targetCrags.map(c => c.lat).join(',');
-  const lons = targetCrags.map(c => c.lon).join(',');
+  // Multiple sectors share coordinates. Request each weather location once,
+  // then retain each crag's own elevation correction and scoring below.
+  const locationIndex = new Map();
+  const locations = [];
+  const indices = targetCrags.map(crag => {
+    const key = `${crag.lat},${crag.lon}`;
+    if (!locationIndex.has(key)) {
+      locationIndex.set(key, locations.length);
+      locations.push(crag);
+    }
+    return locationIndex.get(key);
+  });
+  const lats = locations.map(c => c.lat).join(',');
+  const lons = locations.map(c => c.lon).join(',');
   const params = new URLSearchParams({
     latitude: lats,
     longitude: lons,
@@ -160,7 +172,7 @@ export async function fetchAllForecasts(region = 'ALL') {
   // Map each crag to its forecast object
   const byId = {};
   targetCrags.forEach((crag, i) => {
-    const rawForecast = list[i];
+    const rawForecast = list[indices[i]];
     if (!rawForecast) return;
     const elevation = crag.elevation ?? 0;
     const lapse = elevation > 400 ? -((elevation - 400) / 1000) * 6.5 : 0;

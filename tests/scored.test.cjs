@@ -352,3 +352,39 @@ test('provider rate limits use a bounded fallback without extending its age', as
   assert.equal(expired.status, 502);
   assert.match((await expired.json()).error, /429/);
 });
+
+test('paid weather and marine requests use the server secret without exposing it', async () => {
+  const hosts = new Set();
+  const key = 'test-only-paid-key';
+  const harness = await loadWorker(async input => {
+    const url = new URL(input);
+    hosts.add(url.hostname);
+    assert.equal(url.searchParams.get('apikey'), key);
+    assert.ok(url.hostname.startsWith('customer-'));
+    url.hostname = url.hostname.replace('customer-', '');
+    return Response.json(fixtureForUrl(url.toString()));
+  });
+  const response = await harness.worker.fetch(
+    new Request('https://api.test/forecast/scored?region=TAS'),
+    { OPEN_METEO_API_KEY: key }, harness.ctx);
+  assert.equal(response.status, 200);
+  assert.deepEqual(hosts, new Set(['customer-api.open-meteo.com', 'customer-marine-api.open-meteo.com']));
+  assert.ok(!(await response.text()).includes(key));
+  await harness.flush();
+  for (const [cacheKey, cached] of harness.entries) {
+    assert.ok(!cacheKey.includes(key));
+    assert.ok(!(await cached.clone().text()).includes(key));
+  }
+});
+
+test('provider network errors redact the API key', async () => {
+  const key = 'test-only-private-key';
+  const harness = await loadWorker(async url => { throw new Error(`Request failed: ${url}`); });
+  const response = await harness.worker.fetch(
+    new Request('https://api.test/forecast/scored?region=NT'),
+    { OPEN_METEO_API_KEY: key }, harness.ctx);
+  assert.equal(response.status, 502);
+  const body = await response.text();
+  assert.ok(!body.includes(key));
+  assert.match(body, /Weather provider request failed/);
+});

@@ -574,7 +574,7 @@ export function computeClimbTemps(crag, hourly, dateStr) {
     if (!Number.isFinite(temp) || !Number.isFinite(app)) continue;
     const sun = sunPosition(melbourneHourToDate(t), crag.lat, crag.lon);
     const lit = hasConcreteAspect(crag.aspect)
-      ? sunOnAspect(crag.aspect, sun.azimuth, sun.altitude) : null;
+      ? sunOnCrag(crag, sun.azimuth, sun.altitude, hour) : null;
     temperatureSamples.push({
       hour,
       apparent: app,
@@ -696,7 +696,7 @@ function computeSunWindow(crag, hourly, dateStr) {
     const when = melbourneHourToDate(t);
     const sun = sunPosition(when, crag.lat, crag.lon);
     if (sun.altitude <= 3) continue;
-    if (!sunOnAspect(crag.aspect, sun.azimuth, sun.altitude)) continue;
+    if (!sunOnCrag(crag, sun.azimuth, sun.altitude, hour)) continue;
     if (firstHour == null || hour < firstHour) firstHour = hour;
     if (lastHour == null || hour > lastHour) lastHour = hour;
   }
@@ -740,7 +740,7 @@ function computeSolarExposure(crag, hourly, dateStr) {
     const cloud = hourly.cloudcover?.[i] ?? 0;
     const clear = Math.max(0, 1 - cloud / 100);
     total += clear;
-    if (!sunOnAspect(crag.aspect, sun.azimuth, sun.altitude)) continue;
+    if (!sunOnCrag(crag, sun.azimuth, sun.altitude, hour)) continue;
     onWall += clear;
     if (hour >= 11 && hour < 16) warm += clear;
     if (hour >= 8 && hour < 11) cool += clear;
@@ -982,6 +982,13 @@ export function hasConcreteAspect(aspect) {
 // and twilight scatter). Mixed/unknown aspects return false — callers should
 // check `hasConcreteAspect` and fall back to author-provided text instead of
 // pretending they have a precise sun window.
+// Observed local shade overrides geometry from the recorded hour onward.
+export function sunOnCrag(crag, sunAz, sunAlt, hour) {
+  if (Number.isFinite(crag.shadeFromHour) && Number.isFinite(hour) &&
+      hour >= crag.shadeFromHour) return false;
+  return sunOnAspect(crag.aspect, sunAz, sunAlt);
+}
+
 export function sunOnAspect(aspect, sunAz, sunAlt) {
   if (sunAlt <= 3) return false;
   const wallAz = ASPECT_AZIMUTH[aspect];
@@ -1072,7 +1079,7 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
     // Mixed/unknown aspect → we don't know if the wall is lit. Surface that as
     // null so the UI can show a neutral marker rather than "in shade".
     const lit = hasConcreteAspect(crag.aspect)
-      ? sunOnAspect(crag.aspect, sun.azimuth, sun.altitude)
+      ? sunOnCrag(crag, sun.azimuth, sun.altitude, hour)
       : null;
     out.push({
       hour,

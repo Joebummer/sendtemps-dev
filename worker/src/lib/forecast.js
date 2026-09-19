@@ -283,6 +283,7 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '') {
         morningDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 8),
         afternoonDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 14),
         dayDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 11), // mid-day single value
+        ...wetRockDayCondition(crag, f.hourly, drynessSeries, date),
         elevCorrection: lapse !== 0 ? Math.round(lapse * 10) / 10 : null,
       });
       }),
@@ -349,6 +350,128 @@ const NIGHT_DRY_FACTOR = {
   limestone:   0.35, // seeps and re-wets significantly at night
   sandstone:   0.30, // most affected by dew and overnight humidity
 };
+
+// Open-Meteo commonly reports light rain in 0.1 mm increments. Treat any
+// positive reported amount as measurable rather than letting drizzle round
+// away to a perfect climbing hour.
+const MEASURABLE_RAIN_MM = 0.05;
+
+// Base recovery time grows with the accumulated rain in the current weather
+// event. Rock type then scales that time to reflect absorption and seepage.
+// Every rock gets at least one complete dry hour; sandstone and tuff retain
+// the longest recovery because a dry-looking surface can still be fragile.
+const RAIN_RECOVERY_MULTIPLIER = {
+  granite: 1,
+  rhyolite: 1,
+  basalt: 1.1,
+  dolerite: 1.2,
+  quartzite: 1.35,
+  marble: 1.5,
+  trachyte: 1.75,
+  conglomerate: 2.25,
+  limestone: 2.5,
+  tuff: 3.5,
+  sandstone: 5,
+};
+
+const RAIN_HOUR_CAP = {
+  sandstone: 0,
+  tuff: 0,
+  conglomerate: 20,
+  limestone: 25,
+};
+
+const RECOVERY_START_CAP = {
+  sandstone: 20,
+  tuff: 20,
+  conglomerate: 35,
+  limestone: 40,
+};
+
+function baseRainRecoveryHours(eventMm) {
+  if (eventMm <= 0.2) return 1;
+  if (eventMm <= 0.5) return 2;
+  if (eventMm <= 1) return 3;
+  if (eventMm <= 2) return 5;
+  if (eventMm <= 5) return 8;
+  if (eventMm <= 10) return 12;
+  return 18;
+}
+
+export function rainRecoveryHours(crag, eventMm) {
+  if (!Number.isFinite(eventMm) || eventMm < MEASURABLE_RAIN_MM) return 0;
+  const multiplier = RAIN_RECOVERY_MULTIPLIER[crag?.rockType] ?? 1.5;
+  return Math.max(1, Math.min(72, Math.ceil(baseRainRecoveryHours(eventMm) * multiplier)));
+}
+
+export function wetRockCondition(crag, hour) {
+  const rain = Number.isFinite(hour?.precip) ? hour.precip : 0;
+  const hoursSinceRain = Number.isFinite(hour?.hoursSinceRain) ? hour.hoursSinceRain : null;
+  const rainEventMm = Number.isFinite(hour?.rainEventMm) ? hour.rainEventMm : rain;
+  const rock = crag?.rockType || 'rock';
+
+  if (rain >= MEASURABLE_RAIN_MM) {
+    return {
+      cap: RAIN_HOUR_CAP[rock] ?? 60,
+      label: `${rock} wet`,
+      detail: `${rain.toFixed(1)}mm forecast this hour`,
+    };
+  }
+
+  const recoveryHours = rainRecoveryHours(crag, rainEventMm);
+  if (hoursSinceRain == null || hoursSinceRain <= 0 || hoursSinceRain > recoveryHours) {
+    return { cap: 100, label: null, detail: null, recoveryHours };
+  }
+
+  // The full recovery interval stays below the Excellent band. Normal scoring
+  // resumes only after the final required dry hour has elapsed.
+  const startCap = RECOVERY_START_CAP[rock] ?? 55;
+  const progress = hoursSinceRain / recoveryHours;
+  const cap = Math.round(startCap + (79 - startCap) * progress);
+  return {
+    cap,
+    label: `${rock} drying after rain`,
+    detail: `${hoursSinceRain}/${recoveryHours} dry hours after ${rainEventMm.toFixed(1)}mm`,
+    recoveryHours,
+  };
+}
+
+function wetRockDayCondition(crag, hourly, drynessSeries, dateStr) {
+  if (!hourly?.time || !drynessSeries?.length) return {};
+  const samples = [];
+  for (let i = 0; i < hourly.time.length; i++) {
+    const iso = hourly.time[i];
+    if (!iso.startsWith(dateStr)) continue;
+    const hour = parseInt(iso.slice(11, 13), 10);
+    if (hour < 7 || hour > 19) continue;
+    const condition = wetRockCondition(crag, {
+      precip: hourly.precipitation?.[i] ?? 0,
+      hoursSinceRain: drynessSeries[i]?.hoursSinceRain ?? null,
+      rainEventMm: drynessSeries[i]?.rainEventMm ?? 0,
+    });
+    samples.push({ hour, ...condition });
+  }
+  if (!samples.length) return {};
+
+  // Match the headline's five-hour session logic. Rain later in the day does
+  // not invalidate a genuinely dry morning; a day that is recovering for all
+  // viable sessions remains capped below Excellent.
+  const count = Math.min(5, samples.length);
+  let best = null;
+  for (let i = 0; i + count <= samples.length; i++) {
+    const window = samples.slice(i, i + count);
+    const average = window.reduce((sum, sample) => sum + sample.cap, 0) / count;
+    if (!best || average > best.average) best = { window, average };
+  }
+  if (!best || best.average >= 100) return {};
+  const representative = best.window.reduce((worst, sample) =>
+    sample.cap < worst.cap ? sample : worst, best.window[0]);
+  return {
+    wetRockCap: Math.floor(best.average),
+    wetRockLabel: representative.label,
+    wetRockDetail: `${best.window[0].hour}:00–${best.window[best.window.length - 1].hour + 1}:00 recovery ceiling; ${representative.detail}`,
+  };
+}
 
 // Average wind direction + speed during climbing hours (8am–6pm) for a given
 // local date. Returns { windDir, windAvg, windExposure } where windDir is a
@@ -827,6 +950,8 @@ function computeDrynessSeries(crag, hourly) {
   // rain falls inside the window it'll be captured. (The 4-day lookback is
   // adequate even for sandstone given the 24h half-life ⇒ ~4 half-lives.)
   let wetness = 0;
+  let hoursSinceRain = null;
+  let rainEventMm = 0;
   const series = new Array(n);
 
   for (let i = 0; i < n; i++) {
@@ -842,6 +967,17 @@ function computeDrynessSeries(crag, hourly) {
     // Gust-weighted effective wind. Gusts dry rock faster than the average,
     // so we blend them in rather than relying purely on the mean speed.
     const effectiveWind = Math.max(wind, gust * 0.7);
+
+    // Track rain events separately from absorbed wetness. Showers separated by
+    // no more than two dry hours remain part of one event; later rain resets a
+    // completed recovery clock and starts a new event.
+    if (mm >= MEASURABLE_RAIN_MM) {
+      if (hoursSinceRain == null || hoursSinceRain > 2) rainEventMm = 0;
+      rainEventMm += mm;
+      hoursSinceRain = 0;
+    } else if (hoursSinceRain != null) {
+      hoursSinceRain += 1;
+    }
 
     // 1) Add rain wetness. Each mm normalised by saturation point.
     if (mm > 0) {
@@ -900,7 +1036,12 @@ function computeDrynessSeries(crag, hourly) {
     // wetness=0 → 100, wetness=1 (just saturated) → ~37, wetness=2 → ~14,
     // wetness=3 (deluge cap) → ~5. Using exp curve keeps the top tier informative.
     const dryness = Math.round(100 * Math.exp(-wetness));
-    series[i] = { wetness: Math.round(wetness * 100) / 100, dryness };
+    series[i] = {
+      wetness: Math.round(wetness * 100) / 100,
+      dryness,
+      hoursSinceRain,
+      rainEventMm: Math.round(rainEventMm * 10) / 10,
+    };
   }
   return series;
 }
@@ -1109,6 +1250,8 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
       cloud: hourly.cloudcover?.[i] ?? 0,
       weatherCode: hourly.weathercode?.[i] ?? null,
       dryness: drynessSeries[i]?.dryness ?? null,
+      hoursSinceRain: drynessSeries[i]?.hoursSinceRain ?? null,
+      rainEventMm: drynessSeries[i]?.rainEventMm ?? 0,
       sunAlt: Math.round(sun.altitude),
       sunAz: Math.round(sun.azimuth),
       sunOnWall: lit,
@@ -1136,6 +1279,8 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
       continue;
     }
     out[i].marineCondition = marineCondition(crag, out[i]);
+    const wetRock = wetRockCondition(crag, out[i]);
+    if (wetRock.cap < 100) out[i].wetRockCondition = wetRock;
     const nearby = out.slice(Math.max(0, i - 2), Math.min(out.length, i + 3));
     const rainNeighbours = nearby.filter(n => n !== out[i] && n.precipProb > 30).length;
     out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb, meanDayCloud);
@@ -1325,6 +1470,7 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   // hours also have elevated probability (sustained = worse than a shower).
   if (h.precip > 1) penalize(70);
   else if (h.precip > 0.2) penalize(35);
+  else if (h.precip >= MEASURABLE_RAIN_MM) penalize(15);
   else if (h.precipProb > 60) {
     // Base -20, +3 per sustained neighbour, capped at -32
     penalize(Math.min(32, 20 + rainNeighbours * 3));
@@ -1398,6 +1544,7 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
 
   const marine = h.marineCondition ?? marineCondition(crag, h);
   penalize(marine.penalty);
+  const wetRock = h.wetRockCondition ?? wetRockCondition(crag, h);
 
   // Sun-on-wall interactions — use apparent temp for the threshold checks
   // so a cold-feeling 20°C day (windy, humid) doesn't falsely claim a sun bonus.
@@ -1414,7 +1561,7 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   // any real penalty can't claim a perfect 100, even if bonuses clawed it
   // all the way back there. Keeps hour-by-hour scores honest relative to
   // the day score, which already applies this same cap.
-  const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap);
+  const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap, wetRock.cap);
   const rawFinal = Math.max(0, Math.min(Math.floor(hourlyCeiling), Math.round(s)));
   return (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
 }
@@ -1762,6 +1909,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   }
   let score = 100;
   let marineScoreCap = 100;
+  const wetRockScoreCap = Number.isFinite(day.wetRockCap) ? day.wetRockCap : 100;
   const reasons = [];
   // Each contribution: { category, label, delta, detail }
   // category: temp | aspect | bestIn | precip | dryness | wind | sun | climate
@@ -2106,9 +2254,19 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     score -= 20;
     reasons.push(`${Math.round(peakProb)}% rain chance`);
     add('precip', 'Rain chance', -20, rainDetail);
+  } else if (effectiveSum >= 0.2) {
+    const pen = 12;
+    score -= pen;
+    reasons.push('light rain');
+    add('precip', 'Light rain', -pen, rainDetail);
   } else if (effectiveProb > 30) {
     score -= 8;
     add('precip', 'Rain chance', -8, rainDetail);
+  } else if (effectiveSum > 0) {
+    const pen = 6;
+    score -= pen;
+    reasons.push('possible drizzle');
+    add('precip', 'Possible drizzle', -pen, rainDetail);
   }
   if (skipLateRain && climb.sumAfter > 0.5) {
     reasons.push('rain after dark only');
@@ -2323,6 +2481,14 @@ export function scoreDay(crag, day, prevDay, nextDay) {
         : `${_humidLabel} — strong evaporative conditions should keep holds feeling crisp`);
   }
 
+  if (wetRockScoreCap < 100 && score > wetRockScoreCap) {
+    const delta = wetRockScoreCap - score;
+    score = wetRockScoreCap;
+    reasons.push(day.wetRockLabel || 'rock drying after rain');
+    add('dryness', 'Wet-rock recovery', delta,
+      day.wetRockDetail || 'Recent rain requires additional drying time');
+  }
+
   // — Penalty integrity cap —
   // A crag that earned any score penalty cannot claim a perfect 100.
   // If penalties fired but bonuses compensated back to 100, cap at 99
@@ -2335,6 +2501,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     temperatureScoreCeiling(protectedTemperaturePenalty),
     tooWarmForHardClimbing ? 90 : 100,
     marineScoreCap,
+    wetRockScoreCap,
   );
   if (protectedTemperaturePenalty > 0 && score > ceiling) {
     add('temp', 'Temperature limit', ceiling - score,

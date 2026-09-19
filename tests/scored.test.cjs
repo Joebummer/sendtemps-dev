@@ -60,6 +60,28 @@ test('best window prefers five hours, supports poor days and short late-day stri
   assert.equal(late.avg, 72);
 });
 
+test('best window excludes 6am while preserving it in the hourly strip', async () => {
+  const harness = await loadWorker();
+  const bestWindow = harness.forecasts.bestWindow;
+  const hours = [
+    { score: 100, hour: 6 },
+    { score: 20, hour: 7 },
+    { score: 30, hour: 8 },
+    { score: 40, hour: 9 },
+    { score: 50, hour: 10 },
+    { score: 60, hour: 11 },
+    { score: 10, hour: 12 },
+  ];
+
+  const window = bestWindow(hours);
+  assert.equal(hours[0].hour, 6, 'the display source still includes 6am');
+  assert.equal(window.count, 5);
+  assert.equal(window.start, 7);
+  assert.equal(window.end, 12);
+  assert.deepEqual(window.hours.map(hour => hour.hour), [7, 8, 9, 10, 11]);
+  assert.equal(window.avg, 40);
+});
+
 function weatherFixture(url) {
   const params = new URL(url).searchParams;
   const dates = Array.from({ length: 14 }, (_, i) =>

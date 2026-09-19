@@ -1430,22 +1430,28 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
 export function bestWindow(hourly) {
   if (!hourly || hourly.length === 0) return null;
 
+  // Keep 6am in the hourly strip for planning context, but do not let it
+  // influence the representative climbing session. Daily scoring starts at
+  // 7am at the earliest.
+  const eligible = hourly.filter(sample => sample.hour >= 7);
+  if (eligible.length === 0) return null;
+
   // A climbing day is represented by the strongest usable session, not one
   // isolated peak hour and not an all-day average. Prefer a five-hour window;
   // shorten only when fewer hours remain today.
-  const count = Math.min(5, hourly.length);
+  const count = Math.min(5, eligible.length);
   let bestStart = 0;
   let bestSum = -Infinity;
-  for (let i = 0; i + count <= hourly.length; i++) {
+  for (let i = 0; i + count <= eligible.length; i++) {
     let sum = 0;
-    for (let j = 0; j < count; j++) sum += hourly[i + j].score;
+    for (let j = 0; j < count; j++) sum += eligible[i + j].score;
     if (sum > bestSum) {
       bestSum = sum;
       bestStart = i;
     }
   }
 
-  const hours = hourly.slice(bestStart, bestStart + count);
+  const hours = eligible.slice(bestStart, bestStart + count);
   const start = hours[0].hour;
   const end = hours[hours.length - 1].hour + 1;
   const avg = bestSum / count;

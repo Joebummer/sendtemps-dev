@@ -2711,8 +2711,8 @@ export function rankByDay(forecasts, dayDates) {
       });
     }
     // Destination cards display the best subcrag's score. Keep the parent
-    // card's tags aligned with that same subcrag so the score and callouts
-    // cannot describe different temperature profiles.
+    // card's tags aligned with that same subcrag and record its ID so the API
+    // response can align the parent card's hourly strip as well.
     const rowById = new Map(rows.map(row => [row.crag.id, row]));
     const childrenByParent = new Map();
     for (const row of rows) {
@@ -2726,6 +2726,7 @@ export function rankByDay(forecasts, dayDates) {
       const parent = rowById.get(parentId);
       parent.reasons = [...best.reasons];
       parent.seasonalContext = best.seasonalContext;
+      parent.bestSubcragId = best.crag.id;
     }
 
     rows.sort((a, b) => b.score - a.score);

@@ -422,7 +422,7 @@ const SCORED_FALLBACK_TTL = 3600; // at most one hour old, same local date and s
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-09-20-sandstone-recovery-v3';
+const SCORED_CACHE_VERSION = '2026-09-21-parent-hourly-alignment-v1';
 const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 
 // Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw
@@ -464,17 +464,23 @@ function normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip, 
   });
 
   const today = {};
+  const todayRows = new Map((ranked[dates[0]] || []).map(row => [row.crag.id, row]));
+  const tomorrowRows = new Map((ranked[dates[1]] || []).map(row => [row.crag.id, row]));
   for (const cragId in forecasts) {
     if (!crags[cragId]) continue; // only include crags actually referenced in this region's output
     const f = forecasts[cragId];
+    const todaySource = forecasts[todayRows.get(cragId)?.bestSubcragId] || f;
+    const tomorrowSource = forecasts[tomorrowRows.get(cragId)?.bestSubcragId] || f;
     today[cragId] = {
-      todayHourly: f.todayHourly,
-      todayBestWindow: f.todayBestWindow,
-      tomorrowHourly: f.tomorrowHourly,
-      tomorrowBestWindow: f.tomorrowBestWindow,
-      nowDryness: f.nowDryness,
-      lastRain: f.lastRain,
-      pastPrecip: f.pastPrecip,
+      todayBestSubcragId: todayRows.get(cragId)?.bestSubcragId || null,
+      todayHourly: todaySource.todayHourly,
+      todayBestWindow: todaySource.todayBestWindow,
+      tomorrowBestSubcragId: tomorrowRows.get(cragId)?.bestSubcragId || null,
+      tomorrowHourly: tomorrowSource.tomorrowHourly,
+      tomorrowBestWindow: tomorrowSource.tomorrowBestWindow,
+      nowDryness: todaySource.nowDryness,
+      lastRain: todaySource.lastRain,
+      pastPrecip: todaySource.pastPrecip,
     };
   }
 

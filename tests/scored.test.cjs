@@ -287,6 +287,31 @@ test('marine provider failure leaves the weather forecast available', async () =
   assert.ok(forecasts['fortescue-main'].todayHourly.length > 0);
 });
 
+test('destination hourly strips follow the subcrag selected for the headline', async () => {
+  const harness = await loadWorker(async url => Response.json(fixtureForUrl(url)));
+  const response = await harness.worker.fetch(
+    new Request('https://api.test/forecast/scored?region=VIC'), {}, harness.ctx);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+
+  for (const parentId of ['gramps-main', 'buffalo-main']) {
+    const todayRow = body.byDate[body.dates[0]].find(row => row.cragId === parentId);
+    const tomorrowRow = body.byDate[body.dates[1]].find(row => row.cragId === parentId);
+    assert.ok(todayRow.bestSubcragId, `${parentId} has a selected subcrag today`);
+    assert.ok(tomorrowRow.bestSubcragId, `${parentId} has a selected subcrag tomorrow`);
+    assert.equal(body.today[parentId].todayBestSubcragId, todayRow.bestSubcragId);
+    assert.equal(body.today[parentId].tomorrowBestSubcragId, tomorrowRow.bestSubcragId);
+    assert.deepEqual(
+      body.today[parentId].todayHourly,
+      body.today[todayRow.bestSubcragId].todayHourly,
+    );
+    assert.deepEqual(
+      body.today[parentId].tomorrowHourly,
+      body.today[tomorrowRow.bestSubcragId].tomorrowHourly,
+    );
+  }
+});
+
 for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
   test(`${region}: real scoring pipeline preserves the response contract and cache payload`, async () => {
     let calls = 0;

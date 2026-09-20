@@ -89,9 +89,13 @@ test('rain recovery always lasts at least one dry hour and scales by rain severi
   assert.equal(recovery({ rockType: 'granite' }, 0.1), 1);
   assert.equal(recovery({ rockType: 'granite' }, 0.5), 2);
   assert.equal(recovery({ rockType: 'granite' }, 2), 5);
-  assert.equal(recovery({ rockType: 'sandstone' }, 0.1), 5);
-  assert.equal(recovery({ rockType: 'sandstone' }, 0.5), 10);
-  assert.equal(recovery({ rockType: 'sandstone' }, 2), 25);
+  assert.equal(recovery({ rockType: 'sandstone' }, 0.1), 12);
+  assert.equal(recovery({ rockType: 'sandstone' }, 0.2), 24);
+  assert.equal(recovery({ rockType: 'sandstone' }, 1), 24);
+  assert.equal(recovery({ rockType: 'sandstone' }, 2), 48);
+  assert.equal(recovery({ rockType: 'sandstone' }, 5), 48);
+  assert.equal(recovery({ rockType: 'sandstone' }, 5.1), 72);
+  assert.equal(recovery({ rockType: 'sandstone (soft)' }, 0.5), 24);
 });
 
 test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async () => {
@@ -101,9 +105,18 @@ test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async
   const granite = { rockType: 'granite' };
 
   assert.equal(condition(sandstone, { precip: 0.1, rainEventMm: 0.1 }).cap, 0);
-  assert.ok(condition(sandstone, { precip: 0, hoursSinceRain: 1, rainEventMm: 0.1 }).cap < 80);
-  assert.equal(condition(sandstone, { precip: 0, hoursSinceRain: 5, rainEventMm: 0.1 }).cap, 79);
-  assert.equal(condition(sandstone, { precip: 0, hoursSinceRain: 6, rainEventMm: 0.1 }).cap, 100);
+  assert.equal(condition(sandstone, {
+    precip: 0, hoursSinceRain: 8, recoveryProgressHours: 0, rainEventMm: 0.1,
+  }).cap, 0);
+  assert.equal(condition(sandstone, {
+    precip: 0, hoursSinceRain: 8, recoveryProgressHours: 1, rainEventMm: 0.1,
+  }).cap, 0);
+  assert.equal(condition(sandstone, {
+    precip: 0, hoursSinceRain: 20, recoveryProgressHours: 12, rainEventMm: 0.1,
+  }).cap, 0);
+  assert.equal(condition(sandstone, {
+    precip: 0, hoursSinceRain: 21, recoveryProgressHours: 13, rainEventMm: 0.1,
+  }).cap, 100);
 
   assert.equal(condition(granite, { precip: 0.1, rainEventMm: 0.1 }).cap, 60);
   assert.equal(condition(granite, { precip: 0, hoursSinceRain: 1, rainEventMm: 0.1 }).cap, 79);
@@ -149,6 +162,46 @@ function lightRainFixture(url) {
   return forecasts;
 }
 
+function sandstoneRecoveryFixture(url) {
+  const forecasts = weatherFixture(url);
+  for (const forecast of forecasts) {
+    for (let i = 0; i < forecast.hourly.time.length; i++) {
+      const hour = Number(forecast.hourly.time[i].slice(11, 13));
+      forecast.hourly.shortwave_radiation[i] = hour >= 7 && hour < 20 ? 300 : 0;
+    }
+    const rainIndex = forecast.hourly.time.indexOf('2026-09-13T18:00');
+    forecast.hourly.precipitation[rainIndex] = 0.1;
+    const drizzleIndex = forecast.hourly.time.indexOf('2026-09-13T20:00');
+    forecast.hourly.precipitation[drizzleIndex] = 0.1;
+    for (const hour of [7, 8]) {
+      const index = forecast.hourly.time.indexOf(`2026-09-14T${String(hour).padStart(2, '0')}:00`);
+      forecast.hourly.relative_humidity_2m[index] = 85;
+    }
+  }
+  return forecasts;
+}
+
+test('sandstone recovery resets in drizzle and pauses overnight and in high humidity', async () => {
+  const harness = await loadWorker(async url => Response.json(sandstoneRecoveryFixture(url)));
+  const forecasts = await harness.forecasts.fetchAllForecasts('NSW');
+  const westside = forecasts['westside-main'];
+  const sample = iso => {
+    const index = westside.hourly.time.indexOf(iso);
+    return westside.drynessSeries[index].recoveryProgressHours;
+  };
+
+  assert.equal(sample('2026-09-13T18:00'), 0);
+  assert.equal(sample('2026-09-13T19:00'), 1);
+  assert.equal(sample('2026-09-13T20:00'), 0);
+  assert.equal(sample('2026-09-14T06:00'), 0);
+  assert.equal(sample('2026-09-14T07:00'), 0);
+  assert.equal(sample('2026-09-14T08:00'), 0);
+  assert.ok(sample('2026-09-14T09:00') > 0);
+  for (const hour of [6, 7, 8]) {
+    assert.equal(westside.tomorrowHourly.find(cell => cell.hour === hour).score, 0);
+  }
+});
+
 test('light rain moves Westside best window before the rain while granite recovers faster', async () => {
   const rainyHarness = await loadWorker(async url => Response.json(lightRainFixture(url)));
   const forecasts = await rainyHarness.forecasts.fetchAllForecasts('NSW');
@@ -158,8 +211,8 @@ test('light rain moves Westside best window before the rain while granite recove
   const westRain = westside.tomorrowHourly.find(hour => hour.hour === 15);
   const westFirstDry = westside.tomorrowHourly.find(hour => hour.hour === 16);
   assert.equal(westRain.score, 0);
-  assert.ok(westFirstDry.score < 80);
-  assert.equal(westFirstDry.wetRockCondition.recoveryHours, 5);
+  assert.equal(westFirstDry.score, 0);
+  assert.equal(westFirstDry.wetRockCondition.recoveryHours, 24);
   assert.ok(westside.tomorrowBestWindow.hours.every(hour => hour.hour < 14));
 
   const graniteFirstDry = granite.tomorrowHourly.find(hour => hour.hour === 16);

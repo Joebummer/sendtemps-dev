@@ -2550,12 +2550,17 @@ export function scoreDay(crag, day, prevDay, nextDay) {
         : `${_humidLabel} — strong evaporative conditions should keep holds feeling crisp`);
   }
 
-  if (wetRockScoreCap < 100 && score > wetRockScoreCap) {
-    const delta = wetRockScoreCap - score;
-    score = wetRockScoreCap;
-    reasons.push(day.wetRockLabel || 'rock drying after rain');
-    add('dryness', 'Wet-rock recovery', delta,
-      day.wetRockDetail || 'Recent rain requires additional drying time');
+  if (wetRockScoreCap < 100) {
+    const wetRockReason = day.wetRockLabel || 'rock drying after rain';
+    const existingReason = reasons.indexOf(wetRockReason);
+    if (existingReason >= 0) reasons.splice(existingReason, 1);
+    reasons.unshift(wetRockReason);
+    if (score > wetRockScoreCap) {
+      const delta = wetRockScoreCap - score;
+      score = wetRockScoreCap;
+      add('dryness', 'Wet-rock recovery', delta,
+        day.wetRockDetail || 'Recent rain requires additional drying time');
+    }
   }
 
   // — Penalty integrity cap —

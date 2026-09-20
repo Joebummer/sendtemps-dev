@@ -200,6 +200,15 @@ test('sandstone recovery resets in drizzle and pauses overnight and in high humi
   for (const hour of [6, 7, 8]) {
     assert.equal(westside.tomorrowHourly.find(cell => cell.hour === hour).score, 0);
   }
+  const dayIndex = westside.days.findIndex(day => day.date === '2026-09-14');
+  const daily = harness.forecasts.scoreDay(
+    westside.crag,
+    westside.days[dayIndex],
+    westside.days[dayIndex - 1],
+    westside.days[dayIndex + 1],
+  );
+  assert.equal(daily.score, 0);
+  assert.equal(daily.reasons[0], 'sandstone drying after rain');
 });
 
 test('light rain moves Westside best window before the rain while granite recovers faster', async () => {

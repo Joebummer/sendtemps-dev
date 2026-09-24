@@ -408,10 +408,10 @@ export function rainRecoveryHours(crag, eventMm) {
   if (!Number.isFinite(eventMm) || eventMm < MEASURABLE_RAIN_MM) return 0;
   const rock = canonicalRockType(crag);
   if (rock === 'sandstone') {
-    if (eventMm < 0.2) return 12;
-    if (eventMm <= 1) return 24;
-    if (eventMm <= 5) return 48;
-    return 72;
+    if (eventMm < 0.2) return 10;
+    if (eventMm <= 1) return 19;
+    if (eventMm <= 5) return 38;
+    return 58;
   }
   const multiplier = RAIN_RECOVERY_MULTIPLIER[rock] ?? 1.5;
   return Math.max(1, Math.min(72, Math.ceil(baseRainRecoveryHours(eventMm) * multiplier)));

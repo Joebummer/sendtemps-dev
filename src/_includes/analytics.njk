@@ -1,0 +1,26 @@
+  <!-- Google tag (gtag.js): Google Ads and Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18446560666"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'AW-18446560666');
+    gtag('config', 'G-BJ0BBXCZRL');
+
+    document.addEventListener('click', function (event) {
+      var target = event.target instanceof Element ? event.target : null;
+      var link = target && target.closest('a[href*="apps.apple.com/au/app/climbable"]');
+      if (!link) return;
+
+      var section = link.closest('section[id]');
+      var location = section ? section.id : 'other';
+      if (link.closest('.site-header')) location = 'header';
+      if (link.closest('.site-footer')) location = 'footer';
+
+      gtag('event', 'app_store_click', {
+        link_url: link.href,
+        link_text: link.textContent.trim().replace(/\s+/g, ' '),
+        cta_location: location
+      });
+    });
+  </script>

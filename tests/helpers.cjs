@@ -13,7 +13,7 @@ async function loadWorker(fetchMock, now = '2026-09-13T02:00:00Z') {
       constructor(...args) { super(...(args.length ? args : [now])); }
       static now() { return new Date(now).getTime(); }
     },
-    Request, Response, URL, URLSearchParams, TextEncoder, TextDecoder,
+    Request, Response, URL, URLSearchParams, TextEncoder, TextDecoder, AbortController,
     console, setTimeout, clearTimeout,
     fetch: fetchMock || (() => { throw new Error('Unexpected network request'); }),
     caches: { default: {

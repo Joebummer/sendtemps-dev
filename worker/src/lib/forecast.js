@@ -26,13 +26,38 @@ export async function fetchOpenMeteo(input, apiKey = '') {
     throw new Error('Invalid weather provider');
   }
   url.searchParams.delete('apikey');
-  const key = apiKey.trim();
+  const key = (apiKey || '').trim();
+  const boundedFetch = async (target, timeoutMs) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(target.toString(), { signal: controller.signal });
+      // The upstream may send headers promptly but stall while streaming the
+      // multi-crag body. Keep the abort active until the body is complete.
+      const body = await response.arrayBuffer();
+      return new Response(body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
   if (key) {
-    url.hostname = `customer-${url.hostname}`;
-    url.searchParams.set('apikey', key);
+    const paidUrl = new URL(url);
+    paidUrl.hostname = `customer-${url.hostname}`;
+    paidUrl.searchParams.set('apikey', key);
+    try {
+      const paid = await boundedFetch(paidUrl, 8000);
+      if (paid.ok) return paid;
+    } catch {
+      // A stalled paid endpoint should not hold the app's startup request.
+    }
   }
   try {
-    return await fetch(url.toString());
+    // Keep the entire provider attempt within the mobile client's timeout.
+    return await boundedFetch(url, 15000);
   } catch {
     // Network errors can contain the requested URL, including credentials.
     throw new Error('Weather provider request failed');

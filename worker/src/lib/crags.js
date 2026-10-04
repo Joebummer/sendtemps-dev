@@ -684,10 +684,9 @@ export const CRAGS = [
     compact: true,
     driveTime: '1h30',
     trip: 'day',
-    state: 'VIC',    notes: 'Currently closed due to fire damage. Granodiorite slabs, cracks, and bouldering scattered around the hill near Harcourt. Dog Rocks and Wabbit Wocks are the classic introductions. Multi-aspect – plenty of options for sun or shade. Dries fast.',
+    state: 'VIC',    notes: 'Granodiorite slabs, cracks, and bouldering scattered around the hill near Harcourt. Dog Rocks and Wabbit Wocks are the classic introductions. Multi-aspect – plenty of options for sun or shade. Dries fast.',
+    accessStatus: 'Check current Parks Victoria fire recovery conditions and follow on-site signs before visiting; some walking tracks and fire-affected areas may remain restricted.',
     bestIn: 'mild',
-    closedAll: true,
-    closureReason: 'fire damage',
     sunOnWall: 'Variable by sub-area',
   },
   {
@@ -707,10 +706,9 @@ export const CRAGS = [
     trip: 'day',
     state: 'VIC',
     bestIn: 'cool',
-    closedAll: true,
-    closureReason: 'fire damage',
     sunOnWall: 'Variable by wall and bloc',
     notes: 'Roadside boulders and short walls on the western flank of Mt Alexander. Multiple blocs and faces give a mix of sun and shade. Granite dries within hours in good conditions.',
+    accessStatus: 'Check current Parks Victoria fire recovery conditions and follow on-site signs before visiting; some walking tracks and fire-affected areas may remain restricted.',
   },
   {
     id: 'harcourt-wabbitwocks',
@@ -729,10 +727,9 @@ export const CRAGS = [
     trip: 'day',
     state: 'VIC',
     bestIn: 'mild',
-    closedAll: true,
-    closureReason: 'fire damage',
     sunOnWall: 'Variable by wall and bloc',
     notes: 'Popular granite climbing area with slabs, cracks, boulders and short faces spread across several formations. Sun exposure varies by wall. Granite dries quickly in good conditions.',
+    accessStatus: 'Check current Parks Victoria fire recovery conditions and follow on-site signs before visiting; some walking tracks and fire-affected areas may remain restricted.',
   },
   {
     id: 'harcourt-scorpionrocks',
@@ -751,10 +748,9 @@ export const CRAGS = [
     trip: 'day',
     state: 'VIC',
     bestIn: 'warm',
-    closedAll: true,
-    closureReason: 'fire damage',
     sunOnWall: 'Variable by wall and bloc',
     notes: 'Quieter Sutton Grange-side climbing area with sport routes and bouldering across several formations. Sun exposure varies by wall and bloc.',
+    accessStatus: 'Check current Parks Victoria fire recovery conditions and follow on-site signs before visiting; some walking tracks and fire-affected areas may remain restricted.',
   },
 
   // – Arapiles sub-areas – 

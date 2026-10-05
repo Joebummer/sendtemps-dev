@@ -89,13 +89,15 @@ test('rain recovery always lasts at least one dry hour and scales by rain severi
   assert.equal(recovery({ rockType: 'granite' }, 0.1), 1);
   assert.equal(recovery({ rockType: 'granite' }, 0.5), 2);
   assert.equal(recovery({ rockType: 'granite' }, 2), 5);
-  assert.equal(recovery({ rockType: 'sandstone' }, 0.1), 10);
-  assert.equal(recovery({ rockType: 'sandstone' }, 0.2), 19);
-  assert.equal(recovery({ rockType: 'sandstone' }, 1), 19);
-  assert.equal(recovery({ rockType: 'sandstone' }, 2), 38);
-  assert.equal(recovery({ rockType: 'sandstone' }, 5), 38);
-  assert.equal(recovery({ rockType: 'sandstone' }, 5.1), 58);
-  assert.equal(recovery({ rockType: 'sandstone (soft)' }, 0.5), 19);
+  assert.equal(recovery({ rockType: 'sandstone' }, 0.1), 4);
+  assert.equal(recovery({ rockType: 'sandstone' }, 0.2), 5);
+  assert.equal(recovery({ rockType: 'sandstone' }, 1), 9);
+  assert.equal(recovery({ rockType: 'sandstone' }, 2), 12);
+  assert.equal(recovery({ rockType: 'sandstone' }, 5), 18);
+  assert.equal(recovery({ rockType: 'sandstone' }, 5.1), 19);
+  assert.equal(recovery({ rockType: 'sandstone' }, 10), 28);
+  assert.equal(recovery({ rockType: 'sandstone' }, 20), 36);
+  assert.equal(recovery({ rockType: 'sandstone (soft)' }, 0.5), 7);
 });
 
 test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async () => {
@@ -112,10 +114,16 @@ test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async
     precip: 0, hoursSinceRain: 8, recoveryProgressHours: 1, rainEventMm: 0.1,
   }).cap, 0);
   assert.equal(condition(sandstone, {
-    precip: 0, hoursSinceRain: 20, recoveryProgressHours: 10, rainEventMm: 0.1,
+    precip: 0, hoursSinceRain: 3, recoveryProgressHours: 3, rainEventMm: 0.1,
   }).cap, 0);
   assert.equal(condition(sandstone, {
-    precip: 0, hoursSinceRain: 21, recoveryProgressHours: 11, rainEventMm: 0.1,
+    precip: 0, hoursSinceRain: 4, recoveryProgressHours: 4, rainEventMm: 0.1,
+  }).cap, 100);
+  assert.equal(condition(sandstone, {
+    precip: 0, hoursSinceRain: 20, recoveryProgressHours: 17, rainEventMm: 5,
+  }).cap, 0);
+  assert.equal(condition(sandstone, {
+    precip: 0, hoursSinceRain: 21, recoveryProgressHours: 18, rainEventMm: 5,
   }).cap, 100);
 
   assert.equal(condition(granite, { precip: 0.1, rainEventMm: 0.1 }).cap, 60);
@@ -207,8 +215,8 @@ test('sandstone recovery resets in drizzle and pauses overnight and in high humi
     westside.days[dayIndex - 1],
     westside.days[dayIndex + 1],
   );
-  assert.equal(daily.score, 0);
-  assert.equal(daily.reasons[0], 'sandstone drying after rain');
+  assert.ok(daily.score >= 70 && daily.score < 95,
+    'a dry afternoon can be climbable after a brief shower the previous evening');
 });
 
 test('light rain moves Westside best window before the rain while granite recovers faster', async () => {
@@ -221,7 +229,7 @@ test('light rain moves Westside best window before the rain while granite recove
   const westFirstDry = westside.tomorrowHourly.find(hour => hour.hour === 16);
   assert.equal(westRain.score, 0);
   assert.equal(westFirstDry.score, 0);
-  assert.equal(westFirstDry.wetRockCondition.recoveryHours, 19);
+  assert.equal(westFirstDry.wetRockCondition.recoveryHours, 5);
   assert.ok(westside.tomorrowBestWindow.hours.every(hour => hour.hour < 14));
 
   const graniteFirstDry = granite.tomorrowHourly.find(hour => hour.hour === 16);

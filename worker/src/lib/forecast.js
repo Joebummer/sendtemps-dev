@@ -388,9 +388,8 @@ const MEASURABLE_RAIN_MM = 0.05;
 
 // Base recovery time grows with the accumulated rain in the current weather
 // event. Rock type then scales that time to reflect absorption and seepage.
-// Every rock gets at least one complete dry hour. Sandstone uses explicit,
-// deliberately conservative minimums because a dry-looking surface can still
-// be fragile below the surface.
+// Every rock gets at least one complete dry hour. Sandstone uses productive
+// drying hours because a dry-looking surface can still be fragile below it.
 const RAIN_RECOVERY_MULTIPLIER = {
   granite: 1,
   rhyolite: 1,
@@ -433,10 +432,12 @@ export function rainRecoveryHours(crag, eventMm) {
   if (!Number.isFinite(eventMm) || eventMm < MEASURABLE_RAIN_MM) return 0;
   const rock = canonicalRockType(crag);
   if (rock === 'sandstone') {
-    if (eventMm < 0.2) return 10;
-    if (eventMm <= 1) return 19;
-    if (eventMm <= 5) return 38;
-    return 58;
+    // Scale smoothly with accumulated rain. The old step at 0.2 mm made a
+    // brief shower require 19 useful daylight hours and several calendar days.
+    // Even the lightest measurable rain still needs multiple drying hours.
+    return Math.ceil(interpolate([
+      [0.05, 3], [0.2, 5], [1, 9], [5, 18], [10, 28], [20, 36],
+    ], eventMm));
   }
   const multiplier = RAIN_RECOVERY_MULTIPLIER[rock] ?? 1.5;
   return Math.max(1, Math.min(72, Math.ceil(baseRainRecoveryHours(eventMm) * multiplier)));
@@ -460,7 +461,8 @@ export function wetRockCondition(crag, hour) {
   }
 
   const recoveryHours = rainRecoveryHours(crag, rainEventMm);
-  if (recoveryProgressHours == null || recoveryHours === 0 || recoveryProgressHours > recoveryHours) {
+  if (recoveryProgressHours == null || recoveryHours === 0 ||
+      (rock === 'sandstone' ? recoveryProgressHours >= recoveryHours : recoveryProgressHours > recoveryHours)) {
     return { cap: 100, label: null, detail: null, recoveryHours };
   }
 

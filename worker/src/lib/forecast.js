@@ -385,6 +385,11 @@ function canonicalRockType(crag) {
 // positive reported amount as measurable rather than letting drizzle round
 // away to a perfect climbing hour.
 const MEASURABLE_RAIN_MM = 0.05;
+const SANDSTONE_TRACE_MM = 0.1;
+
+function isSandstoneTrace(eventMm) {
+  return eventMm <= SANDSTONE_TRACE_MM + 1e-9;
+}
 
 // Base recovery time grows with the accumulated rain in the current weather
 // event. Rock type then scales that time to reflect absorption and seepage.
@@ -432,9 +437,9 @@ export function rainRecoveryHours(crag, eventMm) {
   if (!Number.isFinite(eventMm) || eventMm < MEASURABLE_RAIN_MM) return 0;
   const rock = canonicalRockType(crag);
   if (rock === 'sandstone') {
-    // A trace of drizzle should not impose the same multi-hour Avoid period
-    // as a shower. Keep at least one complete productive drying hour and
-    // scale up quickly as the event accumulates beyond 0.1 mm.
+    // A single 0.1 mm trace does not start sandstone recovery. Accumulated
+    // rain above that threshold retains the severity-scaled drying curve.
+    if (isSandstoneTrace(eventMm)) return 0;
     return Math.ceil(interpolate([
       [0.05, 1], [0.1, 2], [0.2, 4], [1, 9], [5, 18], [10, 28], [20, 36],
     ], eventMm));
@@ -451,6 +456,10 @@ export function wetRockCondition(crag, hour) {
     : hoursSinceRain;
   const rainEventMm = Number.isFinite(hour?.rainEventMm) ? hour.rainEventMm : rain;
   const rock = canonicalRockType(crag);
+
+  if (rock === 'sandstone' && isSandstoneTrace(Math.max(rain, rainEventMm))) {
+    return { cap: 100, label: null, detail: null, recoveryHours: 0 };
+  }
 
   if (rain >= MEASURABLE_RAIN_MM) {
     return {
@@ -1037,6 +1046,7 @@ function computeDrynessSeries(crag, hourly) {
   let hoursSinceRain = null;
   let recoveryProgressHours = null;
   let rainEventMm = 0;
+  let lastRainIndex = null;
   const series = new Array(n);
 
   for (let i = 0; i < n; i++) {
@@ -1054,14 +1064,27 @@ function computeDrynessSeries(crag, hourly) {
     const effectiveWind = Math.max(wind, gust * 0.7);
     const atmosphericDeltaT = hourly.delta_t_2m?.[i] ?? deltaT(t, rh) ?? 3.5;
 
-    // Track rain events separately from absorbed wetness. Showers separated by
-    // no more than two dry hours remain part of one event; later rain resets a
-    // completed recovery clock and starts a new event.
+    // Track trace accumulation even before sandstone needs a recovery clock.
+    // Group rain separated by at most two dry hours. A later trace must not
+    // replace a heavier sandstone event while that event is still drying.
     if (mm >= MEASURABLE_RAIN_MM) {
-      if (hoursSinceRain == null || hoursSinceRain > 2) rainEventMm = 0;
+      if (rock === 'sandstone') {
+        const sameEvent = lastRainIndex != null && i - lastRainIndex <= 3;
+        const stillRecovering = recoveryProgressHours != null &&
+          recoveryProgressHours < rainRecoveryHours(crag, rainEventMm);
+        if (!sameEvent && !stillRecovering) rainEventMm = 0;
+      } else if (hoursSinceRain == null || hoursSinceRain > 2) {
+        rainEventMm = 0;
+      }
       rainEventMm += mm;
-      hoursSinceRain = 0;
-      recoveryProgressHours = 0;
+      lastRainIndex = i;
+      if (rock !== 'sandstone' || !isSandstoneTrace(rainEventMm)) {
+        hoursSinceRain = 0;
+        recoveryProgressHours = 0;
+      } else {
+        hoursSinceRain = null;
+        recoveryProgressHours = null;
+      }
     } else if (hoursSinceRain != null) {
       hoursSinceRain += 1;
       if (rock === 'sandstone') {
@@ -1135,7 +1158,7 @@ function computeDrynessSeries(crag, hourly) {
       dryness,
       hoursSinceRain,
       recoveryProgressHours,
-      rainEventMm: Math.round(rainEventMm * 10) / 10,
+      rainEventMm: Math.round(rainEventMm * 1000) / 1000,
     };
   }
   return series;

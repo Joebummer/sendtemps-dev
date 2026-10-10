@@ -432,11 +432,11 @@ export function rainRecoveryHours(crag, eventMm) {
   if (!Number.isFinite(eventMm) || eventMm < MEASURABLE_RAIN_MM) return 0;
   const rock = canonicalRockType(crag);
   if (rock === 'sandstone') {
-    // Scale smoothly with accumulated rain. The old step at 0.2 mm made a
-    // brief shower require 19 useful daylight hours and several calendar days.
-    // Even the lightest measurable rain still needs multiple drying hours.
+    // A trace of drizzle should not impose the same multi-hour Avoid period
+    // as a shower. Keep at least one complete productive drying hour and
+    // scale up quickly as the event accumulates beyond 0.1 mm.
     return Math.ceil(interpolate([
-      [0.05, 3], [0.2, 5], [1, 9], [5, 18], [10, 28], [20, 36],
+      [0.05, 1], [0.1, 2], [0.2, 4], [1, 9], [5, 18], [10, 28], [20, 36],
     ], eventMm));
   }
   const multiplier = RAIN_RECOVERY_MULTIPLIER[rock] ?? 1.5;

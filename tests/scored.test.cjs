@@ -89,15 +89,16 @@ test('rain recovery always lasts at least one dry hour and scales by rain severi
   assert.equal(recovery({ rockType: 'granite' }, 0.1), 1);
   assert.equal(recovery({ rockType: 'granite' }, 0.5), 2);
   assert.equal(recovery({ rockType: 'granite' }, 2), 5);
-  assert.equal(recovery({ rockType: 'sandstone' }, 0.1), 4);
-  assert.equal(recovery({ rockType: 'sandstone' }, 0.2), 5);
+  assert.equal(recovery({ rockType: 'sandstone' }, 0.05), 1);
+  assert.equal(recovery({ rockType: 'sandstone' }, 0.1), 2);
+  assert.equal(recovery({ rockType: 'sandstone' }, 0.2), 4);
   assert.equal(recovery({ rockType: 'sandstone' }, 1), 9);
   assert.equal(recovery({ rockType: 'sandstone' }, 2), 12);
   assert.equal(recovery({ rockType: 'sandstone' }, 5), 18);
   assert.equal(recovery({ rockType: 'sandstone' }, 5.1), 19);
   assert.equal(recovery({ rockType: 'sandstone' }, 10), 28);
   assert.equal(recovery({ rockType: 'sandstone' }, 20), 36);
-  assert.equal(recovery({ rockType: 'sandstone (soft)' }, 0.5), 7);
+  assert.equal(recovery({ rockType: 'sandstone (soft)' }, 0.5), 6);
 });
 
 test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async () => {
@@ -114,10 +115,13 @@ test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async
     precip: 0, hoursSinceRain: 8, recoveryProgressHours: 1, rainEventMm: 0.1,
   }).cap, 0);
   assert.equal(condition(sandstone, {
-    precip: 0, hoursSinceRain: 3, recoveryProgressHours: 3, rainEventMm: 0.1,
+    precip: 0, hoursSinceRain: 2, recoveryProgressHours: 2, rainEventMm: 0.1,
+  }).cap, 100);
+  assert.equal(condition(sandstone, {
+    precip: 0, hoursSinceRain: 3, recoveryProgressHours: 3, rainEventMm: 0.2,
   }).cap, 0);
   assert.equal(condition(sandstone, {
-    precip: 0, hoursSinceRain: 4, recoveryProgressHours: 4, rainEventMm: 0.1,
+    precip: 0, hoursSinceRain: 4, recoveryProgressHours: 4, rainEventMm: 0.2,
   }).cap, 100);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 20, recoveryProgressHours: 17, rainEventMm: 5,
@@ -169,6 +173,33 @@ function lightRainFixture(url) {
   }
   return forecasts;
 }
+
+function cathedralTraceFixture(url) {
+  const forecasts = weatherFixture(url);
+  for (const forecast of forecasts) {
+    const rainIndex = forecast.hourly.time.indexOf('2026-09-14T12:00');
+    forecast.hourly.precipitation[rainIndex] = 0.1;
+    forecast.hourly.weathercode[rainIndex] = 51;
+    const dayIndex = forecast.daily.time.indexOf('2026-09-14');
+    forecast.daily.precipitation_sum[dayIndex] = 0.1;
+    forecast.daily.weathercode[dayIndex] = 51;
+  }
+  return forecasts;
+}
+
+test('a noon trace at Cathedral Ranges recovers after two productive dry hours', async () => {
+  const harness = await loadWorker(async url => Response.json(cathedralTraceFixture(url)));
+  const cathedral = (await harness.forecasts.fetchAllForecasts('VIC'))['cathedral-main'];
+  const byHour = hour => cathedral.tomorrowHourly.find(cell => cell.hour === hour);
+
+  assert.equal(cathedral.days.find(day => day.date === '2026-09-14').precipSum, 0.1);
+  assert.equal(byHour(12).score, 0, 'sandstone is avoided while rain is falling');
+  assert.equal(byHour(13).score, 0, 'the first complete dry hour remains capped');
+  assert.equal(byHour(13).wetRockCondition.recoveryHours, 2);
+  assert.equal(byHour(14).wetRockCondition, undefined);
+  assert.ok(byHour(14).score > 0, 'a brief trace no longer zeros the whole afternoon');
+  assert.ok(cathedral.tomorrowBestWindow.hours.every(hour => hour.hour < 12));
+});
 
 function sandstoneRecoveryFixture(url) {
   const forecasts = weatherFixture(url);
@@ -229,7 +260,7 @@ test('light rain moves Westside best window before the rain while granite recove
   const westFirstDry = westside.tomorrowHourly.find(hour => hour.hour === 16);
   assert.equal(westRain.score, 0);
   assert.equal(westFirstDry.score, 0);
-  assert.equal(westFirstDry.wetRockCondition.recoveryHours, 5);
+  assert.equal(westFirstDry.wetRockCondition.recoveryHours, 4);
   assert.ok(westside.tomorrowBestWindow.hours.every(hour => hour.hour < 14));
 
   const graniteFirstDry = granite.tomorrowHourly.find(hour => hour.hour === 16);

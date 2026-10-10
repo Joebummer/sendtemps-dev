@@ -82,7 +82,7 @@ test('best window excludes 6am while preserving it in the hourly strip', async (
   assert.equal(window.avg, 40);
 });
 
-test('rain recovery exempts sandstone traces and scales measurable events by rock type', async () => {
+test('rain recovery exempts sandstone events below 1 mm and scales heavier rain by rock type', async () => {
   const harness = await loadWorker();
   const recovery = harness.forecasts.rainRecoveryHours;
 
@@ -92,15 +92,18 @@ test('rain recovery exempts sandstone traces and scales measurable events by roc
   assert.equal(recovery({ rockType: 'sandstone' }, 0.05), 0);
   assert.equal(recovery({ rockType: 'sandstone' }, 0.1), 0);
   assert.equal(recovery({ rockType: 'sandstone (soft)' }, 0.1), 0);
-  assert.ok(recovery({ rockType: 'sandstone' }, 0.11) > 0);
-  assert.equal(recovery({ rockType: 'sandstone' }, 0.2), 4);
+  for (const mm of [0.11, 0.2, 0.5, 0.9, 0.99]) {
+    assert.equal(recovery({ rockType: 'sandstone' }, mm), 0, `${mm} mm stays exempt`);
+  }
+  const accumulated = Array(10).fill(0.1).reduce((sum, mm) => sum + mm, 0);
+  assert.equal(recovery({ rockType: 'sandstone' }, accumulated), 9);
   assert.equal(recovery({ rockType: 'sandstone' }, 1), 9);
   assert.equal(recovery({ rockType: 'sandstone' }, 2), 12);
   assert.equal(recovery({ rockType: 'sandstone' }, 5), 18);
   assert.equal(recovery({ rockType: 'sandstone' }, 5.1), 19);
   assert.equal(recovery({ rockType: 'sandstone' }, 10), 28);
   assert.equal(recovery({ rockType: 'sandstone' }, 20), 36);
-  assert.equal(recovery({ rockType: 'sandstone (soft)' }, 0.5), 6);
+  assert.equal(recovery({ rockType: 'sandstone (soft)' }, 0.5), 0);
 });
 
 test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async () => {
@@ -110,21 +113,24 @@ test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async
   const granite = { rockType: 'granite' };
 
   assert.equal(condition(sandstone, { precip: 0.1, rainEventMm: 0.1 }).cap, 100);
-  assert.equal(condition(sandstone, { precip: 0.11, rainEventMm: 0.11 }).cap, 0);
+  for (const mm of [0.2, 0.5, 0.99]) {
+    assert.equal(condition(sandstone, { precip: mm, rainEventMm: mm }).cap, 100);
+  }
+  assert.equal(condition(sandstone, { precip: 1, rainEventMm: 1 }).cap, 0);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 8, recoveryProgressHours: 0, rainEventMm: 0.1,
   }).cap, 100);
   assert.equal(condition(sandstone, {
-    precip: 0, hoursSinceRain: 8, recoveryProgressHours: 1, rainEventMm: 0.2,
+    precip: 0, hoursSinceRain: 8, recoveryProgressHours: 1, rainEventMm: 1,
   }).cap, 0);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 2, recoveryProgressHours: 2, rainEventMm: 0.1,
   }).cap, 100);
   assert.equal(condition(sandstone, {
-    precip: 0, hoursSinceRain: 3, recoveryProgressHours: 3, rainEventMm: 0.2,
+    precip: 0, hoursSinceRain: 8, recoveryProgressHours: 8, rainEventMm: 1,
   }).cap, 0);
   assert.equal(condition(sandstone, {
-    precip: 0, hoursSinceRain: 4, recoveryProgressHours: 4, rainEventMm: 0.2,
+    precip: 0, hoursSinceRain: 9, recoveryProgressHours: 9, rainEventMm: 1,
   }).cap, 100);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 20, recoveryProgressHours: 17, rainEventMm: 5,
@@ -177,25 +183,25 @@ function lightRainFixture(url) {
   return forecasts;
 }
 
-function cathedralTraceFixture(url) {
+function cathedralTraceFixture(url, mm = 0.1) {
   const forecasts = weatherFixture(url);
   for (const forecast of forecasts) {
     const rainIndex = forecast.hourly.time.indexOf('2026-09-14T12:00');
-    forecast.hourly.precipitation[rainIndex] = 0.1;
+    forecast.hourly.precipitation[rainIndex] = mm;
     forecast.hourly.weathercode[rainIndex] = 51;
     const dayIndex = forecast.daily.time.indexOf('2026-09-14');
-    forecast.daily.precipitation_sum[dayIndex] = 0.1;
+    forecast.daily.precipitation_sum[dayIndex] = mm;
     forecast.daily.weathercode[dayIndex] = 51;
   }
   return forecasts;
 }
 
-test('a single noon trace at Cathedral Ranges starts no sandstone cap or recovery clock', async () => {
-  const harness = await loadWorker(async url => Response.json(cathedralTraceFixture(url)));
+test('a noon 0.2 mm shower at Cathedral Ranges starts no sandstone cap or recovery clock', async () => {
+  const harness = await loadWorker(async url => Response.json(cathedralTraceFixture(url, 0.2)));
   const cathedral = (await harness.forecasts.fetchAllForecasts('VIC'))['cathedral-main'];
   const byHour = hour => cathedral.tomorrowHourly.find(cell => cell.hour === hour);
 
-  assert.equal(cathedral.days.find(day => day.date === '2026-09-14').precipSum, 0.1);
+  assert.equal(cathedral.days.find(day => day.date === '2026-09-14').precipSum, 0.2);
   for (const hour of [12, 13, 14, 15, 16]) {
     assert.ok(byHour(hour).score > 0, `a single trace must not zero ${hour}:00`);
     assert.equal(byHour(hour).wetRockCondition, undefined);
@@ -205,9 +211,9 @@ test('a single noon trace at Cathedral Ranges starts no sandstone cap or recover
   }
 });
 
-test('nearby sandstone traces accumulate into a measurable event', async () => {
+test('nearby sandstone rain accumulates into a 1 mm event', async () => {
   const harness = await loadWorker(async url => {
-    const forecasts = cathedralTraceFixture(url);
+    const forecasts = cathedralTraceFixture(url, 0.9);
     for (const f of forecasts) {
       f.hourly.precipitation[f.hourly.time.indexOf('2026-09-14T13:00')] = 0.1;
     }
@@ -215,9 +221,9 @@ test('nearby sandstone traces accumulate into a measurable event', async () => {
   });
   const cathedral = (await harness.forecasts.fetchAllForecasts('VIC'))['cathedral-main'];
   const byHour = hour => cathedral.tomorrowHourly.find(cell => cell.hour === hour);
-  assert.ok(byHour(12).score > 0, 'the first trace remains exempt');
-  assert.equal(byHour(13).score, 0, 'the combined 0.2 mm event triggers the cap');
-  assert.equal(byHour(14).wetRockCondition.recoveryHours, 4);
+  assert.ok(byHour(12).score > 0, 'the initial 0.9 mm remains exempt');
+  assert.equal(byHour(13).score, 0, 'the combined 1 mm event triggers the cap');
+  assert.equal(byHour(14).wetRockCondition.recoveryHours, 9);
 });
 
 test('an isolated trace cannot replace an unfinished heavier sandstone recovery', async () => {
@@ -260,7 +266,7 @@ function sandstoneRecoveryFixture(url) {
       forecast.hourly.shortwave_radiation[i] = hour >= 7 && hour < 20 ? 300 : 0;
     }
     const rainIndex = forecast.hourly.time.indexOf('2026-09-13T18:00');
-    forecast.hourly.precipitation[rainIndex] = 0.2;
+    forecast.hourly.precipitation[rainIndex] = 1;
     const drizzleIndex = forecast.hourly.time.indexOf('2026-09-13T20:00');
     forecast.hourly.precipitation[drizzleIndex] = 0.1;
     for (const hour of [7, 8]) {
@@ -332,18 +338,11 @@ test('sandstone recovery resets in drizzle and pauses overnight and in high humi
   for (const hour of [6, 7, 8]) {
     assert.equal(westside.tomorrowHourly.find(cell => cell.hour === hour).score, 0);
   }
-  const dayIndex = westside.days.findIndex(day => day.date === '2026-09-14');
-  const daily = harness.forecasts.scoreDay(
-    westside.crag,
-    westside.days[dayIndex],
-    westside.days[dayIndex - 1],
-    westside.days[dayIndex + 1],
-  );
-  assert.ok(daily.score >= 70 && daily.score < 95,
-    'a dry afternoon can be climbable after a brief shower the previous evening');
+  assert.equal(westside.tomorrowHourly.find(hour => hour.hour === 14).score, 0,
+    'the heavier event still needs its full productive drying interval');
 });
 
-test('light rain moves Westside best window before the rain while granite recovers faster', async () => {
+test('0.2 mm events skip sandstone recovery while granite retains its dry-hour interval', async () => {
   const rainyHarness = await loadWorker(async url => Response.json(lightRainFixture(url)));
   const forecasts = await rainyHarness.forecasts.fetchAllForecasts('NSW');
   const westside = forecasts['westside-main'];
@@ -351,10 +350,10 @@ test('light rain moves Westside best window before the rain while granite recove
 
   const westRain = westside.tomorrowHourly.find(hour => hour.hour === 15);
   const westFirstDry = westside.tomorrowHourly.find(hour => hour.hour === 16);
-  assert.equal(westRain.score, 0);
-  assert.equal(westFirstDry.score, 0);
-  assert.equal(westFirstDry.wetRockCondition.recoveryHours, 4);
-  assert.ok(westside.tomorrowBestWindow.hours.every(hour => hour.hour < 14));
+  assert.ok(westRain.score > 0);
+  assert.ok(westFirstDry.score > 0);
+  assert.equal(westRain.wetRockCondition, undefined);
+  assert.equal(westFirstDry.wetRockCondition, undefined);
 
   const graniteFirstDry = granite.tomorrowHourly.find(hour => hour.hour === 16);
   const graniteRecovered = granite.tomorrowHourly.find(hour => hour.hour === 17);

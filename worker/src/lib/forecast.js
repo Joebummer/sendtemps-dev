@@ -385,10 +385,11 @@ function canonicalRockType(crag) {
 // positive reported amount as measurable rather than letting drizzle round
 // away to a perfect climbing hour.
 const MEASURABLE_RAIN_MM = 0.05;
-const SANDSTONE_TRACE_MM = 0.1;
+const SANDSTONE_RECOVERY_MM = 1;
 
-function isSandstoneTrace(eventMm) {
-  return eventMm <= SANDSTONE_TRACE_MM + 1e-9;
+function isBelowSandstoneThreshold(eventMm) {
+  // Ten 0.1 mm readings can total slightly less than 1 in floating point.
+  return eventMm < SANDSTONE_RECOVERY_MM - 1e-9;
 }
 
 // Base recovery time grows with the accumulated rain in the current weather
@@ -437,9 +438,9 @@ export function rainRecoveryHours(crag, eventMm) {
   if (!Number.isFinite(eventMm) || eventMm < MEASURABLE_RAIN_MM) return 0;
   const rock = canonicalRockType(crag);
   if (rock === 'sandstone') {
-    // A single 0.1 mm trace does not start sandstone recovery. Accumulated
-    // rain above that threshold retains the severity-scaled drying curve.
-    if (isSandstoneTrace(eventMm)) return 0;
+    // Events below 1 mm do not start sandstone recovery. At 1 mm and above,
+    // retain the severity-scaled drying curve.
+    if (isBelowSandstoneThreshold(eventMm)) return 0;
     return Math.ceil(interpolate([
       [0.05, 1], [0.1, 2], [0.2, 4], [1, 9], [5, 18], [10, 28], [20, 36],
     ], eventMm));
@@ -457,7 +458,7 @@ export function wetRockCondition(crag, hour) {
   const rainEventMm = Number.isFinite(hour?.rainEventMm) ? hour.rainEventMm : rain;
   const rock = canonicalRockType(crag);
 
-  if (rock === 'sandstone' && isSandstoneTrace(Math.max(rain, rainEventMm))) {
+  if (rock === 'sandstone' && isBelowSandstoneThreshold(Math.max(rain, rainEventMm))) {
     return { cap: 100, label: null, detail: null, recoveryHours: 0 };
   }
 
@@ -1078,7 +1079,7 @@ function computeDrynessSeries(crag, hourly) {
       }
       rainEventMm += mm;
       lastRainIndex = i;
-      if (rock !== 'sandstone' || !isSandstoneTrace(rainEventMm)) {
+      if (rock !== 'sandstone' || !isBelowSandstoneThreshold(rainEventMm)) {
         hoursSinceRain = 0;
         recoveryProgressHours = 0;
       } else {

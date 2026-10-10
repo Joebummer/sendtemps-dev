@@ -2760,9 +2760,9 @@ export function rankByDay(forecasts, dayDates) {
         pastPrecip: fc.pastPrecip,
       });
     }
-    // Destination cards display the best subcrag's score. Keep the parent
-    // card's tags aligned with that same subcrag and record its ID so the API
-    // response can align the parent card's hourly strip as well.
+    // Destination cards and hourly strips represent the best subcrag. Use
+    // that same forecast for the daily weather, score and explanation too;
+    // mixing the parent's trace forecast with a child's shower is misleading.
     const rowById = new Map(rows.map(row => [row.crag.id, row]));
     const childrenByParent = new Map();
     for (const row of rows) {
@@ -2774,9 +2774,9 @@ export function rankByDay(forecasts, dayDates) {
       const best = children.reduce((current, candidate) =>
         candidate.score > current.score ? candidate : current);
       const parent = rowById.get(parentId);
-      parent.reasons = [...best.reasons];
-      parent.seasonalContext = best.seasonalContext;
-      parent.bestSubcragId = best.crag.id;
+      if (parent.contributions.some(c => c.category === 'closure')) continue;
+      const { crag: bestCrag, ...conditions } = best;
+      Object.assign(parent, conditions, { bestSubcragId: bestCrag.id });
     }
 
     rows.sort((a, b) => b.score - a.score);

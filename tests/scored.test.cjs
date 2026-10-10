@@ -271,6 +271,48 @@ function sandstoneRecoveryFixture(url) {
   return forecasts;
 }
 
+test('destination weather, score and hourly strip use the same best-subcrag forecast', async () => {
+  const harness = await loadWorker(async url => {
+    const params = new URL(url).searchParams;
+    const lats = params.get('latitude').split(',');
+    const lons = params.get('longitude').split(',');
+    const forecasts = weatherFixture(url).map((f, i) => {
+      const copy = structuredClone(f);
+      const mm = lats[i] === '-37.3667' && lons[i] === '145.7333' ? 0.1 : 0.2;
+      copy.hourly.precipitation[copy.hourly.time.indexOf('2026-09-14T12:00')] = mm;
+      copy.daily.precipitation_sum[copy.daily.time.indexOf('2026-09-14')] = mm;
+      return copy;
+    });
+    return Response.json(forecasts);
+  });
+  const response = await harness.worker.fetch(
+    new Request('https://api.test/forecast/scored?region=VIC'), {}, harness.ctx,
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const rows = body.byDate['2026-09-14'];
+  const parent = rows.find(r => r.cragId === 'cathedral-main');
+  const best = rows.find(r => r.cragId === parent.bestSubcragId);
+  assert.equal(parent.day.precipSum, 0.2, 'daily rain matches the selected subcrag');
+  for (const key of ['day', 'prevDay', 'score', 'scoreBasis', 'scoreWindow', 'reasons', 'contributions']) {
+    assert.deepEqual(parent[key], best[key], key);
+  }
+  assert.deepEqual(body.today[parent.cragId].tomorrowHourly, body.today[best.cragId].tomorrowHourly);
+  assert.equal(body.today[parent.cragId].tomorrowHourly.find(h => h.hour === 12).precip, 0.2);
+});
+
+test('a destination closure cannot be replaced by open child conditions', async () => {
+  const harness = await loadWorker(async url => Response.json(weatherFixture(url)));
+  const forecasts = await harness.forecasts.fetchAllForecasts('VIC');
+  forecasts['cathedral-main'].crag = { ...forecasts['cathedral-main'].crag, closedAll: true };
+  const parent = harness.forecasts.rankByDay(forecasts, ['2026-09-14'])['2026-09-14']
+    .find(row => row.crag.id === 'cathedral-main');
+  assert.equal(parent.score, 0);
+  assert.equal(parent.scoreBasis, 'closure');
+  assert.equal(parent.bestSubcragId, undefined);
+  assert.ok(parent.contributions.some(c => c.category === 'closure'));
+});
+
 test('sandstone recovery resets in drizzle and pauses overnight and in high humidity', async () => {
   const harness = await loadWorker(async url => Response.json(sandstoneRecoveryFixture(url)));
   const forecasts = await harness.forecasts.fetchAllForecasts('NSW');

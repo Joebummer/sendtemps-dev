@@ -70,6 +70,26 @@ async function loadCrags(relativePath) {
 }
 
 async function main() {
+  // Temporary CI-only outage diagnostic. No production or secret dependencies.
+  if (process.env.CI) {
+    const regions = ['VIC', 'NSW', 'TAS', 'ALL'];
+    await Promise.all(regions.map(async region => {
+      const started = Date.now();
+      try {
+        const res = await fetch('https://api.sendtemps.app/forecast/scored?region=' + region, {
+          signal: AbortSignal.timeout(36000),
+          headers: { Accept: 'application/json' },
+        });
+        const message = res.ok ? 'OK, cache=' + res.headers.get('X-SendTemps-Cache') : (await res.text()).slice(0, 350);
+        console.log('LIVE DIAGNOSTIC ' + region + ': HTTP ' + res.status +
+          ' after ' + (Date.now() - started) + 'ms: ' + message);
+        if (res.body) await res.body.cancel().catch(() => {});
+      } catch (error) {
+        console.log('LIVE DIAGNOSTIC ' + region + ': ' + error.message +
+          ' after ' + (Date.now() - started) + 'ms');
+      }
+    }));
+  }
   for (const file of ['worker/src/lib/crags.js', 'webapp/crags.js']) {
     const crags = await loadCrags(file);
     const errors = validateCrags(crags);

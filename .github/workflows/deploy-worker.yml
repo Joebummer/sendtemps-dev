@@ -32,7 +32,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      # Keep malformed crag records from reaching production. The full regression suite\n      # remains available locally, but legacy web-app parity tests are not a deploy gate.\n      - run: npm run validate:crags
+      # Keep malformed crag records from reaching production. The full regression suite
+      # remains available locally, but legacy web-app parity tests are not a deploy gate.
+      - run: npm run validate:crags
+      - name: Check API protections
+        run: node --experimental-vm-modules --test tests/worker.test.cjs tests/api-protection.test.cjs
 
   deploy:
     needs: validate
@@ -48,6 +52,7 @@ jobs:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           workingDirectory: worker
+          wranglerVersion: "4.151.2"
           secrets: |
             VAPID_PUBLIC_KEY
             VAPID_PRIVATE_KEY

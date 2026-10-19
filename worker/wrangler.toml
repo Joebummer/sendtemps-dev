@@ -13,3 +13,18 @@ crons = ["0 21 * * *"]
 cpu_ms = 10000
 
 # Deployed via GitHub Actions
+
+# Coarse burst protection for the anonymous public API. Deliberately generous
+# because mobile carriers may place multiple climbers behind one IP address.
+[[ratelimits]]
+name = "PUBLIC_API_LIMITER"
+namespace_id = "2026102001"
+simple = { limit = 600, period = 60 }
+
+# Shared by every outbound weather/marine request, including provider retries
+# and scheduled alerts. Cache hits do not consume this allowance. Cloudflare
+# enforces these counters per location; this is not a monthly billing cap.
+[[ratelimits]]
+name = "WEATHER_REQUEST_LIMITER"
+namespace_id = "2026102002"
+simple = { limit = 30, period = 60 }

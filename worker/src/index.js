@@ -288,7 +288,7 @@ async function checkRareWindows(env) {
 
   for (const crag of VIC_CRAGS) {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${crag.lat}&longitude=${crag.lon}&daily=temperature_2m_max,relative_humidity_2m_mean,wind_speed_10m_max&forecast_days=7&timezone=Australia%2FMelbourne`;
-    const res = await fetchOpenMeteo(url, env.OPEN_METEO_API_KEY);
+    const res = await fetchOpenMeteo(url, env.OPEN_METEO_API_KEY, env.WEATHER_REQUEST_LIMITER);
     const data = await res.json();
     const { time, temperature_2m_max, relative_humidity_2m_mean, wind_speed_10m_max } = data.daily;
 
@@ -369,51 +369,91 @@ async function handleRedeem(env, url, corsHeaders, ctx) {
 
 const FORECAST_CACHE_TTL = 900; // 15 minutes — forecasts don't need to be fresher than this
 
-async function handleForecastProxy(request, url, corsHeaders, ctx, env) {
-  const cache = caches.default;
-  // The query string (batched crag lat/lons) is identical for every client
-  // viewing the same region filter on the same app version, so this key is
-  // shared across all of them — one cache entry per region (VIC, TAS, …, or
-  // ALL) rather than one giant shared entry for the whole country.
-  const cacheKey = new Request(url.toString(), { method: 'GET' });
+// Share only fully buffered data, never a response stream, between requests in
+// the same isolate. Edge caching handles later requests; this closes the gap
+// while the first miss is still fetching/scoring and committing its cache entry.
+const forecastRefreshes = new Map();
+const scoredRefreshes = new Map();
+async function shareRefresh(inflight, key, refresh) {
+  if (inflight.has(key)) return inflight.get(key);
+  const pending = refresh();
+  inflight.set(key, pending);
+  try { return await pending; }
+  finally { if (inflight.get(key) === pending) inflight.delete(key); }
+}
 
-  const cached = await cache.match(cacheKey);
-  if (cached) {
-    const res = new Response(cached.body, cached);
-    for (const [k, v] of Object.entries(corsHeaders)) res.headers.set(k, v);
-    // Keep the 15-minute cache at Cloudflare, but make clients revalidate so
-    // regional payloads cannot remain stale on-device after a crag-data deploy.
-    res.headers.set('Cache-Control', 'no-store');
-    res.headers.set('X-SendTemps-Cache', 'HIT');
-    return res;
+const PROXY_PARAMETERS = [
+  'latitude', 'longitude', 'daily', 'hourly', 'timezone', 'forecast_days',
+  'past_days', 'temperature_unit', 'wind_speed_unit', 'windspeed_unit',
+  'precipitation_unit', 'timeformat', 'elevation',
+];
+function forecastQuery(url) {
+  const params = new URLSearchParams();
+  for (const name of PROXY_PARAMETERS) {
+    if (url.searchParams.has(name)) params.set(name, url.searchParams.get(name));
   }
-
-  const upstreamUrl = `https://api.open-meteo.com/v1/forecast?${url.searchParams.toString()}`;
-  const upstream = await fetchOpenMeteo(upstreamUrl, env.OPEN_METEO_API_KEY);
-
-  if (!upstream.ok) {
-    // Upstream is failing (e.g. 429) and we have nothing cached yet — pass the
-    // status through so the client's existing retry/backoff still applies.
-    return new Response(JSON.stringify({ error: `Forecast API error ${upstream.status}` }), { status: upstream.status, headers: corsHeaders });
+  const coordinates = ['latitude', 'longitude'].map(name => (params.get(name) || '').split(','));
+  if (coordinates[0].length !== coordinates[1].length || coordinates[0].length > CRAGS.length) return null;
+  if (coordinates.some((values, axis) => values.some(value =>
+    !value.trim() || !Number.isFinite(Number(value)) || Math.abs(Number(value)) > (axis ? 180 : 90)))) return null;
+  for (const [name, min, max] of [['forecast_days', 1, 10], ['past_days', 0, 4]]) {
+    if (params.has(name) && (!/^\d+$/.test(params.get(name)) || Number(params.get(name)) < min || Number(params.get(name)) > max)) return null;
   }
+  const variables = ['daily', 'hourly'].flatMap(name => params.has(name) ? params.get(name).split(',') : []);
+  if (variables.length > 40 || variables.some(value => !/^[a-z][a-z0-9_]{0,79}$/.test(value))) return null;
+  if (params.has('elevation')) {
+    const values = params.get('elevation').split(',');
+    if (![1, coordinates[0].length].includes(values.length) || values.some(value =>
+      value !== 'nan' && (!value.trim() || !Number.isFinite(Number(value)) || Math.abs(Number(value)) > 10000))) return null;
+  }
+  if (['timezone', 'temperature_unit', 'wind_speed_unit', 'windspeed_unit', 'precipitation_unit', 'timeformat']
+    .some(name => (params.get(name) || '').length > 64 || (params.get(name) || '').includes(','))) return null;
+  // Ignore client keys, cache-busters and unsupported provider options. Sort
+  // supported parameters so query order cannot create another paid cache miss.
+  params.sort();
+  return params;
+}
 
-  const body = await upstream.text();
-  const response = new Response(body, {
-    status: 200,
-    headers: {
-      ...corsHeaders,
-      'Cache-Control': `public, max-age=${FORECAST_CACHE_TTL}`,
-      'X-SendTemps-Cache': 'MISS',
-    },
+function weatherError(error, corsHeaders) {
+  const limited = error.status === 429;
+  const safeMessage = /^(Forecast|Marine) API error \d{3}$/.test(error.message)
+    ? error.message : 'Weather provider request failed';
+  return new Response(JSON.stringify({ error: limited ? 'Please retry shortly' : safeMessage }), {
+    status: limited ? 429 : 502,
+    headers: { ...corsHeaders, 'Cache-Control': 'no-store', ...(limited ? { 'Retry-After': '60' } : {}) },
   });
+}
 
-  // Store for the next request without delaying this one.
-  if (ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, response.clone()));
-  else await cache.put(cacheKey, response.clone());
-
-  const clientResponse = new Response(response.body, response);
-  clientResponse.headers.set('Cache-Control', 'no-store');
-  return clientResponse;
+async function handleForecastProxy(request, url, corsHeaders, ctx, env) {
+  const params = forecastQuery(url);
+  if (!params) return new Response(JSON.stringify({ error: 'invalid forecast parameters' }), {
+    status: 400, headers: { ...corsHeaders, 'Cache-Control': 'no-store' },
+  });
+  const cache = caches.default;
+  const cacheUrl = new URL('/_cache/forecast-proxy', url.origin);
+  cacheUrl.search = params.toString();
+  const cacheKey = new Request(cacheUrl, { method: 'GET' });
+  try {
+    const cached = await cache.match(cacheKey);
+    let result;
+    if (cached) result = { body: await cached.text(), status: 200, cacheStatus: 'HIT' };
+    else result = await shareRefresh(forecastRefreshes, cacheKey.url, async () => {
+      const upstream = await fetchOpenMeteo(`https://api.open-meteo.com/v1/forecast?${params}`, env.OPEN_METEO_API_KEY, env.WEATHER_REQUEST_LIMITER);
+      if (!upstream.ok) return { body: JSON.stringify({ error: `Forecast API error ${upstream.status}` }), status: upstream.status };
+      const body = await upstream.text();
+      await cache.put(cacheKey, new Response(body, {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': `public, max-age=${FORECAST_CACHE_TTL}` },
+      }));
+      return { body, status: 200, cacheStatus: 'MISS' };
+    });
+    return new Response(result.body, {
+      status: result.status,
+      headers: { ...corsHeaders, 'Cache-Control': 'no-store',
+        ...(result.cacheStatus ? { 'X-SendTemps-Cache': result.cacheStatus } : {}),
+        ...(result.status === 429 ? { 'Retry-After': '60' } : {}),
+      },
+    });
+  } catch (error) { return weatherError(error, corsHeaders); }
 }
 
 // ─── Scored forecast (server-side scoring pipeline) ──────────────────────────
@@ -518,31 +558,32 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
       regional = await cached.json();
     } else {
       try {
-        const forecasts = await fetchAllForecasts(region, env.OPEN_METEO_API_KEY);
-        const ranked = rankByDay(forecasts, dates);
-        regional = {
-          payload: normalizeScoredResponse(region, dates, [], ranked, [], forecasts),
-          // Preserve stable trip-score ties in the original forecast order.
-          cragOrder: Object.keys(forecasts),
-        };
-        const edgeResponse = new Response(JSON.stringify(regional), {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': `public, max-age=${SCORED_CACHE_TTL}`,
-          },
+        regional = await shareRefresh(scoredRefreshes, cacheKey.url, async () => {
+          const forecasts = await fetchAllForecasts(region, env.OPEN_METEO_API_KEY, env.WEATHER_REQUEST_LIMITER);
+          const ranked = rankByDay(forecasts, dates);
+          const refreshed = {
+            payload: normalizeScoredResponse(region, dates, [], ranked, [], forecasts),
+            // Preserve stable trip-score ties in the original forecast order.
+            cragOrder: Object.keys(forecasts),
+          };
+          const edgeResponse = new Response(JSON.stringify(refreshed), {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': `public, max-age=${SCORED_CACHE_TTL}`,
+            },
+          });
+          const fallbackResponse = new Response(edgeResponse.clone().body, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': `public, max-age=${SCORED_FALLBACK_TTL}`,
+            },
+          });
+          await Promise.all([
+            cache.put(cacheKey, edgeResponse),
+            cache.put(fallbackKey, fallbackResponse),
+          ]);
+          return refreshed;
         });
-        const fallbackResponse = new Response(edgeResponse.clone().body, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': `public, max-age=${SCORED_FALLBACK_TTL}`,
-          },
-        });
-        const writes = Promise.all([
-          cache.put(cacheKey, edgeResponse),
-          cache.put(fallbackKey, fallbackResponse),
-        ]);
-        if (ctx?.waitUntil) ctx.waitUntil(writes);
-        else await writes;
       } catch (error) {
         const fallback = await cache.match(fallbackKey);
         if (!fallback) throw error;
@@ -579,10 +620,7 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
     });
     return response;
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message || 'scoring failed' }), {
-      status: 502,
-      headers: corsHeaders,
-    });
+    return weatherError(err, corsHeaders);
   }
 }
 
@@ -617,6 +655,17 @@ async function handleRequest(request, env, ctx) {
     'Access-Control-Allow-Origin': resolveCorsOrigin(request),
     'Content-Type': 'application/json',
   };
+
+  // This anonymous API has no trusted user identity. Use a generous IP burst
+  // ceiling (600/minute) to accommodate shared mobile networks. The separate
+  // provider budget below protects upstream calls across all client addresses.
+  const clientIp = request.headers.get('CF-Connecting-IP');
+  if (env.PUBLIC_API_LIMITER && clientIp &&
+      !(await env.PUBLIC_API_LIMITER.limit({ key: clientIp })).success) {
+    return new Response(JSON.stringify({ error: 'Please retry shortly' }), {
+      status: 429, headers: { ...corsHeaders, 'Cache-Control': 'no-store', 'Retry-After': '60' },
+    });
+  }
 
   // GET /forecast — proxies the Open-Meteo call all clients make on load,
   // with an edge cache in front of it. Without this, every phone/iPad hits
@@ -753,7 +802,7 @@ async function handleRequest(request, env, ctx) {
 async function getCragScoreToday(lat, lon, env) {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,precipitation_sum,precipitation_probability_max,windspeed_10m_max&forecast_days=1&timezone=Australia%2FMelbourne`;
-    const res = await fetchOpenMeteo(url, env.OPEN_METEO_API_KEY);
+    const res = await fetchOpenMeteo(url, env.OPEN_METEO_API_KEY, env.WEATHER_REQUEST_LIMITER);
     const data = await res.json();
     const d = data.daily;
     const tMax = d.temperature_2m_max[0];

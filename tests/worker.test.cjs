@@ -79,7 +79,7 @@ test('scored forecast: cache hit overrides stored headers and uses current CORS 
 
 test('forecast proxy preserves upstream failure status and does not cache it', async () => {
   const harness = await loadWorker(async () => new Response('rate limited', { status: 429 }));
-  const response = await harness.worker.fetch(request('/forecast'), env, harness.ctx);
+  const response = await harness.worker.fetch(request('/forecast?latitude=-37&longitude=144'), env, harness.ctx);
   assert.equal(response.status, 429);
   await harness.flush();
   assert.equal(harness.entries.size, 0);
@@ -97,7 +97,7 @@ test('forecast proxy falls back to the free provider when the paid provider fail
     assert.equal(url.searchParams.has('apikey'), false);
     return Response.json({ daily: { time: [] } });
   });
-  const response = await harness.worker.fetch(request('/forecast?apikey=client-key'),
+  const response = await harness.worker.fetch(request('/forecast?latitude=-37&longitude=144&apikey=client-key'),
     { OPEN_METEO_API_KEY: key }, harness.ctx);
   assert.equal(response.status, 200);
   assert.ok(!(await response.text()).includes(key));

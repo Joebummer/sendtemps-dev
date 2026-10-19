@@ -20,7 +20,7 @@ const API = 'https://api.open-meteo.com/v1/forecast';
 const MARINE_API = 'https://marine-api.open-meteo.com/v1/marine';
 
 // Read the key from Worker secrets per request; never include it in payloads.
-export async function fetchOpenMeteo(input, apiKey = '') {
+export async function fetchOpenMeteo(input, apiKey = '', requestLimiter) {
   const url = new URL(input);
   if (!['api.open-meteo.com', 'marine-api.open-meteo.com'].includes(url.hostname)) {
     throw new Error('Invalid weather provider');
@@ -28,6 +28,11 @@ export async function fetchOpenMeteo(input, apiKey = '') {
   url.searchParams.delete('apikey');
   const key = (apiKey || '').trim();
   const boundedFetch = async (target, timeoutMs) => {
+    if (requestLimiter && !(await requestLimiter.limit({ key: 'open-meteo' })).success) {
+      const error = new Error('Weather request limit reached');
+      error.status = 429;
+      throw error;
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -51,14 +56,16 @@ export async function fetchOpenMeteo(input, apiKey = '') {
     try {
       const paid = await boundedFetch(paidUrl, 8000);
       if (paid.ok) return paid;
-    } catch {
+    } catch (error) {
+      if (error.status === 429) throw error;
       // A stalled paid endpoint should not hold the app's startup request.
     }
   }
   try {
     // Keep the entire provider attempt within the mobile client's timeout.
     return await boundedFetch(url, 15000);
-  } catch {
+  } catch (error) {
+    if (error.status === 429) throw error;
     // Network errors can contain the requested URL, including credentials.
     throw new Error('Weather provider request failed');
   }
@@ -71,7 +78,7 @@ export async function fetchOpenMeteo(input, apiKey = '') {
 // root forecast.js copy (not an intentional diff).
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-async function fetchMarineForecasts(crags, apiKey) {
+async function fetchMarineForecasts(crags, apiKey, requestLimiter) {
   const targets = crags.filter(crag => crag.marineHazard);
   if (!targets.length) return {};
 
@@ -94,7 +101,7 @@ async function fetchMarineForecasts(crags, apiKey) {
   let res;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise(resolve => setTimeout(resolve, attempt * 1500));
-    res = await fetchOpenMeteo(`${MARINE_API}?${params}`, apiKey);
+    res = await fetchOpenMeteo(`${MARINE_API}?${params}`, apiKey, requestLimiter);
     if (res.status !== 429) break;
   }
   if (!res.ok) throw new Error(`Marine API error ${res.status}`);
@@ -143,13 +150,17 @@ function mergeMarineHourly(weatherHourly, marineHourly) {
 // or 'ALL' for every crag nationwide. Scoping to one state cuts the request
 // (and the edge-cached response) down to roughly a fifth of the full payload
 // for most states, which is where most of the load-time cost was coming from.
-export async function fetchAllForecasts(region = 'ALL', apiKey = '') {
+export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimiter) {
   const scoped = region === 'ALL' ? CRAGS : CRAGS.filter(c => c.state === region);
   // Safety net: never send an empty request (e.g. an unrecognised region code).
   const targetCrags = scoped.length ? scoped : CRAGS;
   // Marine data is only requested for explicitly configured sea cliffs. It is
   // optional: a marine-provider outage must not take the whole forecast down.
-  const marinePromise = fetchMarineForecasts(targetCrags, apiKey).catch(() => ({}));
+  let marineLimitError;
+  const marinePromise = fetchMarineForecasts(targetCrags, apiKey, requestLimiter).catch(error => {
+    if (error.status === 429) marineLimitError = error;
+    return {};
+  });
   // Multiple sectors share coordinates. Request each weather location once,
   // then retain each crag's own elevation correction and scoring below.
   const locationIndex = new Map();
@@ -201,12 +212,13 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '') {
   let res;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500));
-    res = await fetchOpenMeteo(url, apiKey);
+    res = await fetchOpenMeteo(url, apiKey, requestLimiter);
     if (res.status !== 429) break;
   }
   if (!res.ok) throw new Error(`Forecast API error ${res.status}`);
   const data = await res.json();
   const marineById = await marinePromise;
+  if (marineLimitError) throw marineLimitError;
 
   // Open-Meteo returns either a single object (one location) or an array (multiple).
   const list = Array.isArray(data) ? data : [data];

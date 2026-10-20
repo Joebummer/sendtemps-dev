@@ -443,6 +443,66 @@ test('destination hourly strips follow the subcrag selected for the headline', a
   }
 });
 
+test('Wollongong destinations and sectors reach the scored API with matching parent hourly strips', async () => {
+  let weatherCalls = 0;
+  const harness = await loadWorker(async url => {
+    assert.equal(new URL(url).hostname, 'api.open-meteo.com');
+    weatherCalls++;
+    return Response.json(weatherFixture(url));
+  });
+  const response = await harness.worker.fetch(
+    new Request('https://api.test/forecast/scored?region=NSW'), {}, harness.ctx);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const groups = { 'mt-keira-main': 2, 'scarborough-main': 3, 'coalcliff-main': 5 };
+  const records = Object.values(body.crags).filter(crag => groups[crag.id] || groups[crag.parentId]);
+  assert.equal(records.length, 13);
+  assert.deepEqual(validateCrags(records), []);
+  assert.equal(weatherCalls, 1, 'all NSW sectors share one batched weather request');
+  for (const [parentId, count] of Object.entries(groups)) {
+    const children = records.filter(crag => crag.parentId === parentId);
+    assert.equal(children.length, count);
+    for (const date of body.dates) {
+      for (const crag of [body.crags[parentId], ...children]) {
+        const row = body.byDate[date].find(row => row.cragId === crag.id);
+        assert.ok(row && Number.isFinite(row.score), `${crag.id}: scored on ${date}`);
+      }
+    }
+    for (const [index, prefix] of [[0, 'today'], [1, 'tomorrow']]) {
+      const row = body.byDate[body.dates[index]].find(row => row.cragId === parentId);
+      assert.ok(children.some(crag => crag.id === row.bestSubcragId));
+      assert.equal(body.today[parentId][`${prefix}BestSubcragId`], row.bestSubcragId);
+      assert.deepEqual(body.today[parentId][`${prefix}Hourly`], body.today[row.bestSubcragId][`${prefix}Hourly`]);
+    }
+  }
+  assert.equal(body.crags['mt-keira-west'].aspect, 'W');
+  assert.equal(body.crags['mt-keira-south'].aspect, 'S');
+  assert.equal(body.crags['scarborough-kennys'].aspect, 'E');
+  assert.match(body.crags['mt-keira-main'].accessStatus, /west- and south-facing/);
+  assert.equal(body.crags['coalcliff-main'].marineHazard, undefined);
+  await harness.flush();
+});
+
+for (const mm of [0.2, 1]) {
+  test(`Wollongong sandstone preserves the existing rain-event threshold at ${mm} mm`, async () => {
+    const harness = await loadWorker(async url => Response.json(cathedralTraceFixture(url, mm)));
+    const forecasts = await harness.forecasts.fetchAllForecasts('NSW');
+    const additions = Object.values(forecasts).filter(forecast =>
+      /^(mt-keira-|scarborough-|coalcliff-)/.test(forecast.crag.id));
+    assert.equal(additions.length, 13);
+    for (const forecast of additions) {
+      const cell = forecast.tomorrowHourly.find(hour => hour.hour === 13);
+      if (mm < 1) {
+        assert.ok(cell.score > 0, `${forecast.crag.id}: trace rain does not trigger lockout`);
+        assert.equal(cell.wetRockCondition, undefined);
+      } else {
+        assert.equal(cell.score, 0, `${forecast.crag.id}: meaningful rain retains wet-rock recovery`);
+        assert.ok(cell.wetRockCondition);
+      }
+    }
+  });
+}
+
 for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
   test(`${region}: real scoring pipeline preserves the response contract and cache payload`, async () => {
     let calls = 0;

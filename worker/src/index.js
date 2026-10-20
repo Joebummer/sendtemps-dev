@@ -462,7 +462,7 @@ const SCORED_FALLBACK_TTL = 3600; // at most one hour old, same local date and s
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-10-20-ten-day-sessions-v1';
+const SCORED_CACHE_VERSION = '2026-10-21-days-3-8-daily-v1';
 const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 
 // Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw

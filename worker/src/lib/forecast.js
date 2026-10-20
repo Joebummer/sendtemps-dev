@@ -271,11 +271,11 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
     const todayBestWindow = bestWindow(todayHourly, crag, todayMinimumHours);
     const tomorrowHourly = buildTomorrowHourly(crag, f.hourly, drynessSeries, tomorrowMel);
     const tomorrowBestWindow = bestWindow(tomorrowHourly, crag, 5);
-    // Reuse the ten-day hourly response. Only today/tomorrow strips go on the
-    // wire; later dates retain a compact selected session for daily ranking.
+    // Only today/tomorrow strips go on the wire. Days 3–8 use daily estimates;
+    // retain compact selected sessions for the other dates in the response.
     const bestWindows = { [todayMel]: todayBestWindow, [tomorrowMel]: tomorrowBestWindow };
     for (const date of f.daily.time) {
-      if (date <= tomorrowMel) continue;
+      if (date <= tomorrowMel || isDailyEstimateDate(date, todayMel)) continue;
       bestWindows[date] = bestWindow(buildDayHourly(crag, f.hourly, drynessSeries, date), crag, 5);
     }
     // Last 4 days of daily precipitation totals for the sparkline.
@@ -2761,6 +2761,14 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   };
 }
 
+// Forecast days 3–8 have no hourly breakdown in the app. Use the broader daily
+// calculation rather than selecting a session the user cannot inspect. Compare
+// calendar dates in UTC so request subsets and daylight saving do not shift it.
+function isDailyEstimateDate(date, todayDate) {
+  const dayOffset = (Date.parse(date) - Date.parse(todayDate)) / 86400000;
+  return dayOffset >= 2 && dayOffset <= 7;
+}
+
 // Build ranked list per day. Returns { 'YYYY-MM-DD': [{crag, score, reasons, day}] }
 export function rankByDay(forecasts, dayDates) {
   const ranked = {};
@@ -2770,8 +2778,10 @@ export function rankByDay(forecasts, dayDates) {
       const fc = forecasts[id];
       const dayIdx = fc.days.findIndex(d => d.date === date);
       if (dayIdx === -1) continue;
-      const hourlyWindow = fc.bestWindows?.[date] ?? (date === fc.todayDate ? fc.todayBestWindow
-        : date === fc.tomorrowDate ? fc.tomorrowBestWindow : null);
+      const useDailyEstimate = isDailyEstimateDate(date, fc.todayDate);
+      const hourlyWindow = useDailyEstimate ? null : (fc.bestWindows?.[date] ??
+        (date === fc.todayDate ? fc.todayBestWindow
+          : date === fc.tomorrowDate ? fc.tomorrowBestWindow : null));
       const day = hourlyWindow ? { ...fc.days[dayIdx],
         climbTemps: windowTemperatures(fc.crag, hourlyWindow.hours) } : fc.days[dayIdx];
       const prevDay = dayIdx > 0 ? fc.days[dayIdx - 1] : null;
@@ -2782,7 +2792,7 @@ export function rankByDay(forecasts, dayDates) {
       // The session score already includes the temperature ceilings calculated
       // from these exact hours, never from an unrelated hotter afternoon.
       const isClosed = contributions.some(c => c.category === 'closure');
-      let scoreBasis = 'daily-estimate-no-hourly-data';
+      let scoreBasis = useDailyEstimate ? 'daily-estimate' : 'daily-estimate-no-hourly-data';
       let scoreWindow = null;
       if (hourlyWindow && !isClosed) {
         const windowScore = Math.max(0, Math.min(100, Math.round(hourlyWindow.avg)));

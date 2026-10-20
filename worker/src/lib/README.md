@@ -6,13 +6,19 @@ diverged. Do not overwrite the production modules by copying the browser files.
 
 ## Session scoring
 
-Every available forecast date uses the strongest consecutive five-hour session
-from 7am onwards. Today may shorten to the remaining one to four hours. Dates
-without enough valid hourly weather use `daily-estimate-no-hourly-data`; closed
-crags use `closure`. Missing model values never become ideal dry-weather hours,
-and sessions cannot bridge missing hours.
+Forecast days 3–8 (today is day 1) use the broader daily calculation and report
+`daily-estimate`, with no `scoreWindow` or window contribution. These dates have
+no hour-by-hour breakdown in the app, so their headline must not depend on an
+unseen selected session. This also retains the daily temperature and rain
+explanations. The boundary uses calendar dates, including for trip-only queries.
 
-The headline, temperature callout and temperature ceilings use the selected
+The other forecast dates retain the strongest consecutive five-hour session
+from 7am onwards. Today may shorten to the remaining one to four hours. Session
+dates without enough valid hourly weather use `daily-estimate-no-hourly-data`;
+closed crags use `closure`. Missing model values never become ideal dry-weather
+hours, and sessions cannot bridge missing hours.
+
+For session dates, the headline, temperature callout and temperature ceilings use the selected
 session's temperatures. The existing 90-point `too warm for hard climbing` and
 98-point `temp varies` ceilings remain. `bestWindow.avg` and `scoreWindow.average`
 represent the resulting session score. When a temperature ceiling applies,

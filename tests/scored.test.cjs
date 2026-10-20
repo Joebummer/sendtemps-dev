@@ -29,7 +29,7 @@ test('session scoring keeps cool mornings independent of hot afternoons', async 
   assert.ok(!row.contributions.some(c => c.category === 'temp' && c.delta < 0));
 });
 
-test('session scoring uses ten days of hourly data and preserves trip and parent consistency', async () => {
+test('days 3–8 use daily estimates and preserve trip and parent consistency', async () => {
   let calls = 0;
   const harness = await loadWorker(async url => { calls++; return Response.json(weatherFixture(url)); });
   const response = await harness.worker.fetch(
@@ -44,12 +44,19 @@ test('session scoring uses ten days of hourly data and preserves trip and parent
         assert.equal(row.scoreBasis, 'closure');
         continue;
       }
-      assert.equal(row.scoreBasis, 'best-hourly-window', `${row.cragId} ${date}`);
-      assert.equal(row.scoreWindow.hours, 5);
-      assert.equal(row.scoreWindow.end - row.scoreWindow.start, 5);
-      assert.equal(row.scoreWindow.average, row.score);
-      assert.equal(row.scoreWindow.provisional, dayIndex > 1);
-      assert.equal(row.day.climbTemps.climbHours, 5);
+      if (dayIndex >= 2 && dayIndex <= 7) {
+        assert.equal(row.scoreBasis, 'daily-estimate', `${row.cragId} ${date}`);
+        assert.equal(row.scoreWindow, null);
+        assert.ok(!row.contributions.some(c => c.category === 'window'));
+        assert.ok(row.day.climbTemps.climbHours > 5);
+      } else {
+        assert.equal(row.scoreBasis, 'best-hourly-window', `${row.cragId} ${date}`);
+        assert.equal(row.scoreWindow.hours, 5);
+        assert.equal(row.scoreWindow.end - row.scoreWindow.start, 5);
+        assert.equal(row.scoreWindow.average, row.score);
+        assert.equal(row.scoreWindow.provisional, dayIndex > 1);
+        assert.equal(row.day.climbTemps.climbHours, 5);
+      }
       if (row.bestSubcragId) {
         const child = rows.find(r => r.cragId === row.bestSubcragId);
         for (const key of ['score', 'scoreWindow', 'reasons', 'day']) assert.deepEqual(row[key], child[key]);
@@ -65,6 +72,58 @@ test('session scoring uses ten days of hourly data and preserves trip and parent
       : (scores[scores.length / 2 - 1] + scores[scores.length / 2]) / 2;
     assert.equal(trip.tripScore, Math.round(0.5 * scores[0] + 0.3 * scores.reduce((a, b) => a + b, 0) / scores.length + 0.2 * median));
   }
+});
+
+test('days 3–8 keep daily rain penalties even with a dry five-hour morning or stored window', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const forecast of data) {
+      forecast.hourly.time.forEach((iso, i) => {
+        if (iso.startsWith('2026-09-15') && Number(iso.slice(11, 13)) >= 13 && Number(iso.slice(11, 13)) < 19) {
+          forecast.hourly.precipitation[i] = 1.02;
+          forecast.hourly.precipitation_probability[i] = 81;
+          forecast.hourly.weathercode[i] = 80;
+        }
+      });
+      const di = forecast.daily.time.indexOf('2026-09-15');
+      forecast.daily.precipitation_sum[di] = 6.12;
+      forecast.daily.precipitation_probability_max[di] = 81;
+      forecast.daily.precipitation_hours[di] = 6;
+      forecast.daily.weathercode[di] = 80;
+    }
+    return Response.json(data);
+  });
+  const fc = (await harness.forecasts.fetchAllForecasts('VIC'))['camels-hump'];
+  // Single-date and out-of-order queries must use the horizon from today,
+  // rather than the position in the requested list (or the past-weather list).
+  for (const date of ['2026-09-20', '2026-09-15', '2026-09-16']) {
+    assert.equal(fc.bestWindows[date], undefined);
+    fc.bestWindows[date] = { ...fc.tomorrowBestWindow, avg: 100 };
+    const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [date])[date][0];
+    const di = fc.days.findIndex(day => day.date === date);
+    const expected = harness.forecasts.scoreDay(fc.crag, fc.days[di], fc.days[di - 1], fc.days[di + 1]);
+    assert.equal(row.scoreBasis, 'daily-estimate');
+    assert.equal(row.score, expected.score);
+    assert.deepEqual(row.day, fc.days[di]);
+    assert.deepEqual(row.reasons, expected.reasons);
+    assert.deepEqual(row.contributions, expected.contributions);
+    assert.equal(row.scoreWindow, null);
+    if (date === '2026-09-15') {
+      assert.equal(row.day.precipProb, 81);
+      assert.equal(row.day.precipSum, 6.12);
+      assert.ok(row.score < Math.round(fc.tomorrowBestWindow.avg), 'daily rain cannot be hidden by a dry morning');
+      assert.ok(row.contributions.some(c => c.category === 'precip' && c.delta < 0));
+    }
+  }
+  for (const date of ['2026-09-14', '2026-09-21']) {
+    const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [date])[date][0];
+    assert.equal(row.scoreBasis, 'best-hourly-window');
+    assert.equal(row.score, Math.round(fc.bestWindows[date].avg));
+  }
+  fc.crag = { ...fc.crag, closedAll: true };
+  const closed = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, ['2026-09-15'])['2026-09-15'][0];
+  assert.equal(closed.scoreBasis, 'closure');
+  assert.equal(closed.score, 0);
 });
 
 test('session scoring falls back when future hourly fields are null or insufficient', async () => {

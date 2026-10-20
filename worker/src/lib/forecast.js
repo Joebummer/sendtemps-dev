@@ -267,9 +267,17 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
     // forward, so a 2pm visit sees 2pm–7pm rather than the irrelevant
     // 6am–1pm that have already passed.
     const todayHourly = buildTodayHourly(crag, f.hourly, drynessSeries, todayMel);
-    const todayBestWindow = bestWindow(todayHourly);
+    const todayMinimumHours = Math.min(5, Math.max(0, 20 - Math.max(7, melbourneHourNow())));
+    const todayBestWindow = bestWindow(todayHourly, crag, todayMinimumHours);
     const tomorrowHourly = buildTomorrowHourly(crag, f.hourly, drynessSeries, tomorrowMel);
-    const tomorrowBestWindow = bestWindow(tomorrowHourly);
+    const tomorrowBestWindow = bestWindow(tomorrowHourly, crag, 5);
+    // Reuse the ten-day hourly response. Only today/tomorrow strips go on the
+    // wire; later dates retain a compact selected session for daily ranking.
+    const bestWindows = { [todayMel]: todayBestWindow, [tomorrowMel]: tomorrowBestWindow };
+    for (const date of f.daily.time) {
+      if (date <= tomorrowMel) continue;
+      bestWindows[date] = bestWindow(buildDayHourly(crag, f.hourly, drynessSeries, date), crag, 5);
+    }
     // Last 4 days of daily precipitation totals for the sparkline.
     const pastPrecip = extractPastDailyPrecip(f.hourly, todayMel, 4);
 
@@ -286,6 +294,7 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
       tomorrowDate: tomorrowMel,
       tomorrowHourly,
       tomorrowBestWindow,
+      bestWindows,
       days: f.daily.time.map((date, di) => {
         const _climbTemps = computeClimbTemps(crag, f.hourly, date);
         return ({
@@ -809,6 +818,47 @@ export function computeClimbTemps(crag, hourly, dateStr) {
   };
 }
 
+// One temperature classification for both session selection and its callout.
+// Heat follows air temperature; cold comfort follows feels-like temperature.
+function climbingTemperature(crag, ct = {}, day = {}) {
+  const [lo, hi] = crag.idealTemp;
+  const climbHours = ct.climbHours || 0;
+  const tFeel = climbHours && ct.meanApparent != null ? ct.meanApparent : (day.tFeel ?? day.tMax);
+  const tAir = climbHours && ct.meanTemp != null ? ct.meanTemp : (day.tMax ?? tFeel);
+  const t = tAir > hi ? tAir : tFeel;
+  const samples = (ct.temperatureSamples || []).filter(sample => Number.isFinite(sample.apparent));
+  const distance = samples.length
+    ? samples.reduce((sum, sample) => sum + temperaturePenalty(crag, sample.apparent, sample.air, sample.hour), 0) / samples.length
+    : temperaturePenalty(crag, tFeel, tAir);
+  const dwell = climbHours >= 4
+    ? Math.min(10, Math.pow(Math.max(0, Math.min(6, climbHours) - ct.hoursInRange), 2) * 0.35) : 0;
+  const penalty = distance + dwell < 0.5 ? 0 : distance + dwell;
+  const reason = penalty === 0 ? `temp ideal (${Math.round(t)}°C)`
+    : t < lo ? `cold (${Math.round(t)}°C avg)`
+      : t > hi ? `hot (${Math.round(t)}°C avg)`
+        : tAir >= peakTemperatureUpper(crag) + 1 ? 'too warm for hard climbing' : 'temp varies';
+  const ceiling = reason === 'too warm for hard climbing' ? 90 : reason === 'temp varies' ? 98 : 100;
+  return { climbHours, tFeel, tAir, t, samples, penalty, reason, ceiling };
+}
+
+function windowTemperatures(crag, hours) {
+  const [lo, hi] = crag.idealTemp;
+  const samples = hours.map(h => ({
+    hour: h.hour, air: h.temp, apparent: h.apparentTemp ?? h.temp,
+    solarFraction: hourSolarFraction(crag, h),
+  }));
+  return {
+    climbHours: samples.length,
+    hoursInRange: samples.filter(h => h.air <= hi && h.apparent >= lo).length,
+    hoursCold: samples.filter(h => h.air <= hi && h.apparent < lo).length,
+    hoursHot: samples.filter(h => h.air > hi).length,
+    meanTemp: samples.reduce((sum, h) => sum + h.air, 0) / samples.length,
+    meanApparent: samples.reduce((sum, h) => sum + h.apparent, 0) / samples.length,
+    maxApparent: Math.max(...samples.map(h => h.apparent)),
+    temperatureSamples: samples,
+  };
+}
+
 // Compute atmospheric-moisture conditions across the climbing window.
 // Raw RH fields remain for climate anomaly reporting and response compatibility;
 // scoring uses the averaged hourly spooge penalty and mean delta T.
@@ -1272,7 +1322,12 @@ export function sunOnAspect(aspect, sunAz, sunAlt) {
 
 // Parse a Melbourne-local ISO hour string ('2026-05-19T08:00') back into a Date
 // (treating the string as Australia/Melbourne wall-clock time).
+const _melbourneHourTimestamps = new Map();
 function melbourneHourToDate(isoLocal) {
+  // Hundreds of sectors reuse the same forecast hours in several scoring
+  // passes. Cache only the deterministic timestamp with bounded memory use,
+  // and return a fresh Date so callers cannot mutate the cache.
+  if (_melbourneHourTimestamps.has(isoLocal)) return new Date(_melbourneHourTimestamps.get(isoLocal));
   // Melbourne is UTC+10 (AEST) or +11 (AEDT). We need the right offset for the date.
   // Simplest reliable approach: build a Date from the ISO string interpreted as
   // local time-zoned via Intl, then extract.
@@ -1283,7 +1338,12 @@ function melbourneHourToDate(isoLocal) {
   const naiveUtc = new Date(isoLocal + 'Z'); // pretend the string is UTC
   // Find what Melbourne offset is at that instant.
   const offsetMin = melbourneOffsetMinutes(naiveUtc);
-  return new Date(naiveUtc.getTime() - offsetMin * 60000);
+  const timestamp = naiveUtc.getTime() - offsetMin * 60000;
+  if (_melbourneHourTimestamps.size >= 1024) {
+    _melbourneHourTimestamps.delete(_melbourneHourTimestamps.keys().next().value);
+  }
+  _melbourneHourTimestamps.set(isoLocal, timestamp);
+  return new Date(timestamp);
 }
 
 // Hoisted to module scope (v60 perf fix) — this used to be constructed fresh
@@ -1410,6 +1470,14 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
       out[i].closure = closed;
       continue;
     }
+    const sourceIndex = hourly.time.indexOf(out[i].isoHour);
+    const required = ['temperature_2m', 'relative_humidity_2m', 'windspeed_10m',
+      'winddirection_10m', 'precipitation', 'precipitation_probability', 'cloudcover'];
+    if (!required.every(key => Number.isFinite(hourly[key]?.[sourceIndex])) ||
+        !Number.isFinite(out[i].dryness)) {
+      out[i].score = null;
+      continue;
+    }
     out[i].marineCondition = marineCondition(crag, out[i]);
     const wetRock = wetRockCondition(crag, out[i]);
     if (wetRock.cap < 100) out[i].wetRockCondition = wetRock;
@@ -1417,7 +1485,9 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
     const rainNeighbours = nearby.filter(n => n !== out[i] && n.precipProb > 30).length;
     out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb, meanDayCloud);
   }
-  return out;
+  // Keep the native hourly contract numeric. Missing hours are omitted rather
+  // than sent as a null score or invented dry weather; selection detects gaps.
+  return out.filter(hour => Number.isFinite(hour.score));
 }
 
 // Thin wrapper kept for clarity at call sites.
@@ -1698,42 +1768,47 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   return (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
 }
 
-// Find the best climbing window in a tomorrow-hourly array.
-// A "window" is any run of consecutive hours all scoring ≥ threshold.
-// We first find every qualifying run, then — for each — slide a fixed-width
-// MAX_HOURS window across it and pick the highest-average sub-window. This
-// keeps the recommendation actionable: even on a bluebird day where 12 hours
-// all qualify, the user sees "best 5h block" rather than "any time, all day."
-//
-// Returns the highest-scoring window, or null if no run is long enough.
-export function bestWindow(hourly) {
+// Pick the strongest consecutive session, including poor-weather days.
+// Full days require five real hourly samples; today may shorten as time runs
+// out. Missing values and gaps never become an apparently ideal session.
+// Temperature callout ceilings use the candidate session's own hours.
+export function bestWindow(hourly, crag = null, minimumHours = 1) {
   if (!hourly || hourly.length === 0) return null;
 
   // Keep 6am in the hourly strip for planning context, but do not let it
   // influence the representative climbing session. Daily scoring starts at
   // 7am at the earliest.
-  const eligible = hourly.filter(sample => sample.hour >= 7);
+  const eligible = hourly.filter(sample => sample.hour >= 7 && Number.isFinite(sample.score));
   if (eligible.length === 0) return null;
 
   // A climbing day is represented by the strongest usable session, not one
   // isolated peak hour and not an all-day average. Prefer a five-hour window;
   // shorten only when fewer hours remain today.
   const count = Math.min(5, eligible.length);
-  let bestStart = 0;
+  if (count < minimumHours) return null;
+  let bestStart = -1;
   let bestSum = -Infinity;
+  let bestAverage = -Infinity;
+  let bestCeiling = 100;
   for (let i = 0; i + count <= eligible.length; i++) {
-    let sum = 0;
-    for (let j = 0; j < count; j++) sum += eligible[i + j].score;
-    if (sum > bestSum) {
+    const candidate = eligible.slice(i, i + count);
+    if (candidate.some((h, j) => j && h.hour !== candidate[j - 1].hour + 1)) continue;
+    const sum = candidate.reduce((total, h) => total + h.score, 0);
+    const ceiling = crag ? climbingTemperature(crag, windowTemperatures(crag, candidate)).ceiling : 100;
+    const average = Math.min(sum / count, ceiling);
+    if (average > bestAverage) {
       bestSum = sum;
+      bestAverage = average;
+      bestCeiling = ceiling;
       bestStart = i;
     }
   }
 
+  if (bestStart < 0) return null;
   const hours = eligible.slice(bestStart, bestStart + count);
   const start = hours[0].hour;
   const end = hours[hours.length - 1].hour + 1;
-  const avg = bestSum / count;
+  const avg = bestAverage;
   return {
     start,
     end,
@@ -1741,6 +1816,7 @@ export function bestWindow(hourly) {
     count,
     hours,
     avg,
+    ...(bestCeiling < bestSum / count ? { hourlyAvg: bestSum / count, temperatureCap: bestCeiling } : {}),
     // Wire compatibility for current native clients. These mirror the selected
     // session and are not an all-day average.
     runStart: start,
@@ -2101,34 +2177,15 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // cancel into a deceptively comfortable mean. No overnight minimum penalty.
   const [idealMin, idealMax] = crag.idealTemp;
   const ct = day.climbTemps || {};
-  const climbHours = ct.climbHours || 0;
-  const tFeel = (climbHours > 0 && ct.meanApparent != null) ? ct.meanApparent : (day.tFeel ?? day.tMax);
-  const tAir = (climbHours > 0 && ct.meanTemp != null) ? ct.meanTemp : (day.tMax ?? tFeel);
-  // Heat follows air temperature; cool-weather comfort follows feels-like.
-  const t = tAir > idealMax ? tAir : tFeel;
-  const dwellPen = climbHours >= 4
-    ? Math.min(10, Math.pow(Math.max(0, Math.min(6, climbHours) - ct.hoursInRange), 2) * 0.35)
-    : 0;
-  const samples = Array.isArray(ct.temperatureSamples)
-    ? ct.temperatureSamples.filter(sample => Number.isFinite(sample.apparent)) : [];
-  const tempDistance = samples.length
-    ? samples.reduce((sum, sample) => sum + temperaturePenalty(crag, sample.apparent, sample.air, sample.hour), 0) / samples.length
-    : temperaturePenalty(crag, tFeel, tAir);
-  let protectedTemperaturePenalty = tempDistance + dwellPen;
-  // Do not surface a temperature callout for trace-level interpolation noise.
-  if (protectedTemperaturePenalty < 0.5) protectedTemperaturePenalty = 0;
+  const { climbHours, tFeel, tAir, t, samples, penalty, reason } = climbingTemperature(crag, ct, day);
+  let protectedTemperaturePenalty = penalty;
+  reasons.push(reason);
   if (protectedTemperaturePenalty > 0) {
     const peakMax = peakTemperatureUpper(crag);
     score -= protectedTemperaturePenalty;
-    reasons.push(t < idealMin ? `cold (${Math.round(t)}°C avg)`
-      : t > idealMax ? `hot (${Math.round(t)}°C avg)`
-        : tAir >= peakMax + 1 ? 'too warm for hard climbing'
-          : 'temp varies');
     add('temp', 'Temperature', -protectedTemperaturePenalty,
       `${Math.round(tAir)}°C air / ${Math.round(tFeel)}°C feels-like climbing average; peak up to ${peakMax}°C, good cragging ${idealMin}–${idealMax}°C` +
       (climbHours > 0 ? `; ${ct.hoursInRange}/${climbHours}h in range` : ''));
-  } else {
-    reasons.push(`temp ideal (${Math.round(t)}°C)`);
   }
 
   // — Atmospheric spooge: descriptive label + score delta —
@@ -2713,30 +2770,22 @@ export function rankByDay(forecasts, dayDates) {
       const fc = forecasts[id];
       const dayIdx = fc.days.findIndex(d => d.date === date);
       if (dayIdx === -1) continue;
-      const day = fc.days[dayIdx];
+      const hourlyWindow = fc.bestWindows?.[date] ?? (date === fc.todayDate ? fc.todayBestWindow
+        : date === fc.tomorrowDate ? fc.tomorrowBestWindow : null);
+      const day = hourlyWindow ? { ...fc.days[dayIdx],
+        climbTemps: windowTemperatures(fc.crag, hourlyWindow.hours) } : fc.days[dayIdx];
       const prevDay = dayIdx > 0 ? fc.days[dayIdx - 1] : null;
       const nextDay = dayIdx + 1 < fc.days.length ? fc.days[dayIdx + 1] : null;
       const dayResult = scoreDay(fc.crag, day, prevDay, nextDay);
       let { score, reasons, contributions, seasonalContext } = dayResult;
 
-      // Keep the headline score aligned with the hour-by-hour strip for today
-      // and tomorrow. A multi-hour window is representative of a usable
-      // climbing session and avoids promoting one anomalously good hour.
-      const hourlyWindow = date === fc.todayDate ? fc.todayBestWindow
-        : date === fc.tomorrowDate ? fc.tomorrowBestWindow
-        : null;
+      // The session score already includes the temperature ceilings calculated
+      // from these exact hours, never from an unrelated hotter afternoon.
       const isClosed = contributions.some(c => c.category === 'closure');
-      const isHourlyDate = date === fc.todayDate || date === fc.tomorrowDate;
-      let scoreBasis = 'daily-estimate';
+      let scoreBasis = 'daily-estimate-no-hourly-data';
       let scoreWindow = null;
       if (hourlyWindow && !isClosed) {
-        let windowScore = Math.max(0, Math.min(100, Math.round(hourlyWindow.avg)));
-        // The headline and its callouts must tell the same story. Scores of 95+
-        // are reserved for genuinely ideal hard-climbing temperatures.
-        const tooWarm = reasons.some(reason => reason.startsWith('too warm for hard climbing'));
-        const tempVaries = reasons.includes('temp varies');
-        if (tooWarm) windowScore = Math.min(windowScore, 90);
-        else if (tempVaries) windowScore = Math.min(windowScore, 98);
+        const windowScore = Math.max(0, Math.min(100, Math.round(hourlyWindow.avg)));
         const delta = windowScore - score;
         score = windowScore;
         scoreBasis = 'best-hourly-window';
@@ -2745,17 +2794,22 @@ export function rankByDay(forecasts, dayDates) {
           end: hourlyWindow.end,
           hours: hourlyWindow.count,
           average: windowScore,
+          ...(hourlyWindow.temperatureCap != null ? {
+            hourlyAverage: hourlyWindow.hourlyAvg,
+            temperatureCap: hourlyWindow.temperatureCap,
+          } : {}),
+          provisional: date > fc.tomorrowDate,
         };
         contributions = [...contributions, {
           category: 'window',
           label: 'Best climbing window',
           delta,
-          detail: `${hourlyWindow.start}:00–${hourlyWindow.end}:00 average across ${hourlyWindow.count} hours`,
+          detail: `${hourlyWindow.start}:00–${hourlyWindow.end}:00 average across ${hourlyWindow.count} hours` +
+            (hourlyWindow.temperatureCap != null ? `; session temperature limit ${hourlyWindow.temperatureCap}` : '') +
+            (date > fc.tomorrowDate ? '; provisional hourly model estimate' : ''),
         }];
-      } else if (isHourlyDate && isClosed) {
+      } else if (isClosed) {
         scoreBasis = 'closure';
-      } else if (isHourlyDate) {
-        scoreBasis = 'daily-estimate-no-hourly-data';
       }
 
       rows.push({
@@ -2801,11 +2855,12 @@ export function rankByDay(forecasts, dayDates) {
 // Weekend-Away trip score: combines Fri/Sat/Sun into a single 0–100 score
 // where the WORST day matters most. Formula: 0.5 * min + 0.3 * mean + 0.2 * median.
 // Returns { 'cragId': { crag, tripScore, dailyScores: [{date, score, reasons, day}], worstDate, summary } }
-// Optional pre-ranked days let the API reuse daily scores without changing
-// the legacy two-argument behaviour or the forecast insertion order for ties.
+// Optional pre-ranked days let the API reuse daily scores. The uncached path
+// uses the same sessions and destination rollups, preserving insertion-order ties.
 export function rankWeekendTrip(forecasts, tripDates, ranked = null) {
-  const rankedByDate = ranked && new Map(tripDates.map(date => [date,
-    new Map((ranked[date] || []).map(row => [row.cragId ?? row.crag.id, row])),
+  const dailyRanked = ranked || rankByDay(forecasts, tripDates);
+  const rankedByDate = new Map(tripDates.map(date => [date,
+    new Map((dailyRanked[date] || []).map(row => [row.cragId ?? row.crag.id, row])),
   ]));
   const out = {};
   for (const id in forecasts) {
@@ -2813,19 +2868,9 @@ export function rankWeekendTrip(forecasts, tripDates, ranked = null) {
     if (fc.crag.trip !== 'weekend' && fc.crag.trip !== 'both') continue;
     const dailyScores = [];
     for (const date of tripDates) {
-      if (rankedByDate) {
-        const row = rankedByDate.get(date)?.get(id);
-        if (!row) continue;
-        const { score, reasons, contributions, day, prevDay } = row;
-        dailyScores.push({ date, score, reasons, contributions, day, prevDay });
-        continue;
-      }
-      const dayIdx = fc.days.findIndex(d => d.date === date);
-      if (dayIdx === -1) continue;
-      const day = fc.days[dayIdx];
-      const prevDay = dayIdx > 0 ? fc.days[dayIdx - 1] : null;
-      const nextDay = dayIdx + 1 < fc.days.length ? fc.days[dayIdx + 1] : null;
-      const { score, reasons, contributions } = scoreDay(fc.crag, day, prevDay, nextDay);
+      const row = rankedByDate.get(date)?.get(id);
+      if (!row) continue;
+      const { score, reasons, contributions, day, prevDay } = row;
       dailyScores.push({ date, score, reasons, contributions, day, prevDay });
     }
     if (!dailyScores.length) continue;

@@ -1,79 +1,53 @@
-# lib/ — copied scoring modules
+# Production forecast modules
 
-`forecast.js`, `climateBaseline.js`, and `crags.js` in this directory are
-**verbatim copies** of the same-named files at the repo root, with two
-intentional changes in `forecast.js`:
+`forecast.js`, `climateBaseline.js` and `crags.js` here power the shared
+`GET /forecast/scored` API used by Climbable. The older browser modules have
+diverged. Do not overwrite the production modules by copying the browser files.
 
-1. The `crags.js` import has its `?v=41` cache-busting query string
-   stripped (Workers ES module resolution doesn't support query strings
-   in import specifiers).
-2. The `API` constant points directly at `https://api.open-meteo.com/v1/forecast`
-   instead of `https://api.sendtemps.app/forecast` (the Worker's own public
-   proxy). The browser copy routes through the Worker's proxy so every
-   client shares one edge-cached response instead of hitting Open-Meteo's
-   per-IP rate limit directly. This copy runs *inside* the Worker (for
-   `GET /forecast/scored`), so pointing it at its own public hostname means
-   the Worker calling itself over the public internet on every request —
-   which returned Cloudflare error 522 in testing. `handleScoredForecast()`
-   in `index.js` provides its own edge cache on top, so rate-limit
-   protection is preserved, just applied at the `/forecast/scored` layer
-   instead of at the Open-Meteo-call layer.
+## Session scoring
 
-## Why copies instead of a shared package
+Every available forecast date uses the strongest consecutive five-hour session
+from 7am onwards. Today may shorten to the remaining one to four hours. Dates
+without enough valid hourly weather use `daily-estimate-no-hourly-data`; closed
+crags use `closure`. Missing model values never become ideal dry-weather hours,
+and sessions cannot bridge missing hours.
 
-Keeping these as plain copies (not a shared npm package or symlink) means:
-- The web app's client-side bundle and the Worker's server-side bundle can
-  each be deployed independently without a build/publish step in between.
-- No risk of a shared-package version mismatch between web and Worker.
+The headline, temperature callout and temperature ceilings use the selected
+session's temperatures. The existing 90-point `too warm for hard climbing` and
+98-point `temp varies` ceilings remain. `bestWindow.avg` and `scoreWindow.average`
+represent the resulting session score. When a temperature ceiling applies,
+`bestWindow.hourlyAvg` / `scoreWindow.hourlyAverage` retain the uncapped hourly
+mean and `temperatureCap` explains the limit.
 
-## Keeping them in sync
+The existing ten-day weather request already contains hourly data. Future
+sessions reuse it without adding provider requests or full future hourly strips
+to the public response. `scoreWindow.provisional` is true after tomorrow and the
+window contribution describes these as provisional hourly model estimates. This
+is horizon guidance, not a calibrated probability of forecast accuracy. Native
+clients can use the metadata without a breaking schema change.
 
-Whenever `forecast.js`, `climateBaseline.js`, or `crags.js` change at the
-repo root (new crags, scoring tweaks, bug fixes), re-copy them here:
+Destination rows inherit the selected best child's score, session and weather.
+`rankWeekendTrip(forecasts, tripDates, ranked)` reuses daily rows, including their
+normalized `cragId` form. Without the optional rows, it calculates the same
+sessions and destination rollups. Trip scoring remains 50% worst day, 30% mean
+and 20% median, preserving original forecast order for ties.
 
-```bash
-cp forecast.js worker/src/lib/forecast.js
-cp climateBaseline.js worker/src/lib/climateBaseline.js
-cp crags.js worker/src/lib/crags.js
-sed -i "s|from './crags.js?v=[0-9]*'|from './crags.js'|" worker/src/lib/forecast.js
-sed -i "s|const API = 'https://api.sendtemps.app/forecast';|const API = 'https://api.open-meteo.com/v1/forecast';|" worker/src/lib/forecast.js
-```
-
-Then diff against the root files to confirm the only differences are the
-import line and the `API` constant, and redeploy the Worker.
-
-**Why this matters:** `GET /forecast/scored` (used by the iOS app, and
-eventually the web app) runs this exact code server-side. If these copies
-drift from the root files, the iOS app and the website will silently
-disagree on crag scores for the same day — the two clients need to be
-running byte-identical scoring logic.
-
-## Longer-term fix
-
-Once the marketing/web app also calls `/forecast/scored` instead of running
-`fetchAllForecasts`/`rankByDay`/`rankWeekendTrip` client-side, the root-level
-copies of these three files can be deleted and the web app can fetch scored
-JSON from the Worker directly — eliminating the sync step entirely. That
-migration is tracked as a follow-up, not done yet.
-
-## Regional scoring reuse
-
-The Worker copy now supports an optional third `ranked` argument to
-`rankWeekendTrip(forecasts, tripDates, ranked)`. This reuses previously computed
-`rankByDay` rows (including their normalized `cragId` form) without re-running
-`scoreDay`. The existing two-argument path is unchanged and is covered as the
-reference calculation in equivalence tests. This is an additional intentional
-Worker-only difference; do not overwrite it when syncing the webapp modules.
+## Caching and validation
 
 The Worker caches one normalized regional dataset plus original crag ordering
 for 900 seconds, keyed by region, Melbourne calendar date and cache version.
-Trip selections aggregate the cached daily scores without downloading weather
-again. Original crag ordering preserves tie-breaking. Raw hourly forecast
-intermediates are not added to this cache. `X-SendTemps-Cache` now describes
-whether this regional dataset was reused, rather than an exact trip response.
-Client responses remain `no-store`. Cache sharing is per Cloudflare edge
-location; simultaneous cold misses are not coalesced.
+A fallback is bounded to one hour. Trip selections aggregate cached daily scores
+without downloading or scoring weather again. Full future hourly intermediates
+are not duplicated in the regional payload. Client responses remain `no-store`.
 
-Run `npm run check` after any sync. Scoring and crag edits must still bump
-`SCORED_CACHE_VERSION` in the Worker so old regional entries are not reused.
+Timezone conversions reuse a bounded cache of deterministic hourly timestamps
+to keep ten-day scoring within the Worker's CPU budget. Cached timestamps never
+contain weather or user data and callers receive fresh Date objects.
 
+Bump `SCORED_CACHE_VERSION` for scorer or catalogue changes. Run
+`npm run validate:crags` and the Worker/API-protection and scored-pipeline tests
+before deploying. CI runs all scored-pipeline tests, including session, trip,
+parent, caching, rain-recovery and Wollongong regressions. `npm run check` also
+includes known legacy browser-parity and temperature-calibration expectations;
+report those separately rather than changing current production calibration to
+match outdated assertions.

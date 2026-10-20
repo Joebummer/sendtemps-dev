@@ -72,17 +72,22 @@ test('warm-performance callouts are concise, unambiguous and cannot score 99', a
   assert.ok(varied.reasons.includes('temp varies'));
   assert.ok(!varied.reasons.includes('temperature varies through the day'));
 
-  const window = { start: 10, end: 15, count: 5, avg: 100 };
+  // Use real selected samples so callouts can be checked against the same
+  // session, rather than a fabricated perfect score with no hourly weather.
+  const windowAt = temperature => f.bestWindow(Array.from({ length: 5 }, (_, i) => {
+    const hour = 10 + i;
+    return { ...hourAt(typeof temperature === 'function' ? temperature(hour) : temperature), hour, score: 100 };
+  }), route, 5);
   const rankedWarm = f.rankByDay({ warm: {
     crag: route, days: [dayFor(f, route, 17)], todayDate: date,
-    todayBestWindow: window, nowDryness: 100, pastPrecip: [],
+    todayBestWindow: windowAt(17), nowDryness: 100, pastPrecip: [],
   } }, [date])[date][0];
   assert.equal(rankedWarm.score, 90);
   assert.ok(!rankedWarm.reasons.some(reason => reason.startsWith('best window avg')));
 
   const rankedVaried = f.rankByDay({ varied: {
     crag: route, days: [dayFor(f, route, h => h % 2 ? 16.5 : 15.5)], todayDate: date,
-    todayBestWindow: window, nowDryness: 100, pastPrecip: [],
+    todayBestWindow: windowAt(h => h % 2 ? 16.5 : 15.5), nowDryness: 100, pastPrecip: [],
   } }, [date])[date][0];
   assert.equal(rankedVaried.score, 98);
   assert.ok(!rankedVaried.reasons.some(reason => reason.startsWith('best window avg')));

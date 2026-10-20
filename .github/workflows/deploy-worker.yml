@@ -37,6 +37,8 @@ jobs:
       - run: npm run validate:crags
       - name: Check API protections
         run: node --experimental-vm-modules --test tests/worker.test.cjs tests/api-protection.test.cjs
+      - name: Check Wollongong forecasts
+        run: node --experimental-vm-modules --test --test-name-pattern="Wollongong" tests/scored.test.cjs
 
   deploy:
     needs: validate

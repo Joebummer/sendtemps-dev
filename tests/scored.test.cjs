@@ -3,6 +3,119 @@ const assert = require('node:assert/strict');
 const { loadWorker } = require('./helpers.cjs');
 const { loadCrags, validateCrags } = require('../scripts/validate-crags.cjs');
 
+test('session scoring keeps cool mornings independent of hot afternoons', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const forecast of data) {
+      forecast.hourly.time.forEach((iso, i) => {
+        const h = Number(iso.slice(11, 13));
+        forecast.hourly.temperature_2m[i] = h < 12 ? 12 : 28;
+        forecast.hourly.apparent_temperature[i] = h < 12 ? 12 : 28;
+      });
+    }
+    return Response.json(data);
+  });
+  const forecasts = await harness.forecasts.fetchAllForecasts('NSW');
+  const fc = forecasts['westside-main'];
+  const row = harness.forecasts.rankByDay(forecasts, [fc.tomorrowDate])[fc.tomorrowDate]
+    .find(r => r.crag.id === 'westside-main');
+  assert.equal(row.scoreWindow.start, 7);
+  assert.equal(row.scoreWindow.end, 12);
+  assert.equal(row.day.climbTemps.meanTemp, 12);
+  assert.equal(row.score, Math.round(fc.tomorrowBestWindow.avg));
+  assert.ok(row.score > 90, 'an ideal cool session escapes the afternoon heat cap');
+  assert.ok(row.reasons.some(r => r.startsWith('temp ideal')));
+  assert.ok(!row.reasons.some(r => /too warm|temp varies|hot \(/.test(r)));
+  assert.ok(!row.contributions.some(c => c.category === 'temp' && c.delta < 0));
+});
+
+test('session scoring uses ten days of hourly data and preserves trip and parent consistency', async () => {
+  let calls = 0;
+  const harness = await loadWorker(async url => { calls++; return Response.json(weatherFixture(url)); });
+  const response = await harness.worker.fetch(
+    new Request('https://api.test/forecast/scored?region=NSW&tripStart=2026-09-13&tripEnd=2026-09-22'), {}, harness.ctx);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(calls, 1, 'all ten days reuse the one batched weather request');
+  for (const [dayIndex, date] of body.dates.entries()) {
+    const rows = body.byDate[date];
+    for (const row of rows) {
+      if (row.contributions.some(c => c.category === 'closure')) {
+        assert.equal(row.scoreBasis, 'closure');
+        continue;
+      }
+      assert.equal(row.scoreBasis, 'best-hourly-window', `${row.cragId} ${date}`);
+      assert.equal(row.scoreWindow.hours, 5);
+      assert.equal(row.scoreWindow.end - row.scoreWindow.start, 5);
+      assert.equal(row.scoreWindow.average, row.score);
+      assert.equal(row.scoreWindow.provisional, dayIndex > 1);
+      assert.equal(row.day.climbTemps.climbHours, 5);
+      if (row.bestSubcragId) {
+        const child = rows.find(r => r.cragId === row.bestSubcragId);
+        for (const key of ['score', 'scoreWindow', 'reasons', 'day']) assert.deepEqual(row[key], child[key]);
+      }
+    }
+  }
+  for (const trip of body.weekendTrip) {
+    const scores = trip.dailyScores.map(d => {
+      assert.equal(d.score, body.byDate[d.date].find(r => r.cragId === trip.cragId).score);
+      return d.score;
+    }).sort((a, b) => a - b);
+    const median = scores.length % 2 ? scores[(scores.length - 1) / 2]
+      : (scores[scores.length / 2 - 1] + scores[scores.length / 2]) / 2;
+    assert.equal(trip.tripScore, Math.round(0.5 * scores[0] + 0.3 * scores.reduce((a, b) => a + b, 0) / scores.length + 0.2 * median));
+  }
+});
+
+test('session scoring falls back when future hourly fields are null or insufficient', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const forecast of data) {
+      forecast.hourly.time.forEach((iso, i) => {
+        if (iso === '2026-09-14T09:00') forecast.hourly.temperature_2m[i] = null;
+        if (iso.startsWith('2026-09-21')) forecast.hourly.precipitation[i] = null;
+        if (iso.startsWith('2026-09-22') && ![7, 8, 9, 10].includes(Number(iso.slice(11, 13))))
+          forecast.hourly.temperature_2m[i] = null;
+      });
+    }
+    return Response.json(data);
+  });
+  const forecasts = await harness.forecasts.fetchAllForecasts('NSW');
+  for (const date of ['2026-09-21', '2026-09-22']) {
+    const rows = harness.forecasts.rankByDay(forecasts, [date])[date];
+    for (const row of rows) {
+      assert.ok(Number.isFinite(row.score));
+      if (row.contributions.some(c => c.category === 'closure')) continue;
+      assert.equal(row.scoreBasis, 'daily-estimate-no-hourly-data');
+      assert.equal(row.scoreWindow, null);
+    }
+  }
+  const fc = forecasts['westside-main'];
+  assert.ok(fc.tomorrowHourly.every(h => Number.isFinite(h.score)));
+  assert.ok(!fc.tomorrowHourly.some(h => h.hour === 9), 'a missing hour is omitted without breaking numeric native scores');
+  assert.equal(fc.tomorrowBestWindow.count, 5);
+  assert.equal(fc.tomorrowBestWindow.end - fc.tomorrowBestWindow.start, 5);
+  fc.crag = { ...fc.crag, closedAll: true };
+  assert.equal(harness.forecasts.rankByDay({ [fc.crag.id]: fc }, ['2026-09-22'])['2026-09-22'][0].scoreBasis, 'closure');
+});
+
+test('session scoring rejects gaps and keeps temperature ceilings tied to the selected hours', async () => {
+  const { bestWindow } = (await loadWorker()).forecasts;
+  const gap = [7, 8, 9, 10, 12, 13].map(hour => ({ hour, score: 100 }));
+  assert.equal(bestWindow(gap, null, 5), null);
+  assert.equal(bestWindow([{ hour: 7, score: null }]), null);
+  assert.equal(bestWindow([7, 8, 9, 10].map(hour => ({ hour, score: 100 })), null, 5), null);
+  const crag = { idealTemp: [10, 19], peakTempMax: 18, trip: 'both', discipline: 'sport' };
+  const window = temp => bestWindow([7, 8, 9, 10, 11].map(hour => ({
+    hour, score: 100, temp, apparentTemp: temp,
+  })), crag, 5);
+  assert.equal(window(12).avg, 100);
+  assert.equal(window(18.4).avg, 98);
+  assert.equal(window(18.4).temperatureCap, 98);
+  assert.equal(window(19).avg, 90);
+  assert.equal(window(19).hourlyAvg, 100);
+});
+
 test('Candlestick chasm penalty starts gently below 15 knots and escalates in SSW winds', async () => {
   const harness = await loadWorker();
   const candlestick = {
@@ -590,7 +703,7 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
     const expectedCalls = ['TAS', 'ALL'].includes(region) ? 2 : 1;
     assert.equal(calls, expectedCalls);
 
-    // The unoptimised two-argument path remains our score-equivalence oracle.
+    // The uncached two-argument path must use the same sessions and rollups.
     // Compare every trip field and ordering, not just the aggregate score.
     const baseline = await loadWorker(async url => Response.json(fixtureForUrl(url)));
     const forecasts = await baseline.forecasts.fetchAllForecasts(region);

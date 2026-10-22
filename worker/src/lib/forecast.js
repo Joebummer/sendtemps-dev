@@ -271,7 +271,7 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
     const todayBestWindow = bestWindow(todayHourly, crag, todayMinimumHours);
     const tomorrowHourly = buildTomorrowHourly(crag, f.hourly, drynessSeries, tomorrowMel);
     const tomorrowBestWindow = bestWindow(tomorrowHourly, crag, 5);
-    // Only today/tomorrow strips go on the wire. Days 3–8 use daily estimates;
+    // Only today/tomorrow strips go on the wire. Days 4–8 use daily estimates;
     // retain compact selected sessions for the other dates in the response.
     const bestWindows = { [todayMel]: todayBestWindow, [tomorrowMel]: tomorrowBestWindow };
     for (const date of f.daily.time) {
@@ -2761,12 +2761,12 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   };
 }
 
-// Forecast days 3–8 have no hourly breakdown in the app. Use the broader daily
-// calculation rather than selecting a session the user cannot inspect. Compare
-// calendar dates in UTC so request subsets and daylight saving do not shift it.
+// Forecast days 1–3 use session scoring; days 4–8 use the broader daily
+// calculation. Compare calendar dates in UTC so request subsets and daylight
+// saving do not shift it.
 function isDailyEstimateDate(date, todayDate) {
   const dayOffset = (Date.parse(date) - Date.parse(todayDate)) / 86400000;
-  return dayOffset >= 2 && dayOffset <= 7;
+  return dayOffset >= 3 && dayOffset <= 7;
 }
 
 // Build ranked list per day. Returns { 'YYYY-MM-DD': [{crag, score, reasons, day}] }

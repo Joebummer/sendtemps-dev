@@ -17,19 +17,22 @@ test('session scoring keeps cool mornings independent of hot afternoons', async 
   });
   const forecasts = await harness.forecasts.fetchAllForecasts('NSW');
   const fc = forecasts['westside-main'];
-  const row = harness.forecasts.rankByDay(forecasts, [fc.tomorrowDate])[fc.tomorrowDate]
-    .find(r => r.crag.id === 'westside-main');
-  assert.equal(row.scoreWindow.start, 7);
-  assert.equal(row.scoreWindow.end, 12);
-  assert.equal(row.day.climbTemps.meanTemp, 12);
-  assert.equal(row.score, Math.round(fc.tomorrowBestWindow.avg));
-  assert.ok(row.score > 90, 'an ideal cool session escapes the afternoon heat cap');
-  assert.ok(row.reasons.some(r => r.startsWith('temp ideal')));
-  assert.ok(!row.reasons.some(r => /too warm|temp varies|hot \(/.test(r)));
-  assert.ok(!row.contributions.some(c => c.category === 'temp' && c.delta < 0));
+  for (const date of [fc.tomorrowDate, '2026-09-15']) {
+    const row = harness.forecasts.rankByDay(forecasts, [date])[date]
+      .find(r => r.crag.id === 'westside-main');
+    assert.equal(row.scoreBasis, 'best-hourly-window');
+    assert.equal(row.scoreWindow.start, 7);
+    assert.equal(row.scoreWindow.end, 12);
+    assert.equal(row.day.climbTemps.meanTemp, 12);
+    assert.equal(row.score, Math.round(fc.bestWindows[date].avg));
+    assert.ok(row.score > 90, 'an ideal cool session escapes the afternoon heat cap');
+    assert.ok(row.reasons.some(r => r.startsWith('temp ideal')));
+    assert.ok(!row.reasons.some(r => /too warm|temp varies|hot \(/.test(r)));
+    assert.ok(!row.contributions.some(c => c.category === 'temp' && c.delta < 0));
+  }
 });
 
-test('days 3–8 use daily estimates and preserve trip and parent consistency', async () => {
+test('days 1–3 use sessions and days 4–8 use daily estimates with trip and parent consistency', async () => {
   let calls = 0;
   const harness = await loadWorker(async url => { calls++; return Response.json(weatherFixture(url)); });
   const response = await harness.worker.fetch(
@@ -44,7 +47,7 @@ test('days 3–8 use daily estimates and preserve trip and parent consistency', 
         assert.equal(row.scoreBasis, 'closure');
         continue;
       }
-      if (dayIndex >= 2 && dayIndex <= 7) {
+      if (dayIndex >= 3 && dayIndex <= 7) {
         assert.equal(row.scoreBasis, 'daily-estimate', `${row.cragId} ${date}`);
         assert.equal(row.scoreWindow, null);
         assert.ok(!row.contributions.some(c => c.category === 'window'));
@@ -74,18 +77,18 @@ test('days 3–8 use daily estimates and preserve trip and parent consistency', 
   }
 });
 
-test('days 3–8 keep daily rain penalties even with a dry five-hour morning or stored window', async () => {
+test('days 4–8 keep daily rain penalties even with a dry five-hour morning or stored window', async () => {
   const harness = await loadWorker(async url => {
     const data = weatherFixture(url);
     for (const forecast of data) {
       forecast.hourly.time.forEach((iso, i) => {
-        if (iso.startsWith('2026-09-15') && Number(iso.slice(11, 13)) >= 13 && Number(iso.slice(11, 13)) < 19) {
+        if (iso.startsWith('2026-09-16') && Number(iso.slice(11, 13)) >= 13 && Number(iso.slice(11, 13)) < 19) {
           forecast.hourly.precipitation[i] = 1.02;
           forecast.hourly.precipitation_probability[i] = 81;
           forecast.hourly.weathercode[i] = 80;
         }
       });
-      const di = forecast.daily.time.indexOf('2026-09-15');
+      const di = forecast.daily.time.indexOf('2026-09-16');
       forecast.daily.precipitation_sum[di] = 6.12;
       forecast.daily.precipitation_probability_max[di] = 81;
       forecast.daily.precipitation_hours[di] = 6;
@@ -96,7 +99,7 @@ test('days 3–8 keep daily rain penalties even with a dry five-hour morning or 
   const fc = (await harness.forecasts.fetchAllForecasts('VIC'))['camels-hump'];
   // Single-date and out-of-order queries must use the horizon from today,
   // rather than the position in the requested list (or the past-weather list).
-  for (const date of ['2026-09-20', '2026-09-15', '2026-09-16']) {
+  for (const date of ['2026-09-20', '2026-09-16', '2026-09-17']) {
     assert.equal(fc.bestWindows[date], undefined);
     fc.bestWindows[date] = { ...fc.tomorrowBestWindow, avg: 100 };
     const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [date])[date][0];
@@ -108,22 +111,24 @@ test('days 3–8 keep daily rain penalties even with a dry five-hour morning or 
     assert.deepEqual(row.reasons, expected.reasons);
     assert.deepEqual(row.contributions, expected.contributions);
     assert.equal(row.scoreWindow, null);
-    if (date === '2026-09-15') {
+    if (date === '2026-09-16') {
       assert.equal(row.day.precipProb, 81);
       assert.equal(row.day.precipSum, 6.12);
       assert.ok(row.score < Math.round(fc.tomorrowBestWindow.avg), 'daily rain cannot be hidden by a dry morning');
       assert.ok(row.contributions.some(c => c.category === 'precip' && c.delta < 0));
     }
   }
-  for (const date of ['2026-09-14', '2026-09-21']) {
+  for (const date of ['2026-09-14', '2026-09-15', '2026-09-21']) {
     const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [date])[date][0];
     assert.equal(row.scoreBasis, 'best-hourly-window');
     assert.equal(row.score, Math.round(fc.bestWindows[date].avg));
   }
   fc.crag = { ...fc.crag, closedAll: true };
-  const closed = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, ['2026-09-15'])['2026-09-15'][0];
-  assert.equal(closed.scoreBasis, 'closure');
-  assert.equal(closed.score, 0);
+  for (const date of ['2026-09-15', '2026-09-16']) {
+    const closed = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [date])[date][0];
+    assert.equal(closed.scoreBasis, 'closure');
+    assert.equal(closed.score, 0);
+  }
 });
 
 test('session scoring falls back when future hourly fields are null or insufficient', async () => {
@@ -132,7 +137,7 @@ test('session scoring falls back when future hourly fields are null or insuffici
     for (const forecast of data) {
       forecast.hourly.time.forEach((iso, i) => {
         if (iso === '2026-09-14T09:00') forecast.hourly.temperature_2m[i] = null;
-        if (iso.startsWith('2026-09-21')) forecast.hourly.precipitation[i] = null;
+        if (iso.startsWith('2026-09-15') || iso.startsWith('2026-09-21')) forecast.hourly.precipitation[i] = null;
         if (iso.startsWith('2026-09-22') && ![7, 8, 9, 10].includes(Number(iso.slice(11, 13))))
           forecast.hourly.temperature_2m[i] = null;
       });
@@ -140,7 +145,7 @@ test('session scoring falls back when future hourly fields are null or insuffici
     return Response.json(data);
   });
   const forecasts = await harness.forecasts.fetchAllForecasts('NSW');
-  for (const date of ['2026-09-21', '2026-09-22']) {
+  for (const date of ['2026-09-15', '2026-09-21', '2026-09-22']) {
     const rows = harness.forecasts.rankByDay(forecasts, [date])[date];
     for (const row of rows) {
       assert.ok(Number.isFinite(row.score));

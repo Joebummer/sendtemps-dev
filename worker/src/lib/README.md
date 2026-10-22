@@ -6,11 +6,11 @@ diverged. Do not overwrite the production modules by copying the browser files.
 
 ## Session scoring
 
-Forecast days 3–8 (today is day 1) use the broader daily calculation and report
-`daily-estimate`, with no `scoreWindow` or window contribution. These dates have
-no hour-by-hour breakdown in the app, so their headline must not depend on an
-unseen selected session. This also retains the daily temperature and rain
-explanations. The boundary uses calendar dates, including for trip-only queries.
+Forecast days 1–3 (today is day 1) use the strongest consecutive five-hour
+session. Days 4–8 use the broader daily calculation and report `daily-estimate`,
+with no `scoreWindow` or window contribution, retaining the daily temperature
+and rain explanations. The boundary uses calendar dates, including for
+single-date and trip-only queries.
 
 The other forecast dates retain the strongest consecutive five-hour session
 from 7am onwards. Today may shorten to the remaining one to four hours. Session

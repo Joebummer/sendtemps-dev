@@ -2403,11 +2403,11 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     const parts = [];
     if (preClimbMm > 0.2) parts.push(`${preClimbMm.toFixed(1)}mm before ${startH}am`);
     if (postClimbMm > 0.2) parts.push(`${postClimbMm.toFixed(1)}mm after dark`);
-    rainDetail = `dry during climbing hours — ${parts.join(' + ')} outside the window`;
+    rainDetail = `0.0mm during climbing hours; ${parts.join(' + ')} outside those hours`;
   } else if (skipLateRain) {
-    rainDetail = `${effectiveSum.toFixed(1)}mm during climbable hours (rain after dark ignored)`;
+    rainDetail = `${effectiveSum.toFixed(1)}mm during climbing hours; rain after dark excluded from this penalty`;
   } else {
-    rainDetail = `${effectiveSum.toFixed(1)}mm forecast · ${Math.round(peakProb)}% peak chance (${Math.round(effectiveProb)}% avg across climbing hours)`;
+    rainDetail = `${effectiveSum.toFixed(1)}mm during climbing hours · ${Math.round(peakProb)}% peak rain chance · ${Math.round(effectiveProb)}% average rain chance during climbing hours`;
   }
   // Precipitation concentration: 10mm in 1 hour is far worse than 10mm spread
   // across 8 hours. We scale the rain penalty by how concentrated the rain is.

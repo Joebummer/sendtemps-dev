@@ -2398,6 +2398,8 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // don't add to the penalty — dryness handles any rock-wetness carry-over.
   const preClimbMm = climb.sumBeforeClimb || 0;
   const postClimbMm = climb.sumAfter || 0;
+  const fullDayRain = Number.isFinite(day.precipSum) ? day.precipSum : null;
+  const climbingRainLabel = `${effectiveSum.toFixed(1)}mm during climbing hours${fullDayRain != null ? ` (of ${fullDayRain.toFixed(1)}mm full-day total)` : ''}`;
   let rainDetail;
   if (effectiveSum < 0.2 && (preClimbMm > 0.2 || postClimbMm > 0.2)) {
     const parts = [];
@@ -2405,9 +2407,9 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     if (postClimbMm > 0.2) parts.push(`${postClimbMm.toFixed(1)}mm after dark`);
     rainDetail = `0.0mm during climbing hours; ${parts.join(' + ')} outside those hours`;
   } else if (skipLateRain) {
-    rainDetail = `${effectiveSum.toFixed(1)}mm during climbing hours; rain after dark excluded from this penalty`;
+    rainDetail = `${climbingRainLabel}; rain after dark excluded from this penalty`;
   } else {
-    rainDetail = `${effectiveSum.toFixed(1)}mm during climbing hours · ${Math.round(peakProb)}% peak rain chance · ${Math.round(effectiveProb)}% average rain chance during climbing hours`;
+    rainDetail = `${climbingRainLabel} · ${Math.round(peakProb)}% peak rain chance · ${Math.round(effectiveProb)}% average rain chance during climbing hours`;
   }
   // Precipitation concentration: 10mm in 1 hour is far worse than 10mm spread
   // across 8 hours. We scale the rain penalty by how concentrated the rain is.

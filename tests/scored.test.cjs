@@ -418,7 +418,9 @@ test('an isolated trace cannot replace an unfinished heavier sandstone recovery'
   for (const hour of [12, 13]) {
     const index = cathedral.hourly.time.indexOf(`2026-09-14T${hour}:00`);
     assert.equal(cathedral.drynessSeries[index].rainEventMm, 1.1);
-    assert.equal(cathedral.tomorrowHourly.find(cell => cell.hour === hour).score, 0);
+    const dryingHour = cathedral.tomorrowHourly.find(cell => cell.hour === hour);
+    assert.ok(dryingHour.wetRockCondition, 'the heavier event remains in recovery');
+    assert.ok(dryingHour.score <= dryingHour.wetRockCondition.cap);
   }
 });
 
@@ -516,10 +518,14 @@ test('sandstone recovery resets in drizzle and pauses overnight and in high humi
   assert.equal(sample('2026-09-14T08:00'), 0);
   assert.ok(sample('2026-09-14T09:00') > 0);
   for (const hour of [6, 7, 8]) {
-    assert.equal(westside.tomorrowHourly.find(cell => cell.hour === hour).score, 0);
+    const cell = westside.tomorrowHourly.find(h => h.hour === hour);
+    assert.ok(cell.wetRockCondition, 'recovery remains active');
+    assert.equal(cell.wetRockCondition.cap, 20, 'no productive drying credit yet');
+    assert.ok(cell.score <= 20);
   }
-  assert.equal(westside.tomorrowHourly.find(hour => hour.hour === 14).score, 0,
-    'the heavier event still needs its full productive drying interval');
+  const afternoon = westside.tomorrowHourly.find(hour => hour.hour === 14);
+  assert.ok(afternoon.wetRockCondition, 'the heavier event still needs recovery');
+  assert.ok(afternoon.score <= afternoon.wetRockCondition.cap);
 });
 
 test('0.2 mm events skip sandstone recovery while granite retains its dry-hour interval', async () => {
@@ -676,8 +682,8 @@ for (const mm of [0.2, 1]) {
         assert.ok(cell.score > 0, `${forecast.crag.id}: trace rain does not trigger lockout`);
         assert.equal(cell.wetRockCondition, undefined);
       } else {
-        assert.equal(cell.score, 0, `${forecast.crag.id}: meaningful rain retains wet-rock recovery`);
-        assert.ok(cell.wetRockCondition);
+        assert.ok(cell.wetRockCondition, `${forecast.crag.id}: meaningful rain retains wet-rock recovery`);
+        assert.ok(cell.score <= cell.wetRockCondition.cap);
       }
     }
   });

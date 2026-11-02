@@ -298,20 +298,23 @@ test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async
     precip: 0, hoursSinceRain: 8, recoveryProgressHours: 0, rainEventMm: 0.1,
   }).cap, 100);
   assert.equal(condition(sandstone, {
+    precip: 0, hoursSinceRain: 0, recoveryProgressHours: 0, rainEventMm: 1,
+  }).cap, 20);
+  assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 8, recoveryProgressHours: 1, rainEventMm: 1,
-  }).cap, 0);
+  }).cap, 27);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 2, recoveryProgressHours: 2, rainEventMm: 0.1,
   }).cap, 100);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 8, recoveryProgressHours: 8, rainEventMm: 1,
-  }).cap, 0);
+  }).cap, 78);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 9, recoveryProgressHours: 9, rainEventMm: 1,
   }).cap, 100);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 20, recoveryProgressHours: 17, rainEventMm: 5,
-  }).cap, 0);
+  }).cap, 81);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 21, recoveryProgressHours: 18, rainEventMm: 5,
   }).cap, 100);

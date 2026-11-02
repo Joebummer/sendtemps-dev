@@ -502,11 +502,14 @@ export function wetRockCondition(crag, hour) {
     : recoveryProgressHours.toFixed(1);
   const detail = `${progressLabel}/${recoveryHours} effective dry hours after ${rainEventMm.toFixed(1)}mm`;
 
-  // Sandstone remains an outright Avoid until its full recovery requirement
-  // has elapsed. Other rock types retain a progressive ceiling while drying.
+  // During sandstone recovery, gradually lift the weather suitability ceiling
+  // instead of treating every partially dried hour as an outright Avoid.
+  // The recovery requirement itself remains unchanged. Active rain is still
+  // capped at zero above the 1 mm sandstone event threshold.
   if (rock === 'sandstone') {
+    const progress = Math.max(0, Math.min(1, recoveryProgressHours / recoveryHours));
     return {
-      cap: 0,
+      cap: Math.round(20 + 65 * progress),
       label: 'sandstone drying after rain',
       detail,
       recoveryHours,

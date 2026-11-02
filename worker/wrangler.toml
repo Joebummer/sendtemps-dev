@@ -28,3 +28,11 @@ simple = { limit = 600, period = 60 }
 name = "WEATHER_REQUEST_LIMITER"
 namespace_id = "2026102002"
 simple = { limit = 30, period = 60 }
+
+# Capture runtime errors and request failures for forecast outage diagnosis.
+[observability]
+enabled = true
+
+[observability.logs]
+invocation_logs = true
+head_sampling_rate = 1

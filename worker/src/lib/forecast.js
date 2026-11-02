@@ -54,7 +54,7 @@ export async function fetchOpenMeteo(input, apiKey = '', requestLimiter) {
     paidUrl.hostname = `customer-${url.hostname}`;
     paidUrl.searchParams.set('apikey', key);
     try {
-      const paid = await boundedFetch(paidUrl, 8000);
+      const paid = await boundedFetch(paidUrl, 4000);
       if (paid.ok) return paid;
     } catch (error) {
       if (error.status === 429) throw error;
@@ -63,7 +63,7 @@ export async function fetchOpenMeteo(input, apiKey = '', requestLimiter) {
   }
   try {
     // Keep the entire provider attempt within the mobile client's timeout.
-    return await boundedFetch(url, 15000);
+    return await boundedFetch(url, 7000);
   } catch (error) {
     if (error.status === 429) throw error;
     // Network errors can contain the requested URL, including credentials.

@@ -446,7 +446,8 @@ test('nearby sandstone rain accumulates into a 1 mm event', async () => {
   const byHour = hour => cathedral.tomorrowHourly.find(cell => cell.hour === hour);
   assert.ok(byHour(12).score > 0, 'the initial 0.9 mm remains exempt');
   assert.equal(byHour(13).score, 0, 'the combined 1 mm event triggers the cap');
-  assert.equal(byHour(14).wetRockCondition.recoveryHours, 9);
+  assert.equal(byHour(14).wetRockCondition.recoveryHours,
+    harness.forecasts.rainRecoveryHours(cathedral.crag, 1));
 });
 
 test('an isolated trace cannot replace an unfinished heavier sandstone recovery', async () => {

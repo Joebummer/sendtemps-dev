@@ -330,6 +330,8 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
         afternoonDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 14),
         dayDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 11), // mid-day single value
         ...wetRockDayCondition(crag, f.hourly, drynessSeries, date),
+        longRangeDrySession: isDailyEstimateDate(date, todayMel) &&
+          hasUsableDrySession(crag, f.hourly, drynessSeries, date),
         elevCorrection: lapse !== 0 ? Math.round(lapse * 10) / 10 : null,
       });
       }),
@@ -527,6 +529,36 @@ export function wetRockCondition(crag, hour) {
     detail,
     recoveryHours,
   };
+}
+
+// A long-range daily estimate can acknowledge a genuinely usable dry period
+// without publishing a precise session score several days in advance.
+// Every hour must be forecast dry, low-risk and safe under the wet-rock cap.
+// Missing hourly inputs never qualify.
+function hasUsableDrySession(crag, hourly, drynessSeries, dateStr) {
+  if (!hourly?.time || !drynessSeries?.length) return false;
+  let consecutive = 0;
+  for (let i = 0; i < hourly.time.length; i++) {
+    const iso = hourly.time[i];
+    if (!iso.startsWith(dateStr)) continue;
+    const hour = Number(iso.slice(11, 13));
+    if (hour < 7 || hour >= 20) continue;
+    const rain = hourly.precipitation?.[i];
+    const probability = hourly.precipitation_probability?.[i];
+    const dry = drynessSeries[i];
+    const cap = dry ? wetRockCondition(crag, {
+      precip: rain, recoveryProgressHours: dry.recoveryProgressHours,
+      hoursSinceRain: dry.hoursSinceRain, rainEventMm: dry.rainEventMm,
+    }).cap : 0;
+    if (Number.isFinite(rain) && Number.isFinite(probability) &&
+        rain < MEASURABLE_RAIN_MM && probability <= 35 && cap >= 80) {
+      consecutive += 1;
+      if (consecutive >= 5) return true;
+    } else {
+      consecutive = 0;
+    }
+  }
+  return false;
 }
 
 function wetRockDayCondition(crag, hourly, drynessSeries, dateStr) {
@@ -1112,6 +1144,7 @@ function computeDrynessSeries(crag, hourly) {
   let hoursSinceRain = null;
   let recoveryProgressHours = null;
   let rainEventMm = 0;
+  let activeRainEventMm = 0;
   let lastRainIndex = null;
   const series = new Array(n);
 
@@ -1130,26 +1163,25 @@ function computeDrynessSeries(crag, hourly) {
     const effectiveWind = Math.max(wind, gust * 0.7);
     const atmosphericDeltaT = hourly.delta_t_2m?.[i] ?? deltaT(t, rh) ?? 3.5;
 
-    // Track trace accumulation even before sandstone needs a recovery clock.
-    // Group rain separated by at most two dry hours. A later trace must not
-    // replace a heavier sandstone event while that event is still drying.
+    // Group showers no more than two dry hours apart into independent events.
+    // A new sub-1 mm sandstone shower adds physical wetness below, but must
+    // not reset an unfinished recovery from an earlier substantial event.
     if (mm >= MEASURABLE_RAIN_MM) {
-      if (rock === 'sandstone') {
-        const sameEvent = lastRainIndex != null && i - lastRainIndex <= 3;
-        const stillRecovering = recoveryProgressHours != null &&
-          recoveryProgressHours < rainRecoveryHours(crag, rainEventMm);
-        if (!sameEvent && !stillRecovering) rainEventMm = 0;
-      } else if (hoursSinceRain == null || hoursSinceRain > 2) {
-        rainEventMm = 0;
-      }
-      rainEventMm += mm;
+      const sameEvent = lastRainIndex != null && i - lastRainIndex <= 3;
+      activeRainEventMm = sameEvent ? activeRainEventMm + mm : mm;
       lastRainIndex = i;
-      if (rock !== 'sandstone' || !isBelowSandstoneThreshold(rainEventMm)) {
+      if (rock === 'sandstone') {
+        if (!isBelowSandstoneThreshold(activeRainEventMm)) {
+          rainEventMm = activeRainEventMm;
+          hoursSinceRain = 0;
+          recoveryProgressHours = 0;
+        }
+        // A trace-only event leaves the previous recovery clock unchanged.
+        // The rain still reduces the physical dryness index.
+      } else {
+        rainEventMm = activeRainEventMm;
         hoursSinceRain = 0;
         recoveryProgressHours = 0;
-      } else {
-        hoursSinceRain = null;
-        recoveryProgressHours = null;
       }
     } else if (hoursSinceRain != null) {
       hoursSinceRain += 1;
@@ -2462,6 +2494,20 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     reasons.push('possible drizzle');
     add('precip', 'Possible drizzle', -pen, rainDetail);
   }
+  // For days 4–8 keep the broad daily rain outlook, but avoid treating a
+  // short shower outside a verified dry five-hour period as all-day rain.
+  // Rain risk retains at least 65% of its penalty; wet rock remains capped.
+  if (day.longRangeDrySession && effectiveSum > 0) {
+    const rainPenalty = contributions
+      .filter(c => c.category === 'precip' && c.delta < 0)
+      .reduce((sum, c) => sum - c.delta, 0);
+    const relief = Math.round(rainPenalty * 0.35);
+    if (relief > 0) {
+      score += relief;
+      add('precip', 'Usable dry period', relief,
+        'Five consecutive low-rain-risk hours forecast; daily shower risk remains');
+    }
+  }
   if (skipLateRain && climb.sumAfter > 0.5) {
     reasons.push('rain after dark only');
   } else if (effectiveSum < 0.2 && preClimbMm > 0.5) {
@@ -2478,7 +2524,9 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   const dryness = (day.morningDryness != null && day.afternoonDryness != null)
     ? Math.min(day.morningDryness, day.afternoonDryness)
     : (day.dayDryness ?? day.morningDryness ?? day.afternoonDryness ?? 100);
-  if (dryness < 100) {
+  if (dryness < 100 && wetRockScoreCap >= 100) {
+    // While the sandstone recovery cap is active, that cap already represents
+    // residual moisture. Do not charge a second physical-dryness penalty.
     const penalty = Math.round(((100 - dryness) / 100) * 45);
     score -= penalty;
     if (dryness < 30) reasons.push('rock soaked');

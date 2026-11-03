@@ -479,13 +479,17 @@ export function wetRockCondition(crag, hour) {
     ? hour.recoveryProgressHours
     : hoursSinceRain;
   const rainEventMm = Number.isFinite(hour?.rainEventMm) ? hour.rainEventMm : rain;
+  const currentEventMm = Number.isFinite(hour?.currentEventMm) ? hour.currentEventMm : rainEventMm;
   const rock = canonicalRockType(crag);
 
   if (rock === 'sandstone' && isBelowSandstoneThreshold(Math.max(rain, rainEventMm))) {
     return { cap: 100, label: null, detail: null, recoveryHours: 0 };
   }
 
-  if (rain >= MEASURABLE_RAIN_MM) {
+  // Isolated sandstone drizzle below 1 mm does not become "wet rock"
+  // merely because an older, heavier event is still recovering.
+  if (rain >= MEASURABLE_RAIN_MM &&
+      (rock !== 'sandstone' || !isBelowSandstoneThreshold(currentEventMm))) {
     return {
       cap: RAIN_HOUR_CAP[rock] ?? 60,
       label: `${rock} wet`,
@@ -549,6 +553,7 @@ function hasUsableDrySession(crag, hourly, drynessSeries, dateStr) {
     const cap = dry ? wetRockCondition(crag, {
       precip: rain, recoveryProgressHours: dry.recoveryProgressHours,
       hoursSinceRain: dry.hoursSinceRain, rainEventMm: dry.rainEventMm,
+      currentEventMm: dry.currentEventMm,
     }).cap : 0;
     if (Number.isFinite(rain) && Number.isFinite(probability) &&
         rain < MEASURABLE_RAIN_MM && probability <= 35 && cap >= 80) {
@@ -574,6 +579,7 @@ function wetRockDayCondition(crag, hourly, drynessSeries, dateStr) {
       hoursSinceRain: drynessSeries[i]?.hoursSinceRain ?? null,
       recoveryProgressHours: drynessSeries[i]?.recoveryProgressHours ?? null,
       rainEventMm: drynessSeries[i]?.rainEventMm ?? 0,
+      currentEventMm: drynessSeries[i]?.currentEventMm ?? 0,
     });
     samples.push({ hour, ...condition });
   }
@@ -1257,6 +1263,7 @@ function computeDrynessSeries(crag, hourly) {
       hoursSinceRain,
       recoveryProgressHours,
       rainEventMm: Math.round(rainEventMm * 1000) / 1000,
+      currentEventMm: Math.round(activeRainEventMm * 1000) / 1000,
     };
   }
   return series;
@@ -1479,6 +1486,7 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
       hoursSinceRain: drynessSeries[i]?.hoursSinceRain ?? null,
       recoveryProgressHours: drynessSeries[i]?.recoveryProgressHours ?? null,
       rainEventMm: drynessSeries[i]?.rainEventMm ?? 0,
+      currentEventMm: drynessSeries[i]?.currentEventMm ?? 0,
       sunAlt: Math.round(sun.altitude),
       sunAz: Math.round(sun.azimuth),
       sunOnWall: lit,

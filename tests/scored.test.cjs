@@ -417,7 +417,7 @@ test('an isolated trace cannot replace an unfinished heavier sandstone recovery'
   const cathedral = (await harness.forecasts.fetchAllForecasts('VIC'))['cathedral-main'];
   for (const hour of [12, 13]) {
     const index = cathedral.hourly.time.indexOf(`2026-09-14T${hour}:00`);
-    assert.equal(cathedral.drynessSeries[index].rainEventMm, 1.1);
+    assert.equal(cathedral.drynessSeries[index].rainEventMm, 1);
     const dryingHour = cathedral.tomorrowHourly.find(cell => cell.hour === hour);
     assert.ok(dryingHour.wetRockCondition, 'the heavier event remains in recovery');
     assert.ok(dryingHour.score <= dryingHour.wetRockCondition.cap);
@@ -526,6 +526,80 @@ test('sandstone recovery resets in drizzle and pauses overnight and in high humi
   const afternoon = westside.tomorrowHourly.find(hour => hour.hour === 14);
   assert.ok(afternoon.wetRockCondition, 'the heavier event still needs recovery');
   assert.ok(afternoon.score <= afternoon.wetRockCondition.cap);
+});
+
+test('isolated sub-1 mm shower does not restart a substantial sandstone recovery', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const forecast of data) {
+      forecast.hourly.precipitation[forecast.hourly.time.indexOf('2026-09-14T08:00')] = 5;
+      forecast.hourly.precipitation[forecast.hourly.time.indexOf('2026-09-14T14:00')] = 0.2;
+    }
+    return Response.json(data);
+  });
+  const westside = (await harness.forecasts.fetchAllForecasts('NSW'))['westside-main'];
+  const at = hour => westside.drynessSeries[westside.hourly.time.indexOf(
+    `2026-09-14T${String(hour).padStart(2, '0')}:00`)];
+  assert.equal(at(13).rainEventMm, 5);
+  assert.ok(at(13).recoveryProgressHours > 0);
+  assert.equal(at(14).rainEventMm, 5, 'new light shower does not extend the old rain total');
+  assert.equal(at(14).recoveryProgressHours, at(13).recoveryProgressHours,
+    'light rain pauses rather than resets effective drying progress');
+  assert.equal(at(15).rainEventMm, 5);
+  assert.ok(at(15).recoveryProgressHours >= at(14).recoveryProgressHours);
+});
+
+test('daily sandstone recovery cap is not charged a second dryness penalty', async () => {
+  const harness = await loadWorker();
+  const crag = { ...harness.crags?.find?.(c => c.id === 'gramps-main'),
+    id: 'test-sandstone', rockType: 'sandstone', idealTemp: [8, 22],
+    aspect: 'mixed', shade: 'mixed', bestIn: 'mild', dryRating: 3 };
+  const baseline = {
+    date: '2026-09-16', tMax: 17, tMin: 10, tFeel: 17, precipSum: 0,
+    precipProb: 0, precipHours: 0, wind: 8, sunshine: 20000,
+    rainWindows: [], climbTemps: { climbHours: 0 }, morningDryness: 50,
+    afternoonDryness: 50, dayDryness: 50, wetRockCap: 60,
+  };
+  const recovered = harness.forecasts.scoreDay(crag, baseline);
+  const withoutCap = harness.forecasts.scoreDay(crag, { ...baseline, wetRockCap: 100 });
+  assert.ok(!recovered.contributions.some(c => c.label === 'Rock dryness'),
+    'recovery ceiling already accounts for residual wetness');
+  assert.ok(withoutCap.contributions.some(c => c.label === 'Rock dryness'),
+    'physical dryness penalty remains when no recovery ceiling applies');
+  assert.ok(recovered.score <= 60);
+});
+
+test('days 4–8 moderate shower penalty only for a safe dry period', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const forecast of data) {
+      for (const hour of [15, 16, 17]) {
+        const i = forecast.hourly.time.indexOf(
+          `2026-09-16T${String(hour).padStart(2, '0')}:00`);
+        forecast.hourly.precipitation[i] = 0.5;
+        forecast.hourly.precipitation_probability[i] = 75;
+      }
+      const di = forecast.daily.time.indexOf('2026-09-16');
+      forecast.daily.precipitation_sum[di] = 1.5;
+      forecast.daily.precipitation_probability_max[di] = 75;
+      forecast.daily.precipitation_hours[di] = 3;
+    }
+    return Response.json(data);
+  });
+  const fc = (await harness.forecasts.fetchAllForecasts('VIC'))['camels-hump'];
+  const day = fc.days.find(d => d.date === '2026-09-16');
+  assert.equal(day.longRangeDrySession, true);
+  const withDrySession = harness.forecasts.scoreDay(fc.crag, day);
+  const withoutDrySession = harness.forecasts.scoreDay(fc.crag, {
+    ...day, longRangeDrySession: false,
+  });
+  assert.ok(withDrySession.score > withoutDrySession.score);
+  assert.ok(withDrySession.contributions.some(c => c.label === 'Usable dry period'));
+  assert.ok(withDrySession.contributions.some(c => c.category === 'precip' && c.delta < 0),
+    'dry period never erases daily shower risk');
+  const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, ['2026-09-16'])['2026-09-16'][0];
+  assert.equal(row.scoreBasis, 'daily-estimate');
+  assert.equal(row.scoreWindow, null);
 });
 
 test('0.2 mm events skip sandstone recovery while granite retains its dry-hour interval', async () => {

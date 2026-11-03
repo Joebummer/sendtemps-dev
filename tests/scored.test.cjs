@@ -283,6 +283,49 @@ test('rain recovery exempts sandstone events below 1 mm and scales heavier rain 
   assert.equal(recovery({ rockType: 'sandstone (soft)' }, 0.5), 0);
 });
 
+test('exposed sandstone has shorter provisional recovery, while sheltered rock stays conservative', async () => {
+  const { rainRecoveryHours, wetRockCondition } = (await loadWorker()).forecasts;
+  const exposed = { rockType: 'sandstone', dryRating: 5 };
+  const typical = { rockType: 'sandstone', dryRating: 3 };
+  const sheltered = { rockType: 'sandstone', dryRating: 2 };
+  for (const [rain, oldHours, fastHours, typicalHours] of [
+    [1, 9, 8, 9], [5, 18, 15, 17], [10, 28, 23, 26],
+  ]) {
+    assert.equal(rainRecoveryHours(exposed, rain), fastHours);
+    assert.equal(rainRecoveryHours(typical, rain), typicalHours);
+    assert.equal(rainRecoveryHours(sheltered, rain), oldHours);
+    assert.equal(wetRockCondition(exposed, { precip: rain, rainEventMm: rain,
+      currentEventMm: rain, recoveryProgressHours: 0 }).cap, 0,
+      'active substantial rain must remain unsafe');
+    assert.equal(wetRockCondition(exposed, { precip: 0, rainEventMm: rain,
+      recoveryProgressHours: fastHours }).cap, 100);
+    assert.ok(wetRockCondition(exposed, { precip: 0, rainEventMm: rain,
+      recoveryProgressHours: fastHours / 2 }).cap <= 90);
+  }
+});
+
+test('daily API exposes weather quality separately from sandstone rock-readiness', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const forecast of data) {
+      const index = forecast.hourly.time.indexOf('2026-09-14T08:00');
+      forecast.hourly.precipitation[index] = 5;
+    }
+    return Response.json(data);
+  });
+  const forecast = (await harness.forecasts.fetchAllForecasts('VIC'))['gramps-westflank'];
+  const recovering = forecast.days.find(d => d.date === '2026-09-14');
+  assert.ok(recovering.rockReadiness);
+  assert.match(recovering.rockReadiness.advisory, /Do not climb sandstone/);
+  const row = harness.forecasts.rankByDay(
+    { [forecast.crag.id]: forecast }, ['2026-09-14'])['2026-09-14'][0];
+  assert.ok(Number.isFinite(row.weatherScore));
+  assert.equal(row.weatherScoreBasis, 'daily-estimate');
+  assert.ok(['wet', 'drying', 'forecast-dry'].includes(row.rockReadiness.status));
+  assert.equal(row.rockReadiness.status, recovering.rockReadiness.status);
+  assert.ok(row.score <= 100);
+});
+
 test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async () => {
   const harness = await loadWorker();
   const condition = harness.forecasts.wetRockCondition;
@@ -299,22 +342,22 @@ test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async
   }).cap, 100);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 0, recoveryProgressHours: 0, rainEventMm: 1,
-  }).cap, 20);
+  }).cap, 25);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 8, recoveryProgressHours: 1, rainEventMm: 1,
-  }).cap, 27);
+  }).cap, Math.round(25 + 65 * Math.pow(1 / 9, 0.8)));
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 2, recoveryProgressHours: 2, rainEventMm: 0.1,
   }).cap, 100);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 8, recoveryProgressHours: 8, rainEventMm: 1,
-  }).cap, 78);
+  }).cap, Math.round(25 + 65 * Math.pow(8 / 9, 0.8)));
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 9, recoveryProgressHours: 9, rainEventMm: 1,
   }).cap, 100);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 20, recoveryProgressHours: 17, rainEventMm: 5,
-  }).cap, 81);
+  }).cap, Math.round(25 + 65 * Math.pow(17 / 18, 0.8)));
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 21, recoveryProgressHours: 18, rainEventMm: 5,
   }).cap, 100);
@@ -520,8 +563,8 @@ test('sandstone recovery resets in drizzle and pauses overnight and in high humi
   for (const hour of [6, 7, 8]) {
     const cell = westside.tomorrowHourly.find(h => h.hour === hour);
     assert.ok(cell.wetRockCondition, 'recovery remains active');
-    assert.equal(cell.wetRockCondition.cap, 20, 'no productive drying credit yet');
-    assert.ok(cell.score <= 20);
+    assert.equal(cell.wetRockCondition.cap, 25, 'no productive drying credit yet');
+    assert.ok(cell.score <= 25);
   }
   const afternoon = westside.tomorrowHourly.find(hour => hour.hour === 14);
   assert.ok(afternoon.wetRockCondition, 'the heavier event still needs recovery');

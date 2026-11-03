@@ -464,9 +464,16 @@ export function rainRecoveryHours(crag, eventMm) {
     // Events below 1 mm do not start sandstone recovery. At 1 mm and above,
     // retain the severity-scaled drying curve.
     if (isBelowSandstoneThreshold(eventMm)) return 0;
-    return Math.ceil(interpolate([
+    const baseline = interpolate([
       [0.05, 1], [0.1, 2], [0.2, 4], [1, 9], [5, 18], [10, 28], [20, 36],
-    ], eventMm));
+    ], eventMm);
+    // Provisional, not a safety threshold: exposed sandstone recovers sooner
+    // in the model than enclosed walls, while slow-drying walls retain the
+    // original requirement. Drying CREDIT itself remains humidity/sun/wind-aware.
+    const rating = crag.dryRating ?? 2;
+    const multiplier = rating >= 5 ? 0.80 : rating >= 4 ? 0.85 :
+      rating >= 3 ? 0.90 : 1;
+    return Math.max(1, Math.ceil(baseline * multiplier));
   }
   const multiplier = RAIN_RECOVERY_MULTIPLIER[rock] ?? 1.5;
   return Math.max(1, Math.min(72, Math.ceil(baseRainRecoveryHours(eventMm) * multiplier)));
@@ -508,14 +515,13 @@ export function wetRockCondition(crag, hour) {
     : recoveryProgressHours.toFixed(1);
   const detail = `${progressLabel}/${recoveryHours} effective dry hours after ${rainEventMm.toFixed(1)}mm`;
 
-  // During sandstone recovery, gradually lift the weather suitability ceiling
-  // instead of treating every partially dried hour as an outright Avoid.
-  // The recovery requirement itself remains unchanged. Active rain is still
-  // capped at zero above the 1 mm sandstone event threshold.
+  // Recovery is intentionally gentler after drying has begun. Substantial
+  // active rain still scores zero; a recovering rock's suitability score is
+  // always limited, even when weather alone would be excellent.
   if (rock === 'sandstone') {
     const progress = Math.max(0, Math.min(1, recoveryProgressHours / recoveryHours));
     return {
-      cap: Math.round(20 + 65 * progress),
+      cap: Math.round(25 + 65 * Math.pow(progress, 0.8)),
       label: 'sandstone drying after rain',
       detail,
       recoveryHours,
@@ -595,13 +601,25 @@ function wetRockDayCondition(crag, hourly, drynessSeries, dateStr) {
     const average = window.reduce((sum, sample) => sum + sample.cap, 0) / count;
     if (!best || average > best.average) best = { window, average };
   }
-  if (!best || best.average >= 100) return {};
+  if (!best) return {};
   const representative = best.window.reduce((worst, sample) =>
     sample.cap < worst.cap ? sample : worst, best.window[0]);
+  const averageCap = Math.floor(best.average);
+  const recovering = averageCap < 100;
   return {
-    wetRockCap: Math.floor(best.average),
-    wetRockLabel: representative.label,
-    wetRockDetail: `${best.window[0].hour}:00–${best.window[best.window.length - 1].hour + 1}:00 recovery ceiling; ${representative.detail}`,
+    ...(recovering ? {
+      wetRockCap: averageCap,
+      wetRockLabel: representative.label,
+      wetRockDetail: `${best.window[0].hour}:00–${best.window[best.window.length - 1].hour + 1}:00 recovery ceiling; ${representative.detail}`,
+    } : {}),
+    rockReadiness: {
+      status: !recovering ? 'forecast-dry' :
+        averageCap <= 25 ? 'wet' : 'drying',
+      label: !recovering ? 'Forecast dry – inspect rock' :
+        averageCap <= 25 ? 'Wet sandstone – do not climb' : 'Sandstone drying – inspect before climbing',
+      advisory: 'Forecast model only. Do not climb sandstone that is damp, seeping or soft.',
+      ...(recovering ? { forecastRecoveryCeiling: averageCap } : {}),
+    },
   };
 }
 
@@ -2731,6 +2749,10 @@ export function scoreDay(crag, day, prevDay, nextDay) {
         : `${_humidLabel} — strong evaporative conditions should keep holds feeling crisp`);
   }
 
+  // Weather-only context is distinct from rock-readiness confidence.
+  // This estimate excludes the residual wet-rock cap but retains penalties
+  // for forecast rain itself. Do not interpret it as rock safety.
+  const weatherScore = Math.max(0, Math.min(100, Math.round(score)));
   if (wetRockScoreCap < 100) {
     const wetRockReason = day.wetRockLabel || 'rock drying after rain';
     const existingReason = reasons.indexOf(wetRockReason);
@@ -2816,6 +2838,11 @@ export function scoreDay(crag, day, prevDay, nextDay) {
 
   return {
     score: finalScore,
+    weatherScore,
+    rockReadiness: day.rockReadiness ?? {
+      status: 'unknown', label: 'Rock readiness unverified',
+      advisory: 'Inspect sandstone for moisture before climbing.',
+    },
     reasons: surfacedReasons,
     contributions,
     seasonalContext,
@@ -2848,7 +2875,7 @@ export function rankByDay(forecasts, dayDates) {
       const prevDay = dayIdx > 0 ? fc.days[dayIdx - 1] : null;
       const nextDay = dayIdx + 1 < fc.days.length ? fc.days[dayIdx + 1] : null;
       const dayResult = scoreDay(fc.crag, day, prevDay, nextDay);
-      let { score, reasons, contributions, seasonalContext } = dayResult;
+      let { score, reasons, contributions, seasonalContext, weatherScore, rockReadiness } = dayResult;
 
       // The session score already includes the temperature ceilings calculated
       // from these exact hours, never from an unrelated hotter afternoon.
@@ -2890,6 +2917,9 @@ export function rankByDay(forecasts, dayDates) {
         score,
         scoreBasis,
         scoreWindow,
+        weatherScore,
+        weatherScoreBasis: 'daily-estimate',
+        rockReadiness,
         reasons,
         contributions,
         seasonalContext,

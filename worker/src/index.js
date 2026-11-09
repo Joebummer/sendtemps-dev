@@ -557,8 +557,14 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
     if (cached) {
       regional = await cached.json();
     } else {
-      try {
-        regional = await shareRefresh(scoredRefreshes, cacheKey.url, async () => {
+      // Serve a same-day, same-version fallback immediately instead of making
+      // the mobile client wait for a potentially slow upstream refresh.
+      const stale = await cache.match(fallbackKey);
+      if (stale) {
+        regional = await stale.json();
+        cacheStatus = 'STALE';
+      }
+      const refresh = shareRefresh(scoredRefreshes, cacheKey.url, async () => {
           const forecasts = await fetchAllForecasts(region, env.OPEN_METEO_API_KEY, env.WEATHER_REQUEST_LIMITER);
           const ranked = rankByDay(forecasts, dates);
           const refreshed = {
@@ -584,11 +590,20 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
           ]);
           return refreshed;
         });
-      } catch (error) {
-        const fallback = await cache.match(fallbackKey);
-        if (!fallback) throw error;
-        regional = await fallback.json();
-        cacheStatus = 'STALE';
+      if (stale) {
+        // Keep the refresh running beyond the response; coalesce concurrent
+        // callers and swallow background errors so a provider outage does not
+        // interrupt service of the last known forecast.
+        ctx.waitUntil(refresh.catch(() => {}));
+      } else {
+        try {
+          regional = await refresh;
+        } catch (error) {
+          const fallback = await cache.match(fallbackKey);
+          if (!fallback) throw error;
+          regional = await fallback.json();
+          cacheStatus = 'STALE';
+        }
       }
     }
     const { payload, cragOrder } = regional;

@@ -946,7 +946,7 @@ test('region separation, expiry and midnight rollover cannot reuse the wrong dat
   harness.setNow('2026-09-13T02:14:59Z');
   assert.equal((await get('NSW')).headers.get('X-SendTemps-Cache'), 'HIT');
   harness.setNow('2026-09-13T02:15:00Z');
-  assert.equal((await get('NSW')).headers.get('X-SendTemps-Cache'), 'MISS');
+  assert.equal((await get('NSW')).headers.get('X-SendTemps-Cache'), 'STALE');
   assert.equal(calls, 4);
   harness.setNow('2026-09-13T13:59:00Z'); // 23:59 Melbourne
   await get('NSW');
@@ -998,6 +998,32 @@ test('weather requests deduplicate coordinates while preserving every crag', asy
   const forecasts = await harness.forecasts.fetchAllForecasts('VIC');
   assert.equal(Object.keys(forecasts).length, crags.length);
   for (const crag of crags) assert.ok(forecasts[crag.id].todayHourly.length, crag.id);
+});
+
+test('expired regional cache serves same-day fallback before background refresh resolves', async () => {
+  let release;
+  let delay = false;
+  const harness = await loadWorker(async url => {
+    if (delay) await new Promise(resolve => { release = resolve; });
+    return Response.json(weatherFixture(url));
+  });
+  const req = new Request('https://api.test/forecast/scored?region=NT');
+  const first = await harness.worker.fetch(req, {}, harness.ctx);
+  const original = await first.json();
+  await harness.flush();
+  harness.setNow('2026-09-13T02:16:00Z');
+  delay = true;
+  const raced = await Promise.race([
+    harness.worker.fetch(req, {}, harness.ctx).then(response => ({ response })),
+    new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), 100)),
+  ]);
+  assert.ok(!raced.timedOut, 'stale response should not await the provider');
+  assert.equal(raced.response.headers.get('X-SendTemps-Cache'), 'STALE');
+  assert.deepEqual(await raced.response.json(), original);
+  release();
+  await harness.flush();
+  const refreshed = await harness.worker.fetch(req, {}, harness.ctx);
+  assert.equal(refreshed.headers.get('X-SendTemps-Cache'), 'HIT');
 });
 
 test('provider rate limits use a bounded fallback without extending its age', async () => {

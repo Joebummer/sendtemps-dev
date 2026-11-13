@@ -367,6 +367,40 @@ test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async
   assert.equal(condition(granite, { precip: 0, hoursSinceRain: 2, rainEventMm: 0.1 }).cap, 100);
 });
 
+test('Falcons Lookout dries faster than generic conglomerate and uses rock-specific readiness copy', async () => {
+  const harness = await loadWorker();
+  const crags = await loadCrags('worker/src/lib/crags.js');
+  const falcons = crags.find(c => c.id === 'falcons-lookout');
+  assert.equal(falcons.rockType, 'conglomerate');
+  assert.equal(harness.forecasts.rainRecoveryHours(falcons, 0.5), 3);
+  assert.equal(harness.forecasts.rainRecoveryHours(falcons, 2), 7);
+  assert.equal(harness.forecasts.rainRecoveryHours({ rockType: 'conglomerate' }, 2), 12);
+  assert.equal(harness.forecasts.wetRockCondition(falcons, {
+    precip: 0, rainEventMm: 2, hoursSinceRain: 8,
+  }).cap, 100);
+  assert.ok(harness.forecasts.wetRockCondition({ rockType: 'conglomerate' }, {
+    precip: 0, rainEventMm: 2, hoursSinceRain: 8,
+  }).cap < 100);
+  assert.equal(harness.forecasts.wetRockCondition(falcons, {
+    precip: 1, rainEventMm: 1, currentEventMm: 1, hoursSinceRain: 0,
+  }).cap, 20, 'active rain still imposes the original conglomerate cap');
+
+  const rainyHarness = await loadWorker(async url => {
+    const forecasts = weatherFixture(url);
+    for (const forecast of forecasts) {
+      const index = forecast.hourly.time.indexOf('2026-09-14T10:00');
+      forecast.hourly.precipitation[index] = 5;
+      forecast.hourly.precipitation_probability[index] = 80;
+    }
+    return Response.json(forecasts);
+  });
+  const forecast = (await rainyHarness.forecasts.fetchAllForecasts('VIC'))['falcons-lookout'];
+  const monday = forecast.days.find(d => d.date === '2026-09-14');
+  assert.equal(monday.rockReadiness.status, 'drying');
+  assert.match(monday.rockReadiness.label, /Conglomerate drying/);
+  assert.doesNotMatch(monday.rockReadiness.advisory, /sandstone/i);
+});
+
 function weatherFixture(url) {
   const params = new URL(url).searchParams;
   const dates = Array.from({ length: 14 }, (_, i) =>

@@ -475,7 +475,11 @@ export function rainRecoveryHours(crag, eventMm) {
       rating >= 3 ? 0.90 : 1;
     return Math.max(1, Math.ceil(baseline * multiplier));
   }
-  const multiplier = RAIN_RECOVERY_MULTIPLIER[rock] ?? 1.5;
+  // Crag-specific overrides allow exposed walls to recover faster than the
+  // generic rock-family estimate. Active-rain penalties remain unchanged.
+  const multiplier = Number.isFinite(crag?.rainRecoveryMultiplier)
+    ? crag.rainRecoveryMultiplier
+    : (RAIN_RECOVERY_MULTIPLIER[rock] ?? 1.5);
   return Math.max(1, Math.min(72, Math.ceil(baseRainRecoveryHours(eventMm) * multiplier)));
 }
 
@@ -606,6 +610,9 @@ function wetRockDayCondition(crag, hourly, drynessSeries, dateStr) {
     sample.cap < worst.cap ? sample : worst, best.window[0]);
   const averageCap = Math.floor(best.average);
   const recovering = averageCap < 100;
+  const rock = canonicalRockType(crag);
+  const isSandstone = rock === 'sandstone';
+  const rockLabel = rock.charAt(0).toUpperCase() + rock.slice(1);
   return {
     ...(recovering ? {
       wetRockCap: averageCap,
@@ -616,8 +623,12 @@ function wetRockDayCondition(crag, hourly, drynessSeries, dateStr) {
       status: !recovering ? 'forecast-dry' :
         averageCap <= 25 ? 'wet' : 'drying',
       label: !recovering ? 'Forecast dry – inspect rock' :
-        averageCap <= 25 ? 'Wet sandstone – do not climb' : 'Sandstone drying – inspect before climbing',
-      advisory: 'Forecast model only. Do not climb sandstone that is damp, seeping or soft.',
+        averageCap <= 25
+          ? (isSandstone ? 'Wet sandstone – do not climb' : `Wet ${rock} – allow to dry`)
+          : (isSandstone ? 'Sandstone drying – inspect before climbing' : `${rockLabel} drying – inspect before climbing`),
+      advisory: isSandstone
+        ? 'Forecast model only. Do not climb sandstone that is damp, seeping or soft.'
+        : `Forecast model only. Check ${rock} for wet holds, seepage or loose material before climbing.`,
       ...(recovering ? { forecastRecoveryCeiling: averageCap } : {}),
     },
   };
@@ -2841,7 +2852,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     weatherScore,
     rockReadiness: day.rockReadiness ?? {
       status: 'unknown', label: 'Rock readiness unverified',
-      advisory: 'Inspect sandstone for moisture before climbing.',
+      advisory: 'Inspect rock for moisture before climbing.',
     },
     reasons: surfacedReasons,
     contributions,

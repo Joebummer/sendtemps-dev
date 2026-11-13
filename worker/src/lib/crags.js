@@ -163,6 +163,9 @@ export const CRAGS = [
     aspect: 'NE',
     rockType: 'conglomerate',
     dryRating: 3,
+    // Exposed NE-facing walls dry quickly in sun and wind; avoid the generic
+    // conglomerate recovery multiplier (2.25x) over-penalising this crag.
+    rainRecoveryMultiplier: 1.25,
     idealTemp: [8, 20],
     peakTempMax: 18,
     heatCap: 20,

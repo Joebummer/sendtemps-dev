@@ -259,6 +259,37 @@ test('best window excludes 6am while preserving it in the hourly strip', async (
   assert.equal(window.avg, 40);
 });
 
+test('Falcons Lookout uses its faster conglomerate recovery without sandstone warnings', async () => {
+  const harness = await loadWorker();
+  const crags = await loadCrags('worker/src/lib/crags.js');
+  const falcons = crags.find(c => c.id === 'falcons-lookout');
+  assert.ok(falcons);
+  assert.equal(falcons.rockType, 'conglomerate');
+  assert.equal(falcons.rainRecoveryMultiplier, 1.25);
+  assert.equal(harness.forecasts.rainRecoveryHours(falcons, 5), 10);
+  assert.equal(harness.forecasts.rainRecoveryHours({ rockType: 'conglomerate' }, 5), 18);
+  assert.equal(harness.forecasts.wetRockCondition(falcons, {
+    precip: 0, rainEventMm: 5, hoursSinceRain: 11,
+  }).cap, 100);
+  assert.ok(harness.forecasts.wetRockCondition({ rockType: 'conglomerate' }, {
+    precip: 0, rainEventMm: 5, hoursSinceRain: 11,
+  }).cap < 100);
+
+  const wetHarness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const forecast of data) {
+      const index = forecast.hourly.time.indexOf('2026-09-14T07:00');
+      forecast.hourly.precipitation[index] = 10;
+    }
+    return Response.json(data);
+  });
+  const fc = (await wetHarness.forecasts.fetchAllForecasts('VIC'))['falcons-lookout'];
+  const day = fc.days.find(d => d.date === '2026-09-14');
+  assert.equal(day.rockReadiness.status, 'drying');
+  assert.equal(day.rockReadiness.label, 'Conglomerate drying – inspect before climbing');
+  assert.doesNotMatch(day.rockReadiness.advisory, /sandstone/i);
+});
+
 test('rain recovery exempts sandstone events below 1 mm and scales heavier rain by rock type', async () => {
   const harness = await loadWorker();
   const recovery = harness.forecasts.rainRecoveryHours;

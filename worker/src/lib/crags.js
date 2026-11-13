@@ -162,6 +162,8 @@ export const CRAGS = [
     elevation: 250,
     aspect: 'NE',
     rockType: 'conglomerate',
+    // Exposed walls dry considerably faster than the generic conglomerate model.
+    rainRecoveryMultiplier: 1.25,
     dryRating: 3,
     idealTemp: [8, 20],
     peakTempMax: 18,

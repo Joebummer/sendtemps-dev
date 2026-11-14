@@ -57,7 +57,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
           buckets=$(npx --yes wrangler@4.151.2 r2 bucket list)
-          if ! grep -Eq '^name:[[:space:]]+climbable-forecast-snapshots[[:space:]]*$' <<< "$buckets"; then
+          if ! grep -Fq 'climbable-forecast-snapshots' <<< "$buckets"; then
             npx --yes wrangler@4.151.2 r2 bucket create climbable-forecast-snapshots
           fi
 

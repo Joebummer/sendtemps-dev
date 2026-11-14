@@ -50,6 +50,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Ensure forecast snapshot bucket exists
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          buckets=$(npx --yes wrangler@4.151.2 r2 bucket list --json)
+          if ! jq -e 'any(.[]; .name == "climbable-forecast-snapshots")' <<< "$buckets" >/dev/null; then
+            npx --yes wrangler@4.151.2 r2 bucket create climbable-forecast-snapshots
+          fi
+
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
         with:

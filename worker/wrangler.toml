@@ -8,6 +8,7 @@ crons = ["0 21 * * *", "*/2 * * * *"]
 
 [[r2_buckets]]
 binding = "FORECAST_SNAPSHOTS"
+bucket_name = "climbable-forecast-snapshots"
 
 # Requires Workers Paid. Cold regional scoring requests exceeded the previous
 # 500ms CPU allowance (live VIC requests returned error 1102). Allow 10 seconds

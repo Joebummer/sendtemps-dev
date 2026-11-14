@@ -4,7 +4,10 @@ compatibility_date = "2026-07-19"
 compatibility_flags = ["nodejs_compat"]
 
 [triggers]
-crons = ["0 21 * * *"]
+crons = ["0 21 * * *", "*/2 * * * *"]
+
+[[r2_buckets]]
+binding = "FORECAST_SNAPSHOTS"
 
 # Requires Workers Paid. Cold regional scoring requests exceeded the previous
 # 500ms CPU allowance (live VIC requests returned error 1102). Allow 10 seconds

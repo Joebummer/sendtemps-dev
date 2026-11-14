@@ -1084,6 +1084,45 @@ test('stalled regional refresh returns retryable errors and releases its shared 
   }
 });
 
+test('scheduled snapshots survive a provider outage and Melbourne midnight on a cold edge', async () => {
+  const beforeMidnight = '2026-09-13T13:55:00Z';
+  const objects = new Map();
+  const bucket = {
+    put: async (key, value) => objects.set(key, value),
+    get: async key => objects.has(key) ? { json: async () => JSON.parse(objects.get(key)) } : null,
+  };
+  const env = { FORECAST_SNAPSHOTS: bucket };
+  const publisher = await loadWorker(async url => Response.json(weatherFixture(url)), beforeMidnight);
+  // Slot zero publishes ALL. The snapshot itself uses the clock at execution.
+  const event = { cron: '*/2 * * * *', scheduledTime: 0 };
+  await publisher.worker.scheduled(event, env);
+  const request = new Request('https://climbable.test/forecast/scored?region=ALL');
+  let providerCalls = 0;
+  const edge = await loadWorker(async () => {
+    providerCalls++;
+    return new Response(null, { status: 503 });
+  }, beforeMidnight);
+  await assert.rejects(edge.worker.scheduled(event, env), /refresh failed/);
+  providerCalls = 0;
+  const fresh = await edge.worker.fetch(request, env, edge.ctx);
+  assert.equal(fresh.headers.get('X-SendTemps-Cache'), 'SNAPSHOT');
+  assert.equal(fresh.headers.get('X-Climbable-Forecast-Updated-At'), beforeMidnight.slice(0, -1) + '.000Z');
+  const previous = await fresh.json();
+  edge.setNow('2026-09-13T14:05:00Z');
+  const rollover = await edge.worker.fetch(request, env, edge.ctx);
+  assert.equal(rollover.headers.get('X-SendTemps-Cache'), 'SNAPSHOT-STALE');
+  const current = await rollover.json();
+  assert.equal(current.dates[0], '2026-09-14');
+  assert.equal(current.byDate['2026-09-13'], undefined);
+  const crag = Object.keys(previous.today)[0];
+  assert.deepEqual(current.today[crag].todayHourly, previous.today[crag].tomorrowHourly);
+  assert.deepEqual(current.today[crag].tomorrowHourly, []);
+  assert.equal(providerCalls, 0);
+  edge.setNow('2026-09-14T04:00:00Z');
+  assert.equal((await edge.worker.fetch(request, env, edge.ctx)).status, 502);
+  assert.ok(providerCalls > 0);
+});
+
 test('provider rate limits use a bounded fallback without extending its age', async () => {
   let unavailable = false;
   const harness = await loadWorker(async url => unavailable

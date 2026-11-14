@@ -468,7 +468,7 @@ const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 const SCORED_DEADLINE_MS = 12000;
 const SCORED_TIMEOUT = Symbol('scored forecast deadline');
 
-async function withScoredDeadline(run) {
+async function withScoredDeadline(run, timeoutMs = SCORED_DEADLINE_MS) {
   const controller = new AbortController();
   let timer;
   try {
@@ -478,7 +478,7 @@ async function withScoredDeadline(run) {
         timer = setTimeout(() => {
           controller.abort(SCORED_TIMEOUT);
           reject(SCORED_TIMEOUT);
-        }, SCORED_DEADLINE_MS);
+        }, timeoutMs);
       }),
     ]);
   } finally {
@@ -548,6 +548,69 @@ function normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip, 
   return { region, dates, tripDates, crags, byDate, weekendTrip: weekendTripOut, today };
 }
 
+// Keep the latest successful forecast across deployments and edge locations.
+const SNAPSHOT_CRON = '*/2 * * * *';
+const SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const SNAPSHOT_FRESH_AGE_MS = 30 * 60 * 1000;
+const SNAPSHOT_READ_MS = 2000;
+const snapshotKey = region => `scored/v1/${region}.json`;
+
+async function refreshForecastSnapshot(event, env) {
+  const bucket = env.FORECAST_SNAPSHOTS;
+  if (!bucket) return;
+  const regions = [...SCORED_REGIONS];
+  const region = regions[Math.floor(event.scheduledTime / 120000) % regions.length];
+  const generatedAt = new Date().toISOString();
+  const dates = weekDates(new Date(generatedAt));
+  try {
+    const forecasts = await fetchAllForecasts(region, env.OPEN_METEO_API_KEY, env.WEATHER_REQUEST_LIMITER);
+    const expected = CRAGS.filter(crag => region === 'ALL' || crag.state === region);
+    if (expected.some(crag => !forecasts[crag.id]?.days?.some(day => day.date === dates[0]))) {
+      throw new Error('incomplete forecast');
+    }
+    const ranked = rankByDay(forecasts, dates);
+    const snapshot = {
+      generatedAt,
+      payload: normalizeScoredResponse(region, dates, [], ranked, [], forecasts),
+      cragOrder: Object.keys(forecasts),
+    };
+    await bucket.put(snapshotKey(region), JSON.stringify(snapshot));
+    console.info({ event: 'forecast_snapshot_published', region, generatedAt });
+  } catch {
+    console.error({ event: 'forecast_snapshot_refresh_failed', region });
+    throw new Error(`Forecast snapshot refresh failed for ${region}`);
+  }
+}
+
+async function readForecastSnapshot(bucket, region, today) {
+  const object = await bucket.get(snapshotKey(region));
+  if (!object) return null;
+  const snapshot = await object.json();
+  const { generatedAt, payload } = snapshot;
+  const age = Date.now() - Date.parse(generatedAt);
+  const offset = payload?.dates?.indexOf(today);
+  if (!(age >= 0 && age <= SNAPSHOT_MAX_AGE_MS) || (offset !== 0 && offset !== 1)) return null;
+  if (offset === 1) {
+    // The previously calculated tomorrow hours now belong to today. Hourly
+    // data for the new tomorrow was never stored in this response format.
+    const todayDetails = Object.fromEntries(Object.entries(payload.today).map(([id, row]) => [id, {
+      todayBestSubcragId: row.tomorrowBestSubcragId,
+      todayHourly: row.tomorrowHourly,
+      todayBestWindow: row.tomorrowBestWindow,
+      tomorrowBestSubcragId: null,
+      tomorrowHourly: [],
+      tomorrowBestWindow: null,
+      nowDryness: null,
+      lastRain: null,
+      pastPrecip: [],
+    }]));
+    const dates = payload.dates.slice(1);
+    const byDate = Object.fromEntries(dates.map(date => [date, payload.byDate[date]]));
+    snapshot.payload = { ...payload, dates, byDate, today: todayDetails };
+  }
+  return { ...snapshot, snapshotStale: offset === 1 || age > SNAPSHOT_FRESH_AGE_MS };
+}
+
 async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
   const region = (url.searchParams.get('region') || 'ALL').toUpperCase();
   if (!SCORED_REGIONS.has(region)) {
@@ -589,6 +652,21 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
         timing.cacheLookupMs = Date.now() - started;
         phase = 'cacheRead';
         return cached.json();
+      }
+
+      if (env.FORECAST_SNAPSHOTS) {
+        phase = 'snapshotRead';
+        const snapshot = await withScoredDeadline(
+          () => readForecastSnapshot(env.FORECAST_SNAPSHOTS, region, dates[0]), SNAPSHOT_READ_MS,
+        ).catch(() => {
+          log('forecast_snapshot_read_failed');
+          return null;
+        });
+        signal.throwIfAborted();
+        if (snapshot) {
+          cacheStatus = snapshot.snapshotStale ? 'SNAPSHOT-STALE' : 'SNAPSHOT';
+          return snapshot;
+        }
       }
 
       const stale = await cache.match(fallbackKey);
@@ -649,13 +727,14 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
       }
     });
     phase = 'response';
-    const { payload, cragOrder } = regional;
+    const { payload, cragOrder, generatedAt } = regional;
+    const availableDates = payload.dates;
     const tripDates = (() => {
-      if (!tripStart || !tripEnd) return weekendDates().slice(0, 7);
-      const idxStart = dates.indexOf(tripStart);
-      const idxEnd = dates.indexOf(tripEnd);
-      if (idxStart === -1 || idxEnd === -1) return weekendDates().slice(0, 7);
-      return dates.slice(Math.min(idxStart, idxEnd), Math.max(idxStart, idxEnd) + 1);
+      if (!tripStart || !tripEnd) return weekendDates().filter(date => availableDates.includes(date)).slice(0, 7);
+      const idxStart = availableDates.indexOf(tripStart);
+      const idxEnd = availableDates.indexOf(tripEnd);
+      if (idxStart === -1 || idxEnd === -1) return weekendDates().filter(date => availableDates.includes(date)).slice(0, 7);
+      return availableDates.slice(Math.min(idxStart, idxEnd), Math.max(idxStart, idxEnd) + 1);
     })();
 
     // Only lightweight trip aggregation is repeated. Raw hourly weather and
@@ -673,7 +752,11 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
         ...corsHeaders,
         'Cache-Control': 'no-store',
         'X-SendTemps-Cache': cacheStatus,
-        ...(cacheStatus === 'STALE' ? { Warning: '110 - "Response is stale"' } : {}),
+        ...(generatedAt ? {
+          'X-Climbable-Forecast-Updated-At': generatedAt,
+          'Access-Control-Expose-Headers': 'X-Climbable-Forecast-Updated-At, X-SendTemps-Cache, Warning',
+        } : {}),
+        ...(['STALE', 'SNAPSHOT-STALE'].includes(cacheStatus) ? { Warning: '110 - "Response is stale"' } : {}),
       },
     });
     log('scored_forecast_response_ready', { status: response.status });
@@ -1075,7 +1158,8 @@ export default {
     return handleRequest(request, env, ctx);
   },
   async scheduled(event, env) {
-    await handleCron(env);
+    if (event.cron === SNAPSHOT_CRON) await refreshForecastSnapshot(event, env);
+    else await handleCron(env);
   },
 };
 // redeployed 2026-07-19T09:04:27Z — VAPID_SUBJECT added

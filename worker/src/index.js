@@ -465,6 +465,27 @@ const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 const SCORED_CACHE_VERSION = '2026-11-13-falcons-recovery-v3';
 const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 
+const SCORED_DEADLINE_MS = 12000;
+const SCORED_TIMEOUT = Symbol('scored forecast deadline');
+
+async function withScoredDeadline(run) {
+  const controller = new AbortController();
+  let timer;
+  try {
+    return await Promise.race([
+      run(controller.signal),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort(SCORED_TIMEOUT);
+          reject(SCORED_TIMEOUT);
+        }, SCORED_DEADLINE_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Normalizes rankByDay()/rankWeekendTrip() output for the wire: the raw
 // functions repeat the full crag object on every date's row (a crag with a
 // 7-day forecast sends its ~400-byte crag object 7 times over). This hoists
@@ -550,62 +571,84 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
   cacheUrl.pathname = '/_cache/scored-fallback';
   const fallbackKey = new Request(cacheUrl.toString(), { method: 'GET' });
 
+  const started = Date.now();
+  const timing = {};
+  let phase = 'cacheLookup';
+  let cacheStatus = 'MISS';
+  const log = (event, extra = {}) => console.info({
+    event, region, cacheStatus, phase, elapsedMs: Date.now() - started,
+    ...timing, ...extra,
+  });
+
   try {
-    const cached = await cache.match(cacheKey);
-    let regional;
-    let cacheStatus = cached ? 'HIT' : 'MISS';
-    if (cached) {
-      regional = await cached.json();
-    } else {
-      // Serve a same-day, same-version fallback immediately instead of making
-      // the mobile client wait for a potentially slow upstream refresh.
-      const stale = await cache.match(fallbackKey);
-      if (stale) {
-        regional = await stale.json();
-        cacheStatus = 'STALE';
+    const regional = await withScoredDeadline(async signal => {
+      const cached = await cache.match(cacheKey);
+      signal.throwIfAborted();
+      if (cached) {
+        cacheStatus = 'HIT';
+        timing.cacheLookupMs = Date.now() - started;
+        phase = 'cacheRead';
+        return cached.json();
       }
-      const refresh = shareRefresh(scoredRefreshes, cacheKey.url, async () => {
+
+      const stale = await cache.match(fallbackKey);
+      signal.throwIfAborted();
+      timing.cacheLookupMs = Date.now() - started;
+      if (stale) cacheStatus = 'STALE';
+
+      // The owner has its own deadline so a stalled refresh releases the
+      // shared slot. Each caller also has a deadline that includes cache reads.
+      const refresh = shareRefresh(scoredRefreshes, cacheKey.url, () => {
+        const refreshStarted = Date.now();
+        let refreshPhase = 'provider';
+        return withScoredDeadline(async refreshSignal => {
           const forecasts = await fetchAllForecasts(region, env.OPEN_METEO_API_KEY, env.WEATHER_REQUEST_LIMITER);
+          refreshSignal.throwIfAborted();
+          timing.providerMs = Date.now() - refreshStarted;
+          refreshPhase = 'scoreAndCache';
           const ranked = rankByDay(forecasts, dates);
           const refreshed = {
             payload: normalizeScoredResponse(region, dates, [], ranked, [], forecasts),
-            // Preserve stable trip-score ties in the original forecast order.
             cragOrder: Object.keys(forecasts),
           };
-          const edgeResponse = new Response(JSON.stringify(refreshed), {
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': `public, max-age=${SCORED_CACHE_TTL}`,
-            },
-          });
-          const fallbackResponse = new Response(edgeResponse.clone().body, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': `public, max-age=${SCORED_FALLBACK_TTL}`,
-            },
-          });
+          const serialized = JSON.stringify(refreshed);
           await Promise.all([
-            cache.put(cacheKey, edgeResponse),
-            cache.put(fallbackKey, fallbackResponse),
+            cache.put(cacheKey, new Response(serialized, {
+              headers: { 'Content-Type': 'application/json', 'Cache-Control': `public, max-age=${SCORED_CACHE_TTL}` },
+            })),
+            cache.put(fallbackKey, new Response(serialized, {
+              headers: { 'Content-Type': 'application/json', 'Cache-Control': `public, max-age=${SCORED_FALLBACK_TTL}` },
+            })),
           ]);
           return refreshed;
+        }).catch(error => {
+          log('scored_forecast_refresh_failed', {
+            refreshPhase, reason: error === SCORED_TIMEOUT ? 'deadline' : 'refresh_error',
+          });
+          throw error;
         });
+      });
+      // Keep the refresh alive when serving stale data or after the client
+      // receives an error. A later retry can use the cache if it finishes.
+      ctx?.waitUntil(refresh.catch(() => {}));
       if (stale) {
-        // Keep the refresh running beyond the response; coalesce concurrent
-        // callers and swallow background errors so a provider outage does not
-        // interrupt service of the last known forecast.
-        ctx.waitUntil(refresh.catch(() => {}));
-      } else {
-        try {
-          regional = await refresh;
-        } catch (error) {
-          const fallback = await cache.match(fallbackKey);
-          if (!fallback) throw error;
-          regional = await fallback.json();
-          cacheStatus = 'STALE';
-        }
+        phase = 'cacheRead';
+        return stale.json();
       }
-    }
+
+      phase = 'refresh';
+      try {
+        return await refresh;
+      } catch (error) {
+        if (error === SCORED_TIMEOUT) throw error;
+        const fallback = await cache.match(fallbackKey);
+        if (!fallback) throw error;
+        cacheStatus = 'STALE';
+        phase = 'cacheRead';
+        return fallback.json();
+      }
+    });
+    phase = 'response';
     const { payload, cragOrder } = regional;
     const tripDates = (() => {
       if (!tripStart || !tripEnd) return weekendDates().slice(0, 7);
@@ -633,9 +676,19 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
         ...(cacheStatus === 'STALE' ? { Warning: '110 - "Response is stale"' } : {}),
       },
     });
+    log('scored_forecast_response_ready', { status: response.status });
     return response;
   } catch (err) {
-    return weatherError(err, corsHeaders);
+    if (err === SCORED_TIMEOUT) {
+      log('scored_forecast_response_ready', { status: 503, reason: 'deadline' });
+      return new Response(JSON.stringify({ error: 'Forecast temporarily unavailable. Please retry shortly.' }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Cache-Control': 'no-store', 'Retry-After': '5' },
+      });
+    }
+    const response = weatherError(err, corsHeaders);
+    log('scored_forecast_response_ready', { status: response.status });
+    return response;
   }
 }
 

@@ -1057,6 +1057,33 @@ test('expired regional cache serves same-day fallback before background refresh 
   assert.equal(refreshed.headers.get('X-SendTemps-Cache'), 'HIT');
 });
 
+test('stalled regional refresh returns retryable errors and releases its shared slot', async () => {
+  let calls = 0;
+  let releaseFirst;
+  const harness = await loadWorker(async url => {
+    calls++;
+    if (calls === 1) await new Promise(resolve => { releaseFirst = resolve; });
+    return Response.json(weatherFixture(url));
+  });
+  const get = () => harness.worker.fetch(
+    new Request('https://api.test/forecast/scored?region=NT'), {}, harness.ctx,
+  );
+  const responses = await Promise.all([get(), get()]);
+  for (const response of responses) {
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get('Retry-After'), '5');
+  }
+  assert.equal(calls, 1, 'concurrent misses share one provider call');
+  await harness.flush();
+  try {
+    const recovered = await get();
+    assert.equal(recovered.status, 200);
+    assert.equal(calls, 2);
+  } finally {
+    releaseFirst();
+  }
+});
+
 test('provider rate limits use a bounded fallback without extending its age', async () => {
   let unavailable = false;
   const harness = await loadWorker(async url => unavailable

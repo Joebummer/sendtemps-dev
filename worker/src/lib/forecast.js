@@ -1305,7 +1305,7 @@ function computeDrynessSeries(crag, hourly) {
     // limestone) can re-wet substantially via dew and seepage.
     const hour = parseInt((hourly.time[i] || '').slice(11, 13), 10);
     const isNight = !isNaN(hour) && (hour >= 20 || hour < 7);
-    let nightFactor = isNight ? (NIGHT_DRY_FACTOR[rock] ?? 0.50) : 1.0;
+    let nightFactor = isNight ? (crag.nightDryingFactor ?? NIGHT_DRY_FACTOR[rock] ?? 0.50) : 1.0;
     if (isNight && mm < MEASURABLE_RAIN_MM &&
         (fastSurfaceRecovery || crag.overnightSandstoneDrying) &&
         productiveOvernightAir(crag, effectiveWind, windDir, rh, dt)) {

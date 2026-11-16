@@ -1164,7 +1164,7 @@ function computeDrynessSeries(crag, hourly) {
   if (!hourly || !hourly.time) return [];
   const n = hourly.time.length;
   const rock = canonicalRockType(crag);
-  const halfLife = DRY_HALFLIFE_HRS[rock] ?? 12;
+  const halfLife = crag.dryingHalfLifeHours ?? DRY_HALFLIFE_HRS[rock] ?? 12;
   const satMm = SATURATION_MM[rock] ?? 6;
 
   // Start assuming a dry-ish rock if past_days=4 covered the recent history.

@@ -163,10 +163,10 @@ export const CRAGS = [
     aspect: 'NE',
     rockType: 'conglomerate',
     dryRating: 3,
-    // These exposed walls can dry under overcast skies. Use a shorter
-    // recovery window and faster moisture decay than generic conglomerate.
-    rainRecoveryMultiplier: 1,
-    dryingHalfLifeHours: 8,
+    // Local calibration from dry rock the morning after substantial rain.
+    rainRecoveryMultiplier: 0.75,
+    dryingHalfLifeHours: 3,
+    nightDryingFactor: 0.9,
     idealTemp: [8, 20],
     peakTempMax: 18,
     heatCap: 20,

@@ -265,11 +265,10 @@ test('Falcons Lookout uses its faster conglomerate recovery without sandstone wa
   const falcons = crags.find(c => c.id === 'falcons-lookout');
   assert.ok(falcons);
   assert.equal(falcons.rockType, 'conglomerate');
-  assert.equal(falcons.rainRecoveryMultiplier, 1.25);
-  assert.equal(harness.forecasts.rainRecoveryHours(falcons, 5), 10);
+  assert.equal(harness.forecasts.rainRecoveryHours(falcons, 5), 8);
   assert.equal(harness.forecasts.rainRecoveryHours({ rockType: 'conglomerate' }, 5), 18);
   assert.equal(harness.forecasts.wetRockCondition(falcons, {
-    precip: 0, rainEventMm: 5, hoursSinceRain: 11,
+    precip: 0, rainEventMm: 5, hoursSinceRain: 9,
   }).cap, 100);
   assert.ok(harness.forecasts.wetRockCondition({ rockType: 'conglomerate' }, {
     precip: 0, rainEventMm: 5, hoursSinceRain: 11,
@@ -288,6 +287,25 @@ test('Falcons Lookout uses its faster conglomerate recovery without sandstone wa
   assert.equal(day.rockReadiness.status, 'drying');
   assert.equal(day.rockReadiness.label, 'Conglomerate drying – inspect before climbing');
   assert.doesNotMatch(day.rockReadiness.advisory, /sandstone/i);
+});
+
+test('Falcons Lookout dries after rain in overcast conditions', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const { hourly } of data) {
+      hourly.cloudcover.fill(100);
+      hourly.shortwave_radiation.fill(0);
+      hourly.precipitation[hourly.time.indexOf('2026-09-14T07:00')] = 2;
+    }
+    return Response.json(data);
+  });
+  const forecasts = await harness.forecasts.fetchAllForecasts('VIC');
+  const falcons = forecasts['falcons-lookout'];
+  const byHour = hour => falcons.tomorrowHourly.find(cell => cell.hour === hour);
+  assert.equal(byHour(7).wetRockCondition.cap, 20);
+  assert.ok(byHour(12).wetRockCondition);
+  assert.equal(byHour(13).wetRockCondition, undefined);
+  assert.ok(byHour(18).dryness >= 88);
 });
 
 test('rain recovery exempts sandstone events below 1 mm and scales heavier rain by rock type', async () => {

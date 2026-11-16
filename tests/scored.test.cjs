@@ -375,6 +375,22 @@ test('daily API exposes weather quality separately from sandstone rock-readiness
   assert.ok(row.score <= 100);
 });
 
+test('light rain lifts the post-rain ceiling only on fast-drying rock', async () => {
+  const { wetRockCondition } = (await loadWorker()).forecasts;
+  const granite = { rockType: 'granite' };
+  const conglomerate = { rockType: 'conglomerate' };
+  const recovery = (crag, mm, hours) => wetRockCondition(crag, {
+    precip: 0, rainEventMm: mm, hoursSinceRain: hours,
+  }).cap;
+  assert.equal(recovery(granite, 0.5, 1), 89);
+  assert.equal(recovery(granite, 0.5, 2), 97);
+  assert.equal(recovery(granite, 0.5, 3), 100);
+  assert.equal(recovery(granite, 1, 3), 91);
+  assert.equal(recovery(granite, 2, 5), 79);
+  assert.equal(recovery(conglomerate, 0.5, 5), 79);
+  assert.equal(recovery({ ...conglomerate, dryingHalfLifeHours: 8 }, 0.5, 5), 97);
+});
+
 test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async () => {
   const harness = await loadWorker();
   const condition = harness.forecasts.wetRockCondition;
@@ -412,7 +428,7 @@ test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async
   }).cap, 100);
 
   assert.equal(condition(granite, { precip: 0.1, rainEventMm: 0.1 }).cap, 60);
-  assert.equal(condition(granite, { precip: 0, hoursSinceRain: 1, rainEventMm: 0.1 }).cap, 79);
+  assert.equal(condition(granite, { precip: 0, hoursSinceRain: 1, rainEventMm: 0.1 }).cap, 97);
   assert.equal(condition(granite, { precip: 0, hoursSinceRain: 2, rainEventMm: 0.1 }).cap, 100);
 });
 
@@ -711,7 +727,8 @@ test('0.2 mm events skip sandstone recovery while granite retains its dry-hour i
   const graniteFirstDry = granite.tomorrowHourly.find(hour => hour.hour === 16);
   const graniteRecovered = granite.tomorrowHourly.find(hour => hour.hour === 17);
   assert.equal(graniteFirstDry.wetRockCondition.recoveryHours, 1);
-  assert.ok(graniteFirstDry.score <= 79);
+  assert.equal(graniteFirstDry.wetRockCondition.cap, 97);
+  assert.ok(graniteFirstDry.score > 79 && graniteFirstDry.score <= 97);
   assert.equal(graniteRecovered.wetRockCondition, undefined);
   assert.ok(graniteRecovered.score >= 80);
 });

@@ -265,10 +265,10 @@ test('Falcons Lookout uses its faster conglomerate recovery without sandstone wa
   const falcons = crags.find(c => c.id === 'falcons-lookout');
   assert.ok(falcons);
   assert.equal(falcons.rockType, 'conglomerate');
-  assert.equal(harness.forecasts.rainRecoveryHours(falcons, 5), 8);
+  assert.equal(harness.forecasts.rainRecoveryHours(falcons, 5), 6);
   assert.equal(harness.forecasts.rainRecoveryHours({ rockType: 'conglomerate' }, 5), 18);
   assert.equal(harness.forecasts.wetRockCondition(falcons, {
-    precip: 0, rainEventMm: 5, hoursSinceRain: 9,
+    precip: 0, rainEventMm: 5, hoursSinceRain: 7,
   }).cap, 100);
   assert.ok(harness.forecasts.wetRockCondition({ rockType: 'conglomerate' }, {
     precip: 0, rainEventMm: 5, hoursSinceRain: 11,
@@ -303,9 +303,27 @@ test('Falcons Lookout dries after rain in overcast conditions', async () => {
   const falcons = forecasts['falcons-lookout'];
   const byHour = hour => falcons.tomorrowHourly.find(cell => cell.hour === hour);
   assert.equal(byHour(7).wetRockCondition.cap, 20);
-  assert.ok(byHour(12).wetRockCondition);
-  assert.equal(byHour(13).wetRockCondition, undefined);
+  assert.ok(byHour(11).wetRockCondition);
+  assert.equal(byHour(12).wetRockCondition, undefined);
   assert.ok(byHour(18).dryness >= 88);
+});
+
+test('Falcons Lookout sheds substantial rain overnight even under overcast skies', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const { hourly } of data) {
+      hourly.cloudcover.fill(100);
+      hourly.shortwave_radiation.fill(0);
+      hourly.relative_humidity_2m.fill(86);
+      const rain = hourly.time.indexOf('2026-09-13T20:00');
+      hourly.precipitation[rain] = 6.9;
+    }
+    return Response.json(data);
+  });
+  const falcons = (await harness.forecasts.fetchAllForecasts('VIC'))['falcons-lookout'];
+  const morning = falcons.tomorrowHourly.find(h => h.hour === 8);
+  assert.ok(morning.dryness >= 85);
+  assert.equal(morning.wetRockCondition, undefined);
 });
 
 test('rain recovery exempts sandstone events below 1 mm and scales heavier rain by rock type', async () => {

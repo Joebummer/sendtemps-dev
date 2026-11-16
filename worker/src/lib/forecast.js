@@ -528,11 +528,15 @@ export function wetRockCondition(crag, hour) {
     };
   }
 
-  // The full recovery interval stays below the Excellent band. Normal scoring
-  // resumes only after the final required dry hour has elapsed.
-  const startCap = RECOVERY_START_CAP[rock] ?? 55;
+  // Fast-drying rock gets a gentler ceiling after light rain. Fade the
+  // adjustment out as the event grows so larger showers keep the standard cap.
+  const lightRainRelief = dryingHalfLifeHours(crag, rock) <= 10
+    ? interpolate([[0.5, 1], [2, 0]], rainEventMm)
+    : 0;
+  const startCap = interpolate([[0, RECOVERY_START_CAP[rock] ?? 55], [1, 80]], lightRainRelief);
+  const endCap = interpolate([[0, 79], [1, 97]], lightRainRelief);
   const progress = recoveryProgressHours / recoveryHours;
-  const cap = Math.round(startCap + (79 - startCap) * progress);
+  const cap = Math.round(startCap + (endCap - startCap) * progress);
   return {
     cap,
     label: `${rock} drying after rain`,
@@ -1160,11 +1164,15 @@ function sandstoneDryingCredit(crag, hourly, i, effectiveWind, windDir, rh, dt, 
   return sunOnWall || exposedDryingWind || dryAir ? 1 : 0.5;
 }
 
+function dryingHalfLifeHours(crag, rock) {
+  return crag.dryingHalfLifeHours ?? DRY_HALFLIFE_HRS[rock] ?? 12;
+}
+
 function computeDrynessSeries(crag, hourly) {
   if (!hourly || !hourly.time) return [];
   const n = hourly.time.length;
   const rock = canonicalRockType(crag);
-  const halfLife = crag.dryingHalfLifeHours ?? DRY_HALFLIFE_HRS[rock] ?? 12;
+  const halfLife = dryingHalfLifeHours(crag, rock);
   const satMm = SATURATION_MM[rock] ?? 6;
 
   // Start assuming a dry-ish rock if past_days=4 covered the recent history.

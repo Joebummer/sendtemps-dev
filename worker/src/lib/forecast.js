@@ -536,7 +536,13 @@ export function wetRockCondition(crag, hour) {
   const startCap = interpolate([[0, RECOVERY_START_CAP[rock] ?? 55], [1, 80]], lightRainRelief);
   const endCap = interpolate([[0, 79], [1, 97]], lightRainRelief);
   const progress = recoveryProgressHours / recoveryHours;
-  const cap = Math.round(startCap + (endCap - startCap) * progress);
+  const standardCap = startCap + (endCap - startCap) * progress;
+  // After a sustained dry spell, let modeled surface drying ease the ceiling.
+  const surfaceCap = rainEventMm >= 2 && hoursSinceRain >= 6 &&
+    hasFastSurfaceRecovery(crag, rock) && Number.isFinite(hour.dryness)
+    ? interpolate([[70, 0], [95, 97]], hour.dryness)
+    : 0;
+  const cap = Math.round(Math.max(standardCap, surfaceCap));
   return {
     cap,
     label: `${rock} drying after rain`,
@@ -563,7 +569,7 @@ function hasUsableDrySession(crag, hourly, drynessSeries, dateStr) {
     const cap = dry ? wetRockCondition(crag, {
       precip: rain, recoveryProgressHours: dry.recoveryProgressHours,
       hoursSinceRain: dry.hoursSinceRain, rainEventMm: dry.rainEventMm,
-      currentEventMm: dry.currentEventMm,
+      currentEventMm: dry.currentEventMm, dryness: dry.dryness,
     }).cap : 0;
     if (Number.isFinite(rain) && Number.isFinite(probability) &&
         rain < MEASURABLE_RAIN_MM && probability <= 35 && cap >= 80) {
@@ -590,6 +596,7 @@ function wetRockDayCondition(crag, hourly, drynessSeries, dateStr) {
       recoveryProgressHours: drynessSeries[i]?.recoveryProgressHours ?? null,
       rainEventMm: drynessSeries[i]?.rainEventMm ?? 0,
       currentEventMm: drynessSeries[i]?.currentEventMm ?? 0,
+      dryness: drynessSeries[i]?.dryness,
     });
     samples.push({ hour, ...condition });
   }
@@ -1142,7 +1149,8 @@ export function aspectWindFactor(aspect, windDir, effectiveWind) {
 }
 
 // Sandstone recovery is deliberately based on useful drying rather than raw
-// clock time. Night and very humid air earn no credit. A shaded or sheltered
+// clock time. Very humid air earns no credit. Cathedral Ranges can earn
+// partial credit without sun when the air is dry or moving. A shaded or sheltered
 // daylight hour earns half credit; direct sun, exposed wind or genuinely dry
 // air earns a full hour. Credit is capped at one per elapsed hour, so favourable
 // weather can never shorten the published minimum recovery period.
@@ -1150,7 +1158,12 @@ function sandstoneDryingCredit(crag, hourly, i, effectiveWind, windDir, rh, dt, 
   const iso = hourly.time?.[i] || '';
   const hour = parseInt(iso.slice(11, 13), 10);
   const daylight = Number.isFinite(hour) && hour >= 7 && hour < 20 && swRad > 20;
-  if (!daylight || rh >= 80 || dt < 1.5) return 0;
+  if (rh >= 80 || dt < 1.5) return 0;
+  if (!daylight) {
+    return crag.overnightSandstoneDrying && productiveOvernightAir(crag, effectiveWind, windDir, rh, dt)
+      ? 0.5
+      : 0;
+  }
 
   const when = melbourneHourToDate(iso);
   const sun = sunPosition(when, crag.lat, crag.lon);
@@ -1168,12 +1181,25 @@ function dryingHalfLifeHours(crag, rock) {
   return crag.dryingHalfLifeHours ?? DRY_HALFLIFE_HRS[rock] ?? 12;
 }
 
+function hasFastSurfaceRecovery(crag, rock) {
+  return rock !== 'sandstone' && crag.heatExposure !== 'sheltered' &&
+    dryingHalfLifeHours(crag, rock) <= 10 &&
+    (crag.dryRating >= 4 || crag.dryingHalfLifeHours != null || crag.heatExposure === 'exposed');
+}
+
+function productiveOvernightAir(crag, wind, direction, humidity, delta) {
+  return (humidity <= 70 && delta >= 3) ||
+    (humidity < 80 && delta >= 2 && wind >= 12 &&
+      aspectWindFactor(crag.aspect, direction, wind).exposure !== 'lee');
+}
+
 function computeDrynessSeries(crag, hourly) {
   if (!hourly || !hourly.time) return [];
   const n = hourly.time.length;
   const rock = canonicalRockType(crag);
   const halfLife = dryingHalfLifeHours(crag, rock);
   const satMm = SATURATION_MM[rock] ?? 6;
+  const fastSurfaceRecovery = hasFastSurfaceRecovery(crag, rock);
 
   // Start assuming a dry-ish rock if past_days=4 covered the recent history.
   // We'll let the simulation walk forward from t=0 with wetness=0; if recent
@@ -1279,7 +1305,12 @@ function computeDrynessSeries(crag, hourly) {
     // limestone) can re-wet substantially via dew and seepage.
     const hour = parseInt((hourly.time[i] || '').slice(11, 13), 10);
     const isNight = !isNaN(hour) && (hour >= 20 || hour < 7);
-    const nightFactor = isNight ? (NIGHT_DRY_FACTOR[rock] ?? 0.50) : 1.0;
+    let nightFactor = isNight ? (NIGHT_DRY_FACTOR[rock] ?? 0.50) : 1.0;
+    if (isNight && mm < MEASURABLE_RAIN_MM &&
+        (fastSurfaceRecovery || crag.overnightSandstoneDrying) &&
+        productiveOvernightAir(crag, effectiveWind, windDir, rh, dt)) {
+      nightFactor = fastSurfaceRecovery ? 1.35 : 0.75;
+    }
 
     const dryRate = baseRate * sunFactor * windFactor * evaporationFactor * coldFactor * nightFactor;
     // Exponential decay toward zero across one hour.

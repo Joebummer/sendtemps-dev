@@ -375,6 +375,38 @@ test('daily API exposes weather quality separately from sandstone rock-readiness
   assert.ok(row.score <= 100);
 });
 
+test('substantial rain recovery eases once exposed, fast-drying rock has dried', async () => {
+  const { wetRockCondition } = (await loadWorker()).forecasts;
+  const exposed = { rockType: 'granite', dryRating: 4 };
+  const morning = { precip: 0, hoursSinceRain: 9, rainEventMm: 6.9, dryness: 95 };
+  assert.equal(wetRockCondition(exposed, morning).cap, 97);
+  assert.equal(wetRockCondition({ ...exposed, heatExposure: 'sheltered' }, morning).cap, 73);
+  assert.equal(wetRockCondition(exposed, { ...morning, dryness: 65 }).cap, 73);
+  assert.equal(wetRockCondition(exposed, { ...morning, precip: 0.1 }).cap, 60);
+});
+
+test('Cathedral sandstone earns partial drying credit on a dry, overcast night', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const { hourly } of data) {
+      hourly.cloudcover.fill(100);
+      hourly.shortwave_radiation.fill(0);
+      const rain = hourly.time.indexOf('2026-09-13T20:00');
+      hourly.precipitation[rain] = 3;
+    }
+    return Response.json(data);
+  });
+  const forecasts = await harness.forecasts.fetchAllForecasts('VIC');
+  const overnight = id => {
+    const forecast = forecasts[id];
+    return forecast.drynessSeries[forecast.hourly.time.indexOf('2026-09-14T06:00')];
+  };
+  assert.equal(overnight('cathedral-balcony').recoveryProgressHours, 5);
+  assert.equal(overnight('gramps-westflank').recoveryProgressHours, 0);
+  assert.equal(forecasts['cathedral-balcony'].tomorrowHourly.find(h => h.hour === 6)
+    .wetRockCondition.label, 'sandstone drying after rain');
+});
+
 test('light rain lifts the post-rain ceiling only on fast-drying rock', async () => {
   const { wetRockCondition } = (await loadWorker()).forecasts;
   const granite = { rockType: 'granite' };

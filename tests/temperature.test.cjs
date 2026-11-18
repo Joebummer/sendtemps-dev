@@ -549,24 +549,25 @@ test('The Balcony retains hot-weather relief throughout its shaded day', async (
 });
 
 
-test('sustained 28C feels-like stays below 80 even with warm relief and shade bonuses', async () => {
+test('warm-weather relief uses gradual penalties without a universal feels-like ceiling', async () => {
   const f = await loadForecast('worker/src/lib/forecast.js');
-  // Deliberately generous air-temperature settings isolate the comfort ceiling.
+  // Isolate feels-like heat from air-temperature friction and solar heating.
   const c = { idealTemp: [8, 30], peakTempMax: 25, shade: 'all-day', warmWeatherRelief: 'light' };
-  const hours = Array.from({ length: 5 }, (_, i) => {
-    const h = hourAt(20, { apparentTemp: 28, hour: 9 + i, sunOnWall: false });
-    return { ...h, score: f.scoreHour(c, h) };
-  });
-  assert.ok(hours.every(h => h.score <= 79));
-  assert.ok(f.bestWindow(hours, c, 5).avg <= 79);
-  // A stale/optimistic precomputed hourly score cannot bypass the session cap.
-  assert.ok(f.bestWindow(hours.map(h => ({ ...h, score: 100 })), c, 5).avg <= 79);
+  const ordinary = { ...c, warmWeatherRelief: undefined };
+  const hour = hourAt(20, { apparentTemp: 28, hour: 10, sunOnWall: false });
+  const relieved = f.scoreHour(c, hour);
+  assert.ok(relieved > 79, 'verified relief is not blocked by a universal 79 ceiling');
+  assert.ok(relieved < f.scoreHour(c, { ...hour, apparentTemp: 20 }), 'heat still reduces the score');
+  assert.ok(relieved > f.scoreHour(ordinary, hour), 'crag-specific relief remains effective');
+  const hours = Array.from({ length: 5 }, (_, i) => ({ ...hour, hour: 9 + i, score: relieved }));
+  assert.equal(f.bestWindow(hours, c, 5).avg, relieved);
   const d = dayFor(f, c, 20);
   d.climbTemps.meanApparent = 28;
   d.climbTemps.temperatureSamples.forEach(h => { h.apparent = 28; h.solarFraction = 0; });
   const result = f.scoreDay(c, d, null, null);
-  assert.ok(result.score <= 79);
-  assert.ok(result.reasons.some(r => r.startsWith('hot (28°C')));
+  assert.ok(result.score > 79);
+  assert.ok(result.score > f.scoreDay(ordinary, d, null, null).score);
+  assert.ok(result.contributions.some(x => x.label === 'Feels-like heat' && x.delta < 0));
 });
 
 test('cloud cover and unknown exposure cannot create a physical shade refuge', async () => {

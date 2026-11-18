@@ -791,16 +791,6 @@ function hourSolarFraction(crag, h) {
   return clear * (h.sunOnWall === true ? 1 : 0.5);
 }
 
-// A warm-weather crag can offer relative relief, but sustained 28°C
-// apparent temperature still cannot qualify for an 80+ session score.
-// Average hourly heat severity so a hot afternoon cannot cap a cool morning.
-function feelsLikeScoreCeiling(samples) {
-  const valid = samples.filter(s => Number.isFinite(s.apparent));
-  if (!valid.length) return 100;
-  const severity = valid.reduce((sum, s) => sum + Math.max(0, s.apparent - 21) * 3, 0) / valid.length;
-  return Math.max(0, 100 - severity);
-}
-
 function temperatureScoreCeiling(penalty) {
   // Ignore trace-level floating-point penalties. Once temperature is material
   // enough to surface as a callout, reserve 99+ for genuinely ideal conditions.
@@ -935,7 +925,7 @@ function climbingTemperature(crag, ct = {}, day = {}) {
     : t < lo ? `cold (${Math.round(t)}°C ${day.temperaturePeriod || "climbing"} avg)`
       : t > hi || tFeel > 21 ? `hot (${Math.round(t)}°C ${day.temperaturePeriod || "climbing"} avg)`
         : tAir >= peakTemperatureUpper(crag) + 1 ? 'too warm for hard climbing' : 'temp varies';
-  const ceiling = Math.min(feelsLikeScoreCeiling(samples.length ? samples : [{ apparent: tFeel }]), reason === 'too warm for hard climbing' ? 90 : reason === 'temp varies' ? 98 : 100);
+  const ceiling = reason === 'too warm for hard climbing' ? 90 : reason === 'temp varies' ? 98 : 100;
   return { climbHours, tFeel, tAir, t, samples, penalty, reason, ceiling };
 }
 
@@ -1897,7 +1887,7 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   // any real penalty can't claim a perfect 100, even if bonuses clawed it
   // all the way back there. Keeps hour-by-hour scores honest relative to
   // the day score, which already applies this same cap.
-  const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), feelsLikeScoreCeiling([{ apparent: tFeel }]), marine.cap, wetRock.cap);
+  const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap, wetRock.cap);
   const rawFinal = Math.max(0, Math.min(Math.floor(hourlyCeiling), Math.round(s)));
   return (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
 }
@@ -2852,7 +2842,6 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     reason.startsWith('too warm for hard climbing'));
   const ceiling = Math.min(
     temperatureScoreCeiling(protectedTemperaturePenalty),
-    feelsLikeScoreCeiling(thermalSamples),
     tooWarmForHardClimbing ? 90 : 100,
     marineScoreCap,
     wetRockScoreCap,

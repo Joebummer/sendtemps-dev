@@ -6,7 +6,7 @@ import {
   weatherIcon,
   scoreBand,
   drynessBand,
-} from './forecast.js?v=73';
+} from './forecast.js?v=74';
 import { CRAGS } from './crags.js?v=47';
 
 const API_BASE = 'https://api.sendtemps.app';
@@ -1769,7 +1769,7 @@ function renderCard(row, isTop, isWeekend) {
         </div>
         <div class="detail-section">
           <div class="section-label">Forecast</div>
-          <p>${w.icon} ${w.label}. Feels like ${Math.round(day.tFeel || day.tMax)}°C. ${sunHours}h of sun expected. ${day.precipSum > 0.2 ? `${day.precipSum.toFixed(1)}mm rain forecast.` : 'No measurable rain.'}${prevDay && prevDay.precipSum > 1 ? ` Yesterday's rain was ${prevDay.precipSum.toFixed(1)}mm.` : ''}</p>
+          <p>${w.icon} ${w.label}. Feels like up to ${Math.round(day.tFeel ?? day.tMax)}°C. ${sunHours}h of sun expected. ${day.precipSum > 0.2 ? `${day.precipSum.toFixed(1)}mm rain forecast.` : 'No measurable rain.'}${prevDay && prevDay.precipSum > 1 ? ` Yesterday's rain was ${prevDay.precipSum.toFixed(1)}mm.` : ''}</p>
         </div>
         ${renderRainTiming(day, daysAheadOfActive())}
         ${todayStrip}

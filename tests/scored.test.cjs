@@ -1300,3 +1300,24 @@ test('hourly recovery does not stack a second residual-moisture penalty', async 
     scoreHour(crag, { ...hour, dryness: 100 }));
   assert.ok(scoreHour(crag, { ...hour, dryness: 20 }) <= 90);
 });
+
+
+test('Falcons cloudy forecast retains physical sun exposure without a shade-refuge label', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const forecast of data) {
+      forecast.hourly.cloudcover.fill(100);
+      forecast.hourly.temperature_2m.fill(24);
+      forecast.hourly.apparent_temperature.fill(28);
+    }
+    return Response.json(data);
+  });
+  const fc = (await harness.forecasts.fetchAllForecasts('VIC'))['falcons-lookout'];
+  const d = fc.days.find(d => d.date === fc.tomorrowDate);
+  assert.equal(d.sunHoursOnWall, 0);
+  assert.ok(d.geometricSunHoursOnWall > 0);
+  const row = harness.forecasts.rankByDay({ 'falcons-lookout': fc }, [fc.tomorrowDate])[fc.tomorrowDate][0];
+  assert.ok(!row.reasons.includes('shaded refuge'));
+  assert.ok(row.score <= 79);
+  assert.equal(row.day.temperaturePeriod, 'session');
+});

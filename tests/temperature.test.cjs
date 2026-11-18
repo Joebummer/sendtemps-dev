@@ -547,3 +547,42 @@ test('The Balcony retains hot-weather relief throughout its shaded day', async (
     assert.ok(f.feelsLikeHeatPenalty(crag, 24, hour) < f.feelsLikeHeatPenalty({ ...crag, warmWeatherRelief: undefined }, 24, hour));
   }
 });
+
+
+test('sustained 28C feels-like stays below 80 even with warm relief and shade bonuses', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  // Deliberately generous air-temperature settings isolate the comfort ceiling.
+  const c = { idealTemp: [8, 30], peakTempMax: 25, shade: 'all-day', warmWeatherRelief: 'light' };
+  const hours = Array.from({ length: 5 }, (_, i) => {
+    const h = hourAt(20, { apparentTemp: 28, hour: 9 + i, sunOnWall: false });
+    return { ...h, score: f.scoreHour(c, h) };
+  });
+  assert.ok(hours.every(h => h.score <= 79));
+  assert.ok(f.bestWindow(hours, c, 5).avg <= 79);
+  // A stale/optimistic precomputed hourly score cannot bypass the session cap.
+  assert.ok(f.bestWindow(hours.map(h => ({ ...h, score: 100 })), c, 5).avg <= 79);
+  const d = dayFor(f, c, 20);
+  d.climbTemps.meanApparent = 28;
+  d.climbTemps.temperatureSamples.forEach(h => { h.apparent = 28; h.solarFraction = 0; });
+  const result = f.scoreDay(c, d, null, null);
+  assert.ok(result.score <= 79);
+  assert.ok(result.reasons.some(r => r.startsWith('hot (28°C')));
+});
+
+test('cloud cover and unknown exposure cannot create a physical shade refuge', async () => {
+  const f = await loadForecast('worker/src/lib/forecast.js');
+  const c = { idealTemp: [8, 20], aspect: 'NE', shade: 'afternoon' };
+  const d = { ...dayFor(f, c, 24), sunHoursOnWall: 0, sunHoursOnWallWarm: 0,
+    geometricSunHoursOnWall: 6, geometricSunHoursOnWallWarm: 2, cloudMean: 100 };
+  for (const day of [d, { ...d, geometricSunHoursOnWall: undefined, geometricSunHoursOnWallWarm: undefined }]) {
+    const result = f.scoreDay(c, day, null, null);
+    assert.ok(!result.reasons.includes('shaded refuge'));
+    assert.ok(!result.contributions.some(x => /Shade × heat|Partial shade × heat/.test(x.label)));
+  }
+  const shaded = f.scoreDay({ ...c, shade: 'all-day' }, { ...d,
+    geometricSunHoursOnWall: 0, geometricSunHoursOnWallWarm: 0 }, null, null);
+  assert.ok(shaded.reasons.includes('shaded refuge'));
+  const exposed = f.scoreDay({ ...c, shade: 'none' }, { ...d,
+    geometricSunHoursOnWall: 0, geometricSunHoursOnWallWarm: 0 }, null, null);
+  assert.ok(!exposed.reasons.includes('shaded refuge'));
+});

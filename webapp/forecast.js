@@ -408,16 +408,18 @@ function computeSolarExposure(crag, hourly, dateStr) {
     sunHoursOnWallWarm: 0,
     sunHoursOnWallCool: 0,
     sunHoursTotal: 0,
+    geometricSunHoursOnWall: null,
+    geometricSunHoursOnWallWarm: null,
   };
   if (!hourly || !hourly.time || crag.lat == null || crag.lon == null) return empty;
   // 'shade: all-day' crags are physically shaded by surrounding terrain that
   // the geometric model can't see (deep gorge, overhang, boulder shelter).
   // Honour the explicit override.
-  if (crag.shade === 'all-day') return empty;
+  if (crag.shade === 'all-day') return { ...empty, geometricSunHoursOnWall: 0, geometricSunHoursOnWallWarm: 0 };
   // Mixed-aspect parents have no single wall to compute against — zero out
   // solar exposure so scoring doesn't credit phantom sun hours.
   if (!hasConcreteAspect(crag.aspect)) return empty;
-  let onWall = 0, warm = 0, cool = 0, total = 0;
+  let onWall = 0, warm = 0, cool = 0, total = 0, geometric = 0, geometricWarm = 0;
   for (let i = 0; i < hourly.time.length; i++) {
     const t = hourly.time[i];
     if (!t.startsWith(dateStr)) continue;
@@ -429,6 +431,8 @@ function computeSolarExposure(crag, hourly, dateStr) {
     const clear = Math.max(0, 1 - cloud / 100);
     total += clear;
     if (!sunOnAspect(crag.aspect, sun.azimuth, sun.altitude)) continue;
+    geometric++;
+    if (hour >= 11 && hour < 16) geometricWarm++;
     onWall += clear;
     if (hour >= 11 && hour < 16) warm += clear;
     if (hour >= 8 && hour < 11) cool += clear;
@@ -438,6 +442,8 @@ function computeSolarExposure(crag, hourly, dateStr) {
     sunHoursOnWallWarm: warm,
     sunHoursOnWallCool: cool,
     sunHoursTotal: total,
+    geometricSunHoursOnWall: geometric,
+    geometricSunHoursOnWallWarm: geometricWarm,
   };
 }
 
@@ -1469,6 +1475,9 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   const warmHours = day.sunHoursOnWallWarm ?? 0;
   const coolHours = day.sunHoursOnWallCool ?? 0;
   const onWallHours = day.sunHoursOnWall ?? 0;
+  const shadeHours = day.geometricSunHoursOnWall ?? (crag.shade === 'all-day' ? 0 : Infinity);
+  const shadeWarmHours = day.geometricSunHoursOnWallWarm ?? (crag.shade === 'all-day' ? 0 : Infinity);
+  const physicalShade = (crag.shade !== 'none' && hasConcreteAspect(crag.aspect)) || crag.shade === 'all-day';
   const cloudMean = day.cloudMean ?? null; // mean daytime cloud cover %
 
   // Hot day (>22°C): each hour of direct sun on the wall during the hottest
@@ -1482,16 +1491,16 @@ export function scoreDay(crag, day, prevDay, nextDay) {
       add('aspect', 'Sun on wall × heat', -pen, `${warmHours.toFixed(1)}h direct sun on wall during the hottest hours`);
     }
     // Shade refuge: hot day AND the wall barely sees the sun in the warm window.
-    if (warmHours < 1 && onWallHours < 3) {
-      const bon = Math.min(8, Math.round(6 + (3 - Math.min(onWallHours, 3))));
+    if (physicalShade && shadeWarmHours < 1 && shadeHours < 3) {
+      const bon = Math.min(8, Math.round(6 + (3 - Math.min(shadeHours, 3))));
       score += bon;
       reasons.push('shaded refuge');
-      add('aspect', 'Shade × heat', +bon, `${onWallHours.toFixed(1)}h sun on wall — stays cool in the heat`);
-    } else if (warmHours < 2 && onWallHours < 5) {
+      add('aspect', 'Shade × heat', +bon, `${shadeHours.toFixed(1)}h potential sun on wall; physical shade reduces solar heating`);
+    } else if (physicalShade && shadeWarmHours < 2 && shadeHours < 5) {
       // Afternoon-only shade still helps a bit.
       const bon = 3;
       score += bon;
-      add('aspect', 'Partial shade × heat', +bon, `${warmHours.toFixed(1)}h direct sun in the warm window — partial shade helps`);
+      add('aspect', 'Partial shade × heat', +bon, `${shadeWarmHours.toFixed(1)}h potential sun in the warm window; partial shade reduces solar heating`);
     }
   } else if (t > 18) {
     // Mid-warm day: smaller signal, same direction.
@@ -1500,7 +1509,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
       score -= pen;
       add('aspect', 'Sun on wall × warmth', -pen, `${warmHours.toFixed(1)}h direct sun during 11am–4pm`);
     }
-    if (warmHours < 1 && onWallHours < 3) {
+    if (physicalShade && shadeWarmHours < 1 && shadeHours < 3) {
       const bon = 3;
       score += bon;
       add('aspect', 'Shaded × warmth', +bon, `wall mostly in shade — mild bonus on a warm day`);

@@ -791,6 +791,16 @@ function hourSolarFraction(crag, h) {
   return clear * (h.sunOnWall === true ? 1 : 0.5);
 }
 
+// A warm-weather crag can offer relative relief, but sustained 28°C
+// apparent temperature still cannot qualify for an 80+ session score.
+// Average hourly heat severity so a hot afternoon cannot cap a cool morning.
+function feelsLikeScoreCeiling(samples) {
+  const valid = samples.filter(s => Number.isFinite(s.apparent));
+  if (!valid.length) return 100;
+  const severity = valid.reduce((sum, s) => sum + Math.max(0, s.apparent - 21) * 3, 0) / valid.length;
+  return Math.max(0, 100 - severity);
+}
+
 function temperatureScoreCeiling(penalty) {
   // Ignore trace-level floating-point penalties. Once temperature is material
   // enough to surface as a callout, reserve 99+ for genuinely ideal conditions.
@@ -913,7 +923,7 @@ function climbingTemperature(crag, ct = {}, day = {}) {
   const climbHours = ct.climbHours || 0;
   const tFeel = climbHours && ct.meanApparent != null ? ct.meanApparent : (day.tFeel ?? day.tMax);
   const tAir = climbHours && ct.meanTemp != null ? ct.meanTemp : (day.tMax ?? tFeel);
-  const t = tAir > hi ? tAir : tFeel;
+  const t = tAir > hi || tFeel > 21 ? Math.max(tAir, tFeel) : tFeel;
   const samples = (ct.temperatureSamples || []).filter(sample => Number.isFinite(sample.apparent));
   const distance = samples.length
     ? samples.reduce((sum, sample) => sum + temperaturePenalty(crag, sample.apparent, sample.air, sample.hour), 0) / samples.length
@@ -921,11 +931,11 @@ function climbingTemperature(crag, ct = {}, day = {}) {
   const dwell = climbHours >= 4
     ? Math.min(10, Math.pow(Math.max(0, Math.min(6, climbHours) - ct.hoursInRange), 2) * 0.35) : 0;
   const penalty = distance + dwell < 0.5 ? 0 : distance + dwell;
-  const reason = penalty === 0 ? `temp ideal (${Math.round(t)}°C)`
-    : t < lo ? `cold (${Math.round(t)}°C avg)`
-      : t > hi ? `hot (${Math.round(t)}°C avg)`
+  const reason = penalty === 0 && feelsLikeHeatPenalty(crag, tFeel) === 0 ? `temp ideal (${Math.round(t)}°C)`
+    : t < lo ? `cold (${Math.round(t)}°C ${day.temperaturePeriod || "climbing"} avg)`
+      : t > hi || tFeel > 21 ? `hot (${Math.round(t)}°C ${day.temperaturePeriod || "climbing"} avg)`
         : tAir >= peakTemperatureUpper(crag) + 1 ? 'too warm for hard climbing' : 'temp varies';
-  const ceiling = reason === 'too warm for hard climbing' ? 90 : reason === 'temp varies' ? 98 : 100;
+  const ceiling = Math.min(feelsLikeScoreCeiling(samples.length ? samples : [{ apparent: tFeel }]), reason === 'too warm for hard climbing' ? 90 : reason === 'temp varies' ? 98 : 100);
   return { climbHours, tFeel, tAir, t, samples, penalty, reason, ceiling };
 }
 
@@ -1063,16 +1073,18 @@ function computeSolarExposure(crag, hourly, dateStr) {
     sunHoursOnWallWarm: 0,
     sunHoursOnWallCool: 0,
     sunHoursTotal: 0,
+    geometricSunHoursOnWall: null,
+    geometricSunHoursOnWallWarm: null,
   };
   if (!hourly || !hourly.time || crag.lat == null || crag.lon == null) return empty;
   // 'shade: all-day' crags are physically shaded by surrounding terrain that
   // the geometric model can't see (deep gorge, overhang, boulder shelter).
   // Honour the explicit override.
-  if (crag.shade === 'all-day') return empty;
+  if (crag.shade === 'all-day') return { ...empty, geometricSunHoursOnWall: 0, geometricSunHoursOnWallWarm: 0 };
   // Mixed-aspect parents have no single wall to compute against — zero out
   // solar exposure so scoring doesn't credit phantom sun hours.
   if (!hasConcreteAspect(crag.aspect)) return empty;
-  let onWall = 0, warm = 0, cool = 0, total = 0;
+  let onWall = 0, warm = 0, cool = 0, total = 0, geometric = 0, geometricWarm = 0;
   for (let i = 0; i < hourly.time.length; i++) {
     const t = hourly.time[i];
     if (!t.startsWith(dateStr)) continue;
@@ -1084,6 +1096,8 @@ function computeSolarExposure(crag, hourly, dateStr) {
     const clear = Math.max(0, 1 - cloud / 100);
     total += clear;
     if (!sunOnCrag(crag, sun.azimuth, sun.altitude, hour)) continue;
+    geometric++;
+    if (hour >= 11 && hour < 16) geometricWarm++;
     onWall += clear;
     if (hour >= 11 && hour < 16) warm += clear;
     if (hour >= 8 && hour < 11) cool += clear;
@@ -1093,6 +1107,8 @@ function computeSolarExposure(crag, hourly, dateStr) {
     sunHoursOnWallWarm: warm,
     sunHoursOnWallCool: cool,
     sunHoursTotal: total,
+    geometricSunHoursOnWall: geometric,
+    geometricSunHoursOnWallWarm: geometricWarm,
   };
 }
 
@@ -1881,7 +1897,7 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   // any real penalty can't claim a perfect 100, even if bonuses clawed it
   // all the way back there. Keeps hour-by-hour scores honest relative to
   // the day score, which already applies this same cap.
-  const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap, wetRock.cap);
+  const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), feelsLikeScoreCeiling([{ apparent: tFeel }]), marine.cap, wetRock.cap);
   const rawFinal = Math.max(0, Math.min(Math.floor(hourlyCeiling), Math.round(s)));
   return (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
 }
@@ -2353,26 +2369,29 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   const warmHours = day.sunHoursOnWallWarm ?? 0;
   const coolHours = day.sunHoursOnWallCool ?? 0;
   const onWallHours = day.sunHoursOnWall ?? 0;
+  const shadeHours = day.geometricSunHoursOnWall ?? (crag.shade === 'all-day' ? 0 : Infinity);
+  const shadeWarmHours = day.geometricSunHoursOnWallWarm ?? (crag.shade === 'all-day' ? 0 : Infinity);
+  const physicalShade = (crag.shade !== 'none' && hasConcreteAspect(crag.aspect)) || crag.shade === 'all-day';
   const cloudMean = day.cloudMean ?? null; // mean daytime cloud cover %
 
   // Hot day (>22°C): each hour of direct sun on the wall during the hottest
   // part of the day adds a penalty. Capped so it can't dominate the score.
   if (t > idealMax) {
     // Shade refuge: hot day AND the wall barely sees the sun in the warm window.
-    if (warmHours < 1 && onWallHours < 3) {
-      const bon = Math.min(8, Math.round(6 + (3 - Math.min(onWallHours, 3))));
+    if (physicalShade && shadeWarmHours < 1 && shadeHours < 3) {
+      const bon = Math.min(8, Math.round(6 + (3 - Math.min(shadeHours, 3))));
       score += bon;
       reasons.push('shaded refuge');
-      add('aspect', 'Shade × heat', +bon, `${onWallHours.toFixed(1)}h sun on wall — stays cool in the heat`);
-    } else if (warmHours < 2 && onWallHours < 5) {
+      add('aspect', 'Shade × heat', +bon, `${shadeHours.toFixed(1)}h potential sun on wall; physical shade reduces solar heating`);
+    } else if (physicalShade && shadeWarmHours < 2 && shadeHours < 5) {
       // Afternoon-only shade still helps a bit.
       const bon = 3;
       score += bon;
-      add('aspect', 'Partial shade × heat', +bon, `${warmHours.toFixed(1)}h direct sun in the warm window — partial shade helps`);
+      add('aspect', 'Partial shade × heat', +bon, `${shadeWarmHours.toFixed(1)}h potential sun in the warm window; partial shade reduces solar heating`);
     }
   } else if (t > idealMax - 4) {
     // Mid-warm day: smaller signal, same direction.
-    if (warmHours < 1 && onWallHours < 3) {
+    if (physicalShade && shadeWarmHours < 1 && shadeHours < 3) {
       const bon = 3;
       score += bon;
       add('aspect', 'Shaded × warmth', +bon, `wall mostly in shade — mild bonus on a warm day`);
@@ -2833,6 +2852,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     reason.startsWith('too warm for hard climbing'));
   const ceiling = Math.min(
     temperatureScoreCeiling(protectedTemperaturePenalty),
+    feelsLikeScoreCeiling(thermalSamples),
     tooWarmForHardClimbing ? 90 : 100,
     marineScoreCap,
     wetRockScoreCap,
@@ -2930,6 +2950,7 @@ export function rankByDay(forecasts, dayDates) {
         (date === fc.todayDate ? fc.todayBestWindow
           : date === fc.tomorrowDate ? fc.tomorrowBestWindow : null));
       const day = hourlyWindow ? { ...fc.days[dayIdx],
+        temperaturePeriod: 'session',
         climbTemps: windowTemperatures(fc.crag, hourlyWindow.hours) } : fc.days[dayIdx];
       const prevDay = dayIdx > 0 ? fc.days[dayIdx - 1] : null;
       const nextDay = dayIdx + 1 < fc.days.length ? fc.days[dayIdx + 1] : null;

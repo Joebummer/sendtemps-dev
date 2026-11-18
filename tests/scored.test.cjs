@@ -265,8 +265,8 @@ test('Falcons Lookout uses its faster conglomerate recovery without sandstone wa
   const falcons = crags.find(c => c.id === 'falcons-lookout');
   assert.ok(falcons);
   assert.equal(falcons.rockType, 'conglomerate');
-  assert.equal(harness.forecasts.rainRecoveryHours(falcons, 5), 6);
-  assert.equal(harness.forecasts.rainRecoveryHours({ rockType: 'conglomerate' }, 5), 18);
+  assert.equal(harness.forecasts.rainRecoveryHours(falcons, 5), 5);
+  assert.equal(harness.forecasts.rainRecoveryHours({ rockType: 'conglomerate' }, 5), 14);
   assert.equal(harness.forecasts.wetRockCondition(falcons, {
     precip: 0, rainEventMm: 5, hoursSinceRain: 7,
   }).cap, 100);
@@ -284,8 +284,8 @@ test('Falcons Lookout uses its faster conglomerate recovery without sandstone wa
   });
   const fc = (await wetHarness.forecasts.fetchAllForecasts('VIC'))['falcons-lookout'];
   const day = fc.days.find(d => d.date === '2026-09-14');
-  assert.equal(day.rockReadiness.status, 'drying');
-  assert.equal(day.rockReadiness.label, 'Conglomerate drying – inspect before climbing');
+  assert.equal(day.rockReadiness.status, 'forecast-dry');
+  assert.equal(day.rockReadiness.label, 'Forecast dry – inspect rock');
   assert.doesNotMatch(day.rockReadiness.advisory, /sandstone/i);
 });
 
@@ -303,8 +303,8 @@ test('Falcons Lookout dries after rain in overcast conditions', async () => {
   const falcons = forecasts['falcons-lookout'];
   const byHour = hour => falcons.tomorrowHourly.find(cell => cell.hour === hour);
   assert.equal(byHour(7).wetRockCondition.cap, 20);
-  assert.ok(byHour(11).wetRockCondition);
-  assert.equal(byHour(12).wetRockCondition, undefined);
+  assert.ok(byHour(10).wetRockCondition);
+  assert.equal(byHour(11).wetRockCondition, undefined);
   assert.ok(byHour(18).dryness >= 88);
 });
 
@@ -332,7 +332,7 @@ test('rain recovery exempts sandstone events below 1 mm and scales heavier rain 
 
   assert.equal(recovery({ rockType: 'granite' }, 0.1), 1);
   assert.equal(recovery({ rockType: 'granite' }, 0.5), 2);
-  assert.equal(recovery({ rockType: 'granite' }, 2), 5);
+  assert.equal(recovery({ rockType: 'granite' }, 2), 4);
   assert.equal(recovery({ rockType: 'sandstone' }, 0.05), 0);
   assert.equal(recovery({ rockType: 'sandstone' }, 0.1), 0);
   assert.equal(recovery({ rockType: 'sandstone (soft)' }, 0.1), 0);
@@ -340,13 +340,13 @@ test('rain recovery exempts sandstone events below 1 mm and scales heavier rain 
     assert.equal(recovery({ rockType: 'sandstone' }, mm), 0, `${mm} mm stays exempt`);
   }
   const accumulated = Array(10).fill(0.1).reduce((sum, mm) => sum + mm, 0);
-  assert.equal(recovery({ rockType: 'sandstone' }, accumulated), 9);
-  assert.equal(recovery({ rockType: 'sandstone' }, 1), 9);
-  assert.equal(recovery({ rockType: 'sandstone' }, 2), 12);
-  assert.equal(recovery({ rockType: 'sandstone' }, 5), 18);
-  assert.equal(recovery({ rockType: 'sandstone' }, 5.1), 19);
-  assert.equal(recovery({ rockType: 'sandstone' }, 10), 28);
-  assert.equal(recovery({ rockType: 'sandstone' }, 20), 36);
+  assert.equal(recovery({ rockType: 'sandstone' }, accumulated), 7);
+  assert.equal(recovery({ rockType: 'sandstone' }, 1), 7);
+  assert.equal(recovery({ rockType: 'sandstone' }, 2), 9);
+  assert.equal(recovery({ rockType: 'sandstone' }, 5), 14);
+  assert.equal(recovery({ rockType: 'sandstone' }, 5.1), 14);
+  assert.equal(recovery({ rockType: 'sandstone' }, 10), 21);
+  assert.equal(recovery({ rockType: 'sandstone' }, 20), 27);
   assert.equal(recovery({ rockType: 'sandstone (soft)' }, 0.5), 0);
 });
 
@@ -356,7 +356,7 @@ test('exposed sandstone has shorter provisional recovery, while sheltered rock s
   const typical = { rockType: 'sandstone', dryRating: 3 };
   const sheltered = { rockType: 'sandstone', dryRating: 2 };
   for (const [rain, oldHours, fastHours, typicalHours] of [
-    [1, 9, 8, 9], [5, 18, 15, 17], [10, 28, 23, 26],
+    [1, 7, 6, 7], [5, 14, 11, 13], [10, 21, 17, 19],
   ]) {
     assert.equal(rainRecoveryHours(exposed, rain), fastHours);
     assert.equal(rainRecoveryHours(typical, rain), typicalHours);
@@ -398,8 +398,8 @@ test('substantial rain recovery eases once exposed, fast-drying rock has dried',
   const exposed = { rockType: 'granite', dryRating: 4 };
   const morning = { precip: 0, hoursSinceRain: 9, rainEventMm: 6.9, dryness: 95 };
   assert.equal(wetRockCondition(exposed, morning).cap, 97);
-  assert.equal(wetRockCondition({ ...exposed, heatExposure: 'sheltered' }, morning).cap, 73);
-  assert.equal(wetRockCondition(exposed, { ...morning, dryness: 65 }).cap, 73);
+  assert.equal(wetRockCondition({ ...exposed, heatExposure: 'sheltered' }, morning).cap, 90);
+  assert.equal(wetRockCondition(exposed, { ...morning, dryness: 65 }).cap, 90);
   assert.equal(wetRockCondition(exposed, { ...morning, precip: 0.1 }).cap, 60);
 });
 
@@ -432,13 +432,13 @@ test('light rain lifts the post-rain ceiling only on fast-drying rock', async ()
   const recovery = (crag, mm, hours) => wetRockCondition(crag, {
     precip: 0, rainEventMm: mm, hoursSinceRain: hours,
   }).cap;
-  assert.equal(recovery(granite, 0.5, 1), 89);
-  assert.equal(recovery(granite, 0.5, 2), 97);
+  assert.equal(recovery(granite, 0.5, 1), 93);
+  assert.equal(recovery(granite, 0.5, 2), 99);
   assert.equal(recovery(granite, 0.5, 3), 100);
-  assert.equal(recovery(granite, 1, 3), 91);
-  assert.equal(recovery(granite, 2, 5), 79);
-  assert.equal(recovery(conglomerate, 0.5, 5), 79);
-  assert.equal(recovery({ ...conglomerate, dryingHalfLifeHours: 8 }, 0.5, 5), 97);
+  assert.equal(recovery(granite, 1, 3), 96);
+  assert.equal(recovery(granite, 2, 5), 100);
+  assert.equal(recovery(conglomerate, 0.5, 5), 100);
+  assert.equal(recovery({ ...conglomerate, dryingHalfLifeHours: 8 }, 0.5, 4), 99);
 });
 
 test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async () => {
@@ -460,25 +460,25 @@ test('wet-rock caps distinguish fresh sandstone from fast-drying granite', async
   }).cap, 25);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 8, recoveryProgressHours: 1, rainEventMm: 1,
-  }).cap, Math.round(25 + 65 * Math.pow(1 / 9, 0.8)));
+  }).cap, 50);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 2, recoveryProgressHours: 2, rainEventMm: 0.1,
   }).cap, 100);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 8, recoveryProgressHours: 8, rainEventMm: 1,
-  }).cap, Math.round(25 + 65 * Math.pow(8 / 9, 0.8)));
+  }).cap, 100);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 9, recoveryProgressHours: 9, rainEventMm: 1,
   }).cap, 100);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 20, recoveryProgressHours: 17, rainEventMm: 5,
-  }).cap, Math.round(25 + 65 * Math.pow(17 / 18, 0.8)));
+  }).cap, 100);
   assert.equal(condition(sandstone, {
     precip: 0, hoursSinceRain: 21, recoveryProgressHours: 18, rainEventMm: 5,
   }).cap, 100);
 
   assert.equal(condition(granite, { precip: 0.1, rainEventMm: 0.1 }).cap, 60);
-  assert.equal(condition(granite, { precip: 0, hoursSinceRain: 1, rainEventMm: 0.1 }).cap, 97);
+  assert.equal(condition(granite, { precip: 0, hoursSinceRain: 1, rainEventMm: 0.1 }).cap, 99);
   assert.equal(condition(granite, { precip: 0, hoursSinceRain: 2, rainEventMm: 0.1 }).cap, 100);
 });
 
@@ -777,8 +777,8 @@ test('0.2 mm events skip sandstone recovery while granite retains its dry-hour i
   const graniteFirstDry = granite.tomorrowHourly.find(hour => hour.hour === 16);
   const graniteRecovered = granite.tomorrowHourly.find(hour => hour.hour === 17);
   assert.equal(graniteFirstDry.wetRockCondition.recoveryHours, 1);
-  assert.equal(graniteFirstDry.wetRockCondition.cap, 97);
-  assert.ok(graniteFirstDry.score > 79 && graniteFirstDry.score <= 97);
+  assert.equal(graniteFirstDry.wetRockCondition.cap, 99);
+  assert.ok(graniteFirstDry.score > 79 && graniteFirstDry.score <= 99);
   assert.equal(graniteRecovered.wetRockCondition, undefined);
   assert.ok(graniteRecovered.score >= 80);
 });
@@ -1266,4 +1266,37 @@ test('provider network errors redact the API key', async () => {
   const body = await response.text();
   assert.ok(!body.includes(key));
   assert.match(body, /Weather provider request failed/);
+});
+
+test('global drying calibration shortens recovery across rock types while retaining rain severity', async () => {
+  const { rainRecoveryHours, wetRockCondition } = (await loadWorker()).forecasts;
+  for (const [rockType, oldHours] of [
+    ['granite', 8], ['rhyolite', 8], ['basalt', 9], ['dolerite', 10],
+    ['quartzite', 11], ['marble', 12], ['trachyte', 14],
+    ['conglomerate', 18], ['limestone', 20], ['tuff', 28], ['sandstone', 18],
+  ]) {
+    const crag = { rockType };
+    const hours = rainRecoveryHours(crag, 5);
+    assert.ok(hours < oldHours, `${rockType} recovers sooner`);
+    assert.ok(rainRecoveryHours(crag, 20) > hours, `${rockType} retains heavier-rain recovery`);
+    const caps = Array.from({ length: hours + 2 }, (_, h) => wetRockCondition(crag, {
+      precip: 0, rainEventMm: 5, hoursSinceRain: h, recoveryProgressHours: h,
+    }).cap);
+    assert.ok(caps.every((cap, i) => cap >= 0 && cap <= 100 && (!i || cap >= caps[i - 1])),
+      `${rockType} improves monotonically during recovery`);
+    assert.equal(caps.at(-1), 100);
+    assert.ok(wetRockCondition(crag, { precip: 5, rainEventMm: 5 }).cap <= 60,
+      `${rockType} keeps active-rain ceiling`);
+  }
+});
+
+test('hourly recovery does not stack a second residual-moisture penalty', async () => {
+  const { scoreHour } = (await loadWorker()).forecasts;
+  const crag = { rockType: 'granite', idealTemp: [10, 20], aspect: 'N' };
+  const hour = { hour: 10, temp: 15, apparentTemp: 15, humidity: 60, wind: 5,
+    precip: 0, precipProb: 0, cloud: 50, sunOnWall: null,
+    wetRockCondition: { cap: 90 } };
+  assert.equal(scoreHour(crag, { ...hour, dryness: 20 }),
+    scoreHour(crag, { ...hour, dryness: 100 }));
+  assert.ok(scoreHour(crag, { ...hour, dryness: 20 }) <= 90);
 });

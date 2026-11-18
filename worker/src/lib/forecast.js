@@ -419,6 +419,10 @@ function isBelowSandstoneThreshold(eventMm) {
 // event. Rock type then scales that time to reflect absorption and seepage.
 // Every rock gets at least one complete dry hour. Sandstone uses productive
 // drying hours because a dry-looking surface can still be fragile below it.
+// Global calibration applies after local rock/crag adjustments. Retain at least
+// one full dry hour and sandstone's productive-hour requirement.
+const RECOVERY_TIME_FACTOR = 0.75;
+
 const RAIN_RECOVERY_MULTIPLIER = {
   granite: 1,
   rhyolite: 1,
@@ -473,10 +477,17 @@ export function rainRecoveryHours(crag, eventMm) {
     const rating = crag.dryRating ?? 2;
     const multiplier = rating >= 5 ? 0.80 : rating >= 4 ? 0.85 :
       rating >= 3 ? 0.90 : 1;
-    return Math.max(1, Math.ceil(baseline * multiplier));
+    return Math.max(1, Math.ceil(baseline * multiplier * RECOVERY_TIME_FACTOR));
   }
   const multiplier = crag.rainRecoveryMultiplier ?? RAIN_RECOVERY_MULTIPLIER[rock] ?? 1.5;
-  return Math.max(1, Math.min(72, Math.ceil(baseRainRecoveryHours(eventMm) * multiplier)));
+  return Math.max(1, Math.min(72, Math.ceil(baseRainRecoveryHours(eventMm) * multiplier * RECOVERY_TIME_FACTOR)));
+}
+
+// Ease the residual penalty progressively, without giving freshly wet rock
+// immediate relief. Half the old deficit remains at full recovery progress.
+function recoveryScoreCap(cap, progress) {
+  const relief = 0.5 * Math.sqrt(Math.max(0, Math.min(1, progress)));
+  return Math.round(cap + (100 - cap) * relief);
 }
 
 export function wetRockCondition(crag, hour) {
@@ -521,7 +532,7 @@ export function wetRockCondition(crag, hour) {
   if (rock === 'sandstone') {
     const progress = Math.max(0, Math.min(1, recoveryProgressHours / recoveryHours));
     return {
-      cap: Math.round(25 + 65 * Math.pow(progress, 0.8)),
+      cap: recoveryScoreCap(25 + 65 * Math.pow(progress, 0.8), progress),
       label: 'sandstone drying after rain',
       detail,
       recoveryHours,
@@ -542,7 +553,7 @@ export function wetRockCondition(crag, hour) {
     hasFastSurfaceRecovery(crag, rock) && Number.isFinite(hour.dryness)
     ? interpolate([[70, 0], [95, 97]], hour.dryness)
     : 0;
-  const cap = Math.round(Math.max(standardCap, surfaceCap));
+  const cap = Math.max(recoveryScoreCap(standardCap, progress), Math.round(surfaceCap));
   return {
     cap,
     label: `${rock} drying after rain`,
@@ -1831,9 +1842,11 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
     additionalFeelsLikeHeat(crag, tFeel, tAir, h.hour);
   penalize(thermalPenalty);
 
-  // Dryness — penalty up to 35
-  if (h.dryness != null && h.dryness < 100) {
-    penalize(Math.round(((100 - h.dryness) / 100) * 35));
+  // Use one residual-moisture constraint, as in scoreDay. The recovery cap
+  // already accounts for wet rock; avoid stacking a dryness penalty on it.
+  const wetRock = h.wetRockCondition ?? wetRockCondition(crag, h);
+  if (h.dryness != null && h.dryness < 100 && wetRock.cap >= 100) {
+    penalize(Math.round(((100 - h.dryness) / 100) * 25));
   }
 
   // Wind — mirrors scoreDay's direction-vs-aspect multiplier.
@@ -1853,8 +1866,6 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
 
   const marine = h.marineCondition ?? marineCondition(crag, h);
   penalize(marine.penalty);
-  const wetRock = h.wetRockCondition ?? wetRockCondition(crag, h);
-
   // Sun-on-wall interactions — use apparent temp for the threshold checks
   // so a cold-feeling 20°C day (windy, humid) doesn't falsely claim a sun bonus.
   if (h.sunOnWall === true) {
@@ -2592,14 +2603,14 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // temperature on an hourly basis, so we just translate the day's mid-day
   // dryness score (0–100) into a penalty.
   //
-  // dryness 100 → 0 penalty; dryness 0 → 45 penalty. Linear in between.
+  // dryness 100 → 0 penalty; dryness 0 → 30 penalty. Linear in between.
   const dryness = (day.morningDryness != null && day.afternoonDryness != null)
     ? Math.min(day.morningDryness, day.afternoonDryness)
     : (day.dayDryness ?? day.morningDryness ?? day.afternoonDryness ?? 100);
   if (dryness < 100 && wetRockScoreCap >= 100) {
-    // While the sandstone recovery cap is active, that cap already represents
+    // While a wet-rock recovery cap is active, that cap already represents
     // residual moisture. Do not charge a second physical-dryness penalty.
-    const penalty = Math.round(((100 - dryness) / 100) * 45);
+    const penalty = Math.round(((100 - dryness) / 100) * 30);
     score -= penalty;
     if (dryness < 30) reasons.push('rock soaked');
     else if (dryness < 50) reasons.push('rock wet');

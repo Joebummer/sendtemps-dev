@@ -624,9 +624,14 @@ function wetRockDayCondition(crag, hourly, drynessSeries, dateStr) {
     if (!best || average > best.average) best = { window, average };
   }
   if (!best) return {};
-  const representative = best.window.reduce((worst, sample) =>
-    sample.cap < worst.cap ? sample : worst, best.window[0]);
-  const averageCap = Math.floor(best.average);
+  return wetRockWindowCondition(crag, best.window);
+}
+
+// Summarize exactly the hours represented by a session or daily recovery window.
+function wetRockWindowCondition(crag, samples) {
+  const representative = samples.reduce((worst, sample) =>
+    sample.cap < worst.cap ? sample : worst, samples[0]);
+  const averageCap = Math.floor(samples.reduce((sum, sample) => sum + sample.cap, 0) / samples.length);
   const recovering = averageCap < 100;
   const rockType = canonicalRockType(crag);
   const sandstone = rockType === 'sandstone';
@@ -635,7 +640,7 @@ function wetRockDayCondition(crag, hourly, drynessSeries, dateStr) {
     ...(recovering ? {
       wetRockCap: averageCap,
       wetRockLabel: representative.label,
-      wetRockDetail: `${best.window[0].hour}:00–${best.window[best.window.length - 1].hour + 1}:00 recovery ceiling; ${representative.detail}`,
+      wetRockDetail: `${samples[0].hour}:00–${samples[samples.length - 1].hour + 1}:00 recovery ceiling; ${representative.detail}`,
     } : {}),
     rockReadiness: {
       status: !recovering ? 'forecast-dry' :
@@ -2613,9 +2618,10 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // dryness score (0–100) into a penalty.
   //
   // dryness 100 → 0 penalty; dryness 0 → 30 penalty. Linear in between.
-  const dryness = (day.morningDryness != null && day.afternoonDryness != null)
-    ? Math.min(day.morningDryness, day.afternoonDryness)
-    : (day.dayDryness ?? day.morningDryness ?? day.afternoonDryness ?? 100);
+  const dryness = Number.isFinite(day.sessionDryness) ? day.sessionDryness
+    : (day.morningDryness != null && day.afternoonDryness != null)
+      ? Math.min(day.morningDryness, day.afternoonDryness)
+      : (day.dayDryness ?? day.morningDryness ?? day.afternoonDryness ?? 100);
   if (dryness < 100 && wetRockScoreCap >= 100) {
     // While a wet-rock recovery cap is active, that cap already represents
     // residual moisture. Do not charge a second physical-dryness penalty.
@@ -2938,9 +2944,21 @@ export function rankByDay(forecasts, dayDates) {
       const hourlyWindow = useDailyEstimate ? null : (fc.bestWindows?.[date] ??
         (date === fc.todayDate ? fc.todayBestWindow
           : date === fc.tomorrowDate ? fc.tomorrowBestWindow : null));
+      const sessionDryness = hourlyWindow?.hours.map(hour => hour.dryness).filter(Number.isFinite);
       const day = hourlyWindow ? { ...fc.days[dayIdx],
         temperaturePeriod: 'session',
-        climbTemps: windowTemperatures(fc.crag, hourlyWindow.hours) } : fc.days[dayIdx];
+        climbTemps: windowTemperatures(fc.crag, hourlyWindow.hours),
+        // Preserve the raw morning/afternoon observations, but derive the
+        // displayed moisture reason and readiness from the scored session.
+        sessionDryness: sessionDryness.length ? Math.min(...sessionDryness) : undefined,
+        wetRockCap: undefined,
+        wetRockLabel: undefined,
+        wetRockDetail: undefined,
+        ...wetRockWindowCondition(fc.crag, hourlyWindow.hours.map(hour => ({
+          hour: hour.hour,
+          ...(hour.wetRockCondition ?? wetRockCondition(fc.crag, hour)),
+        }))),
+      } : fc.days[dayIdx];
       const prevDay = dayIdx > 0 ? fc.days[dayIdx - 1] : null;
       const nextDay = dayIdx + 1 < fc.days.length ? fc.days[dayIdx + 1] : null;
       const dayResult = scoreDay(fc.crag, day, prevDay, nextDay);

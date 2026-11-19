@@ -1321,3 +1321,66 @@ test('Falcons cloudy forecast retains physical sun exposure without a shade-refu
   assert.ok(row.score <= 79);
   assert.equal(row.day.temperaturePeriod, 'session');
 });
+
+test('session moisture tags and breakdown use scored hours instead of a soaked morning', async () => {
+  const harness = await loadWorker(async url => Response.json(weatherFixture(url)));
+  const original = (await harness.forecasts.fetchAllForecasts('VIC'))['youyangs-flatrock'];
+  for (const offset of [0, 1, 2, 8]) {
+    const date = new Date(Date.parse(original.todayDate) + offset * 86400000).toISOString().slice(0, 10);
+    const hours = original.bestWindows[date].hours.map((hour, i) => ({ ...hour,
+      hour: 15 + i, dryness: 85 + i, precip: 0, rainEventMm: 14,
+      hoursSinceRain: 30, recoveryProgressHours: 30, wetRockCondition: undefined,
+    }));
+    const fc = { ...original,
+      days: original.days.map(day => day.date === date ? { ...day,
+        morningDryness: 23, afternoonDryness: 75, wetRockCap: 25,
+        wetRockLabel: 'granite wet', wetRockDetail: 'stale daily recovery',
+      } : day),
+      bestWindows: { ...original.bestWindows, [date]: {
+        start: 15, end: 20, count: 5, avg: 87, hours,
+      } },
+    };
+    const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [date])[date][0];
+    assert.equal(row.score, 87);
+    assert.equal(row.day.sessionDryness, 85);
+    assert.equal(row.day.morningDryness, 23, 'raw morning forecast remains available');
+    assert.ok(!row.reasons.some(reason => /rock soaked|rock wet|still drying|granite wet/.test(reason)));
+    const dryness = row.contributions.find(c => c.category === 'dryness');
+    assert.equal(dryness.delta, -5);
+    assert.match(dryness.detail, /85\/100/);
+    assert.equal(row.day.wetRockCap, undefined, 'stale daily cap must be removed');
+    assert.equal(row.rockReadiness.status, 'forecast-dry');
+  }
+
+  const date = new Date(Date.parse(original.todayDate) + 3 * 86400000).toISOString().slice(0, 10);
+  const fc = { ...original, days: original.days.map(day => day.date === date
+    ? { ...day, morningDryness: 23, afternoonDryness: 75, wetRockCap: undefined } : day) };
+  const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [date])[date][0];
+  assert.equal(row.scoreBasis, 'daily-estimate');
+  assert.ok(row.reasons.includes('rock soaked'), 'daily estimates retain their whole-day dryness context');
+});
+
+test('session moisture readiness retains wet-rock constraints within the selected window', async () => {
+  const harness = await loadWorker(async url => Response.json(weatherFixture(url)));
+  const original = (await harness.forecasts.fetchAllForecasts('VIC'))['youyangs-flatrock'];
+  const date = original.tomorrowDate;
+  for (const [rockType, cap, status] of [['granite', 60, 'drying'], ['sandstone', 0, 'wet']]) {
+    const hours = original.bestWindows[date].hours.map(hour => ({ ...hour,
+      dryness: 20, precip: 1, rainEventMm: 5, currentEventMm: 5,
+      hoursSinceRain: 0, recoveryProgressHours: 0, wetRockCondition: undefined,
+    }));
+    const fc = { ...original, crag: { ...original.crag, rockType },
+      days: original.days.map(day => day.date === date ? { ...day,
+        morningDryness: 100, afternoonDryness: 100, wetRockCap: undefined,
+      } : day),
+      bestWindows: { ...original.bestWindows,
+        [date]: { ...original.bestWindows[date], hours, avg: cap } },
+    };
+    const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [date])[date][0];
+    assert.equal(row.day.wetRockCap, cap);
+    assert.equal(row.rockReadiness.status, status);
+    assert.ok(row.reasons.includes(`${rockType} wet`));
+    assert.ok(!row.contributions.some(c => c.label === 'Rock dryness'),
+      'recovery ceiling already represents moisture');
+  }
+});

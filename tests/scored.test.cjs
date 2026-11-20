@@ -1384,3 +1384,28 @@ test('session moisture readiness retains wet-rock constraints within the selecte
       'recovery ceiling already represents moisture');
   }
 });
+
+test('West Flank stays shaded until 2 pm and ends shaded heat relief at that boundary', async () => {
+  const { forecasts: f } = await loadWorker();
+  for (const path of ['worker/src/lib/crags.js', 'webapp/crags.js']) {
+    const crag = (await loadCrags(path)).find(c => c.id === 'gramps-westflank');
+    assert.equal(crag.shadeUntilHour, 14);
+    assert.match(crag.sunOnWall, /2 pm/);
+    for (const hour of [9, 12, 13, 13.99]) {
+      assert.equal(f.sunOnCrag(crag, 270, 50, hour), false, `${path}: shaded at ${hour}`);
+      assert.equal(f.peakTemperatureUpper(crag, hour), f.peakTemperatureUpper(crag, 11));
+    }
+    assert.equal(f.sunOnCrag(crag, 270, 50, 14), true);
+    assert.equal(f.sunOnCrag(crag, 270, 50, 15), true);
+    assert.equal(f.sunOnCrag(crag, 90, 50, 14), false, 'after 2 pm sun still depends on geometry');
+    assert.equal(f.sunOnCrag(crag, 270, 0, 14), false, 'night is never treated as sunny');
+    assert.ok(f.peakTemperatureUpper(crag, 13) > f.peakTemperatureUpper(crag, 14));
+    const weather = { temp: 24, apparentTemp: 24, humidity: 50, wind: 8,
+      windDir: 270, windExposure: 'parallel', precip: 0, precipProb: 0,
+      cloud: 20, dryness: 100, sunAlt: 50 };
+    const score = hour => f.scoreHour(crag, { ...weather, hour,
+      sunOnWall: f.sunOnCrag(crag, 270, 50, hour) });
+    assert.equal(score(13), score(11), 'shade and heat relief extend through 1 pm');
+    assert.ok(score(13) > score(14), 'afternoon sun and loss of relief affect the score');
+  }
+});

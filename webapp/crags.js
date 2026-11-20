@@ -1375,10 +1375,11 @@ export const CRAGS = [
     dryRating: 5,
     idealTemp: [12, 24],
     shade: 'morning',
+    shadeUntilHour: 14,
     driveTime: '3h45',
     trip: 'both',
-    state: 'VIC',    notes: 'Very consumer-friendly crag. Good hot-weather option (if you arrive early) – west-facing cliff shaded until afternoon. Variety of grades from quite easy to really hard, mostly bolted.',
-    sunOnWall: 'Afternoon only (shade until early/mid afternoon)',
+    state: 'VIC',    notes: 'Very consumer-friendly crag. Good hot-weather option (if you arrive early) – west-facing cliff shaded until 2 pm. Variety of grades from quite easy to really hard, mostly bolted.',
+    sunOnWall: 'Afternoon sun from 2 pm (shade until 2 pm)',
     bestIn: 'warm',
   },
   {

@@ -712,7 +712,7 @@ function daytimeWindExposure(crag, hourly, dateStr) {
 function warmReliefApplies(crag, hour) {
   const validHour = Number.isFinite(hour) && hour >= 0 && hour < 24;
   return crag.warmWeatherRelief === 'light' ||
-    (crag.warmWeatherRelief === 'morning' && validHour && hour < 12) ||
+    (crag.warmWeatherRelief === 'morning' && validHour && hour < (crag.shadeUntilHour ?? 12)) ||
     (crag.warmWeatherRelief === 'evening' && validHour && hour >= 17) ||
     (crag.warmWeatherRelief === 'afternoon' && validHour && hour >= 12) ||
     (crag.warmWeatherRelief === 'late-afternoon' && validHour && hour >= 16);
@@ -1432,8 +1432,10 @@ export function hasConcreteAspect(aspect) {
 // and twilight scatter). Mixed/unknown aspects return false — callers should
 // check `hasConcreteAspect` and fall back to author-provided text instead of
 // pretending they have a precise sun window.
-// Observed local shade overrides geometry from the recorded hour onward.
+// Observed local shade overrides geometry during the recorded hours.
 export function sunOnCrag(crag, sunAz, sunAlt, hour) {
+  if (Number.isFinite(crag.shadeUntilHour) && Number.isFinite(hour) &&
+      hour < crag.shadeUntilHour) return false;
   if (Number.isFinite(crag.shadeFromHour) && Number.isFinite(hour) &&
       hour >= crag.shadeFromHour) return false;
   return sunOnAspect(crag.aspect, sunAz, sunAlt);

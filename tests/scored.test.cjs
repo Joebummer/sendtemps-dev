@@ -1417,13 +1417,13 @@ test('all Grampians crags lighten residual drying but preserve active rain and r
     const grampians = crags.filter(c => c.id.startsWith('gramps-'));
     assert.equal(grampians.length, 29);
     for (const crag of grampians) {
-      assert.equal(crag.residualDryingPenaltyFactor, 0.2, crag.id);
+      assert.equal(crag.residualDryingPenaltyFactor, 0.24, crag.id);
       const overnight = { precip: 0, rainEventMm: 15, currentEventMm: 15,
         hoursSinceRain: 14, recoveryProgressHours: 0, dryness: 32 };
       const regular = { ...crag }; delete regular.residualDryingPenaltyFactor;
       assert.equal(f.wetRockCondition(regular, overnight).cap, 25);
       const adjusted = f.wetRockCondition(crag, overnight);
-      assert.equal(adjusted.cap, 85, crag.id);
+      assert.equal(adjusted.cap, 82, crag.id);
       assert.equal(adjusted.recoveryHours, f.rainRecoveryHours(regular, 15),
         'lighter penalty does not pretend the recovery warning has finished');
       assert.equal(adjusted.label, 'recent rain – check for seepage');
@@ -1452,7 +1452,7 @@ test('Grampians pipeline keeps recent rain visible with substantially lighter dr
   const fc = (await harness.forecasts.fetchAllForecasts('VIC'))['gramps-westflank'];
   const morning = fc.tomorrowHourly.find(h => h.hour === 9);
   assert.equal(morning.recoveryProgressHours, 0);
-  assert.equal(morning.wetRockCondition.cap, 85);
+  assert.equal(morning.wetRockCondition.cap, 82);
   assert.ok(morning.score > 70);
   const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [fc.tomorrowDate])[fc.tomorrowDate][0];
   assert.ok(row.reasons.includes('recent rain – check for seepage'));

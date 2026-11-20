@@ -70,6 +70,7 @@ export const CRAGS = [
     "trip": "both",
     "state": "VIC",
     "id": "gramps-tribute-upper",
+    residualDryingPenaltyFactor: 0.2,
     "name": "Tribute Wall – Upper",
     "area": "Grampians (Northern)",
     "lat": -36.8949,
@@ -94,6 +95,7 @@ export const CRAGS = [
     "trip": "both",
     "state": "VIC",
     "id": "gramps-tribute-lower",
+    residualDryingPenaltyFactor: 0.2,
     "name": "Tribute Wall – Lower",
     "area": "Grampians (Northern)",
     "lat": -36.8949,
@@ -1532,6 +1534,7 @@ export const CRAGS = [
   // – Grampians sub-areas – 
   {
     id: 'gramps-main',
+    residualDryingPenaltyFactor: 0.2,
     name: 'Grampians',
     area: 'Grampians',
     lat: -37.1389,
@@ -1550,6 +1553,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-stapylton',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'Mt Stapylton',
     area: 'Grampians (Northern)',
@@ -1572,6 +1576,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-taipan',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'Taipan Wall',
     area: 'Grampians (Northern)',
@@ -1592,6 +1597,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-bundaleer',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'Bundaleer',
     area: 'Grampians (Central)',
@@ -1612,6 +1618,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-muline',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'Muline',
     area: 'Grampians (Central)',
@@ -1633,6 +1640,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-vicrange',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'Victoria Range',
     area: 'Grampians (Western)',
@@ -1653,6 +1661,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-guardhouse',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'The Guardhouse',
     area: 'Grampians (Western)',
@@ -1672,6 +1681,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-rosea',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'Mt Rosea',
     area: 'Grampians (Central)',
@@ -1691,6 +1701,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-westflank',
+    residualDryingPenaltyFactor: 0.2,
     warmWeatherRelief: "morning",
     parentId: 'gramps-main',
     name: 'West Flank',
@@ -1712,6 +1723,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-iforget',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'I Forget Walls',
     area: 'Grampians (Northern)',
@@ -1731,6 +1743,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-ravine',
+    residualDryingPenaltyFactor: 0.2,
     warmWeatherRelief: "light",
     parentId: 'gramps-main',
     name: 'The Ravine',
@@ -1751,6 +1764,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-vandiemens',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: "Van Diemen's Land",
     area: 'Grampians (Northern)',
@@ -1770,6 +1784,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-hollowmtn',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'Hollow Mountain Cave',
     area: 'Grampians (Northern)',
@@ -1792,6 +1807,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-stapylton-amph',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'Stapylton Amphitheatre',
     area: 'Grampians (Northern)',
@@ -1813,6 +1829,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-lowertaipan',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'Lower Taipan',
     area: 'Grampians (Northern)',
@@ -1835,6 +1852,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-dreamtime',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'Dreamtime Wall',
     area: 'Grampians (Northern)',
@@ -1854,6 +1872,7 @@ export const CRAGS = [
   },
   {
     id: 'gramps-hallsgap',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'Halls Gap Area',
     area: 'Grampians (Central)',
@@ -1875,6 +1894,7 @@ export const CRAGS = [
 
   {
     id: 'gramps-malta',
+    residualDryingPenaltyFactor: 0.2,
     parentId: 'gramps-main',
     name: 'The Malta Sector',
     area: 'Grampians (Halls Gap)',
@@ -1904,6 +1924,7 @@ export const CRAGS = [
     "trip": "both",
     "state": "VIC",
     "id": "gramps-tribute",
+    residualDryingPenaltyFactor: 0.2,
     "name": "Tribute Wall",
     "area": "Grampians (Northern)",
     "lat": -36.8949,
@@ -1928,6 +1949,7 @@ export const CRAGS = [
     "trip": "both",
     "state": "VIC",
     "id": "gramps-centurion-lower",
+    residualDryingPenaltyFactor: 0.2,
     "name": "Centurion Walls – Lower",
     "area": "Grampians (Northern)",
     "lat": -36.975,
@@ -1950,6 +1972,7 @@ export const CRAGS = [
     "trip": "both",
     "state": "VIC",
     "id": "gramps-centurion-upper",
+    residualDryingPenaltyFactor: 0.2,
     "name": "Centurion Walls – Upper",
     "area": "Grampians (Northern)",
     "lat": -36.975,
@@ -1974,6 +1997,7 @@ export const CRAGS = [
     "trip": "both",
     "state": "VIC",
     "id": "gramps-watchtower",
+    residualDryingPenaltyFactor: 0.2,
     "name": "The Watchtower",
     "area": "Grampians (Halls Gap)",
     "lat": -37.12202,
@@ -1995,6 +2019,7 @@ export const CRAGS = [
     "trip": "both",
     "state": "VIC",
     "id": "gramps-trackside",
+    residualDryingPenaltyFactor: 0.2,
     "name": "Trackside Boulders",
     "area": "Grampians (Northern)",
     "lat": -36.895741,
@@ -2022,6 +2047,7 @@ export const CRAGS = [
     "trip": "both",
     "state": "VIC",
     "id": "gramps-andersens-west",
+    residualDryingPenaltyFactor: 0.2,
     "name": "Andersens West",
     "area": "Grampians (Northern)",
     "lat": -36.8909,
@@ -2049,6 +2075,7 @@ export const CRAGS = [
     "trip": "both",
     "state": "VIC",
     "id": "gramps-venus-baths",
+    residualDryingPenaltyFactor: 0.2,
     "name": "Venus Baths",
     "area": "Grampians (Halls Gap)",
     "lat": -37.13811,
@@ -2073,6 +2100,7 @@ export const CRAGS = [
     "trip": "both",
     "state": "VIC",
     "id": "gramps-bad-moon",
+    residualDryingPenaltyFactor: 0.2,
     "name": "Bad Moon Rising Wall",
     "area": "Grampians (Northern)",
     "lat": -36.8955,
@@ -2097,6 +2125,7 @@ export const CRAGS = [
     "trip": "both",
     "state": "VIC",
     "id": "gramps-grey-green",
+    residualDryingPenaltyFactor: 0.2,
     "name": "Grey and Green Walls",
     "area": "Grampians (Northern)",
     "lat": -36.8942,

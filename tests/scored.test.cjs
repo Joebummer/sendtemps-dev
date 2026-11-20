@@ -1409,3 +1409,54 @@ test('West Flank stays shaded until 2 pm and ends shaded heat relief at that bou
     assert.ok(score(13) > score(14), 'afternoon sun and loss of relief affect the score');
   }
 });
+
+test('all Grampians crags lighten residual drying but preserve active rain and recent-rain warnings', async () => {
+  const f = (await loadWorker()).forecasts;
+  for (const path of ['worker/src/lib/crags.js', 'webapp/crags.js']) {
+    const crags = await loadCrags(path);
+    const grampians = crags.filter(c => c.id.startsWith('gramps-'));
+    assert.equal(grampians.length, 29);
+    for (const crag of grampians) {
+      assert.equal(crag.residualDryingPenaltyFactor, 0.2, crag.id);
+      const overnight = { precip: 0, rainEventMm: 15, currentEventMm: 15,
+        hoursSinceRain: 14, recoveryProgressHours: 0, dryness: 32 };
+      const regular = { ...crag }; delete regular.residualDryingPenaltyFactor;
+      assert.equal(f.wetRockCondition(regular, overnight).cap, 25);
+      const adjusted = f.wetRockCondition(crag, overnight);
+      assert.equal(adjusted.cap, 85, crag.id);
+      assert.equal(adjusted.recoveryHours, f.rainRecoveryHours(regular, 15),
+        'lighter penalty does not pretend the recovery warning has finished');
+      assert.equal(adjusted.label, 'recent rain – check for seepage');
+      assert.match(adjusted.detail, /15.0mm/);
+      assert.equal(f.wetRockCondition(crag, { ...overnight, precip: 2 }).cap, 0,
+        'active substantial rain retains its full cap');
+      assert.equal(f.wetRockCondition(crag, { ...overnight, hoursSinceRain: 0 }).cap, 25,
+        'fresh rain must earn a complete dry hour before relief');
+    }
+    assert.ok(crags.filter(c => !c.id.startsWith('gramps-')).every(c =>
+      c.residualDryingPenaltyFactor === undefined), 'other regions retain their calibration');
+  }
+});
+
+test('Grampians pipeline keeps recent rain visible with substantially lighter drying scores', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const { hourly } of data) {
+      hourly.precipitation[hourly.time.indexOf('2026-09-13T19:00')] = 15;
+      hourly.cloudcover.fill(100);
+      hourly.shortwave_radiation.fill(0);
+      hourly.relative_humidity_2m.fill(82);
+    }
+    return Response.json(data);
+  });
+  const fc = (await harness.forecasts.fetchAllForecasts('VIC'))['gramps-westflank'];
+  const morning = fc.tomorrowHourly.find(h => h.hour === 9);
+  assert.equal(morning.recoveryProgressHours, 0);
+  assert.equal(morning.wetRockCondition.cap, 85);
+  assert.ok(morning.score > 70);
+  const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [fc.tomorrowDate])[fc.tomorrowDate][0];
+  assert.ok(row.reasons.includes('recent rain – check for seepage'));
+  assert.ok(!row.reasons.includes('rock soaked'));
+  assert.equal(row.rockReadiness.status, 'drying');
+  assert.match(row.rockReadiness.advisory, /Do not climb sandstone that is damp/);
+});

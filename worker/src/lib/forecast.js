@@ -490,6 +490,19 @@ function recoveryScoreCap(cap, progress) {
   return Math.round(cap + (100 - cap) * relief);
 }
 
+// Regional calibration scales residual moisture only. Rainfall amounts and
+// active-rain caps retain their full effect, and warning metadata stays visible.
+function residualDryingFactor(crag) {
+  return Number.isFinite(crag.residualDryingPenaltyFactor)
+    ? Math.max(0, Math.min(1, crag.residualDryingPenaltyFactor)) : 1;
+}
+
+function residualRecoveryCap(crag, cap, elapsedDryHours) {
+  const factor = elapsedDryHours >= 1 ? residualDryingFactor(crag) : 1;
+  // Keep a nonzero deficit until recovery completes, so the rain warning remains.
+  return 100 - Math.ceil((100 - cap) * factor);
+}
+
 export function wetRockCondition(crag, hour) {
   const rain = Number.isFinite(hour?.precip) ? hour.precip : 0;
   const hoursSinceRain = Number.isFinite(hour?.hoursSinceRain) ? hour.hoursSinceRain : null;
@@ -526,14 +539,18 @@ export function wetRockCondition(crag, hour) {
     : recoveryProgressHours.toFixed(1);
   const detail = `${progressLabel}/${recoveryHours} effective dry hours after ${rainEventMm.toFixed(1)}mm`;
 
+  const elapsedDryHours = hoursSinceRain ?? recoveryProgressHours;
+  const recoveryLabel = residualDryingFactor(crag) < 1
+    ? 'recent rain – check for seepage' : `${rock} drying after rain`;
+
   // Recovery is intentionally gentler after drying has begun. Substantial
   // active rain still scores zero; a recovering rock's suitability score is
   // always limited, even when weather alone would be excellent.
   if (rock === 'sandstone') {
     const progress = Math.max(0, Math.min(1, recoveryProgressHours / recoveryHours));
     return {
-      cap: recoveryScoreCap(25 + 65 * Math.pow(progress, 0.8), progress),
-      label: 'sandstone drying after rain',
+      cap: residualRecoveryCap(crag, recoveryScoreCap(25 + 65 * Math.pow(progress, 0.8), progress), elapsedDryHours),
+      label: recoveryLabel,
       detail,
       recoveryHours,
     };
@@ -555,8 +572,8 @@ export function wetRockCondition(crag, hour) {
     : 0;
   const cap = Math.max(recoveryScoreCap(standardCap, progress), Math.round(surfaceCap));
   return {
-    cap,
-    label: `${rock} drying after rain`,
+    cap: residualRecoveryCap(crag, cap, elapsedDryHours),
+    label: recoveryLabel,
     detail,
     recoveryHours,
   };
@@ -1859,7 +1876,7 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   // already accounts for wet rock; avoid stacking a dryness penalty on it.
   const wetRock = h.wetRockCondition ?? wetRockCondition(crag, h);
   if (h.dryness != null && h.dryness < 100 && wetRock.cap >= 100) {
-    penalize(Math.round(((100 - h.dryness) / 100) * 25));
+    penalize(Math.round(((100 - h.dryness) / 100) * 25 * residualDryingFactor(crag)));
   }
 
   // Wind — mirrors scoreDay's direction-vs-aspect multiplier.
@@ -2627,9 +2644,10 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   if (dryness < 100 && wetRockScoreCap >= 100) {
     // While a wet-rock recovery cap is active, that cap already represents
     // residual moisture. Do not charge a second physical-dryness penalty.
-    const penalty = Math.round(((100 - dryness) / 100) * 30);
+    const penalty = Math.round(((100 - dryness) / 100) * 30 * residualDryingFactor(crag));
     score -= penalty;
-    if (dryness < 30) reasons.push('rock soaked');
+    if (dryness < 70 && residualDryingFactor(crag) < 1) reasons.push('recent rain – check for seepage');
+    else if (dryness < 30) reasons.push('rock soaked');
     else if (dryness < 50) reasons.push('rock wet');
     else if (dryness < 70) reasons.push('still drying');
     add('dryness', 'Rock dryness', -penalty, `dryness ${dryness}/100 on ${crag.rockType}`);
@@ -2878,7 +2896,10 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     contributions.some(c => c.delta < 0 && (c.detail?.includes(r) || c.label?.toLowerCase().includes(r.toLowerCase().split(' ')[0])))
   );
   const otherReasons = reasons.filter(r => !penaltyReasons.includes(r));
-  const surfacedReasons = [...new Set([...penaltyReasons, ...otherReasons])].slice(0, 3);
+  const surfacedReasons = [...new Set([
+    ...reasons.filter(r => r === 'recent rain – check for seepage'),
+    ...penaltyReasons, ...otherReasons,
+  ])].slice(0, 3);
 
   // — Seasonal context label —
   // Compares finalScore against a rough expected score for this month at this

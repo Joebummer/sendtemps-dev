@@ -1460,3 +1460,46 @@ test('Grampians pipeline keeps recent rain visible with substantially lighter dr
   assert.equal(row.rockReadiness.status, 'drying');
   assert.match(row.rockReadiness.advisory, /Do not climb sandstone that is damp/);
 });
+
+test('humidity descriptions remain humid when wet-rock scoring suppresses the air penalty', async () => {
+  const { describeHumidity, deltaT, spoogePenalty } = (await loadWorker()).forecasts;
+  const crag = { rockType: 'sandstone' };
+  assert.equal(spoogePenalty(crag, { temp: 22, humidity: 85, wind: 5, dryness: 30 }), 0);
+  assert.equal(describeHumidity(85, 22, deltaT(22, 85)), 'muggy');
+  assert.equal(describeHumidity(85, 18, deltaT(18, 85)), 'moist air');
+  assert.equal(describeHumidity(65, 19.5, deltaT(19.5, 65)), 'moist air');
+  assert.equal(describeHumidity(null, 20, 3), null);
+});
+
+test('current, session and climbing-day humidity stay separate without changing the score', async () => {
+  const harness = await loadWorker(async url => {
+    const data = weatherFixture(url);
+    for (const { hourly } of data) {
+      hourly.time.forEach((iso, i) => {
+        hourly.relative_humidity_2m[i] = Number(iso.slice(11, 13)) < 12 ? 85 : 45;
+      });
+      hourly.precipitation[hourly.time.indexOf('2026-09-13T19:00')] = 15;
+    }
+    return Response.json(data);
+  }, '2026-09-14T00:00:00Z'); // 10 am Melbourne
+  const fc = (await harness.forecasts.fetchAllForecasts('VIC'))['gramps-westflank'];
+  const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [fc.todayDate])[fc.todayDate][0];
+  assert.equal(row.day.currentHumidity.relativeHumidity, 85);
+  assert.equal(row.day.currentHumidity.label, 'moist air');
+  assert.equal(row.day.currentHumidity.source, 'forecast');
+  assert.equal(row.day.currentHumidity.hour, 10);
+  assert.equal(Math.round(row.day.climbHumidity.meanRh), 58);
+  assert.equal(row.day.climbHumidity.period, 'climbing-day');
+  const selected = fc.bestWindows[fc.todayDate].hours;
+  const meanRh = selected.reduce((sum, h) => sum + h.humidity, 0) / selected.length;
+  assert.equal(row.day.sessionHumidity.relativeHumidity, meanRh);
+  assert.equal(row.day.sessionHumidity.startHour, row.scoreWindow.start);
+  assert.equal(row.day.sessionHumidity.endHour, row.scoreWindow.end);
+  assert.ok(row.reasons.includes('moist air'));
+  assert.ok(!row.reasons.includes('comfortable'));
+  assert.equal(row.score, Math.round(fc.bestWindows[fc.todayDate].avg),
+    'descriptive humidity fields do not change the hourly score');
+
+  const tomorrow = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [fc.tomorrowDate])[fc.tomorrowDate][0];
+  assert.equal(tomorrow.day.currentHumidity, undefined, 'future forecasts must never claim a current value');
+});

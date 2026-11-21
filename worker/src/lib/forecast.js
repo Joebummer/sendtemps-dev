@@ -978,6 +978,31 @@ function windowTemperatures(crag, hours) {
 //   60–75% → moderate (climbable but rock starts to feel cooler/greasy)
 //   >75%  → humid    (rock feels damp, sandstone/conglomerate gets slimy)
 //
+// Describe the air independently of score suppression for residual wet rock.
+// All of these values are forecasts, not observations at the cliff.
+export function describeHumidity(relativeHumidity, air, dt) {
+  if (!Number.isFinite(relativeHumidity)) return null;
+  if (relativeHumidity >= 75 && air >= 20) return 'muggy';
+  if (relativeHumidity >= 65 || (Number.isFinite(dt) && dt < 3)) return 'moist air';
+  if (Number.isFinite(dt) && dt >= 6 && relativeHumidity < 60) return 'crisp air';
+  if (Number.isFinite(dt) && dt >= 5 && relativeHumidity < 60) return 'dry air';
+  return 'moderate humidity';
+}
+
+function humiditySummary(hours) {
+  const valid = hours.filter(h => Number.isFinite(h.humidity));
+  if (!valid.length) return null;
+  const mean = key => {
+    const values = valid.map(h => h[key]).filter(Number.isFinite);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  };
+  const relativeHumidity = mean('humidity');
+  const temp = mean('temp');
+  const dt = mean('deltaT');
+  return { relativeHumidity, temp, deltaT: dt,
+    label: describeHumidity(relativeHumidity, temp, dt), source: 'forecast' };
+}
+
 function computeClimbHumidity(crag, hourly, drynessSeries, dateStr) {
   const empty = {
     climbHours: 0, hoursHumid: 0, hoursModerate: 0, hoursDry: 0,
@@ -989,6 +1014,7 @@ function computeClimbHumidity(crag, hourly, drynessSeries, dateStr) {
   const cutoffH = (crag.trip === 'weekend' || crag.trip === 'both') ? 20 : 18;
   let humid = 0, moderate = 0, dry = 0, count = 0;
   let rhSum = 0, maxRh = -Infinity, deltaTSum = 0, deltaTCount = 0;
+  let airSum = 0, airCount = 0;
   let spoogeTotal = 0, spoogeHours = 0, wetSuppressedHours = 0;
   for (let i = 0; i < hourly.time.length; i++) {
     const t = hourly.time[i];
@@ -1012,6 +1038,7 @@ function computeClimbHumidity(crag, hourly, drynessSeries, dateStr) {
     });
     count++;
     rhSum += rh;
+    if (Number.isFinite(temp)) { airSum += temp; airCount++; }
     if (dt != null) { deltaTSum += dt; deltaTCount++; }
     spoogeTotal += penalty;
     if (penalty >= 2) spoogeHours++;
@@ -1028,6 +1055,10 @@ function computeClimbHumidity(crag, hourly, drynessSeries, dateStr) {
     hoursModerate: moderate,
     hoursDry: dry,
     meanRh: rhSum / count,
+    label: describeHumidity(rhSum / count, airCount ? airSum / airCount : null,
+      deltaTCount ? deltaTSum / deltaTCount : null),
+    period: 'climbing-day',
+    source: 'forecast',
     maxRh,
     meanDeltaT: deltaTCount ? deltaTSum / deltaTCount : null,
     spoogePenalty: spoogeTotal / count,
@@ -2343,6 +2374,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // suppressed upstream because rock dryness already carries a larger penalty.
   // The delta is still applied last so later bonuses cannot hide it.
   let _humidLabel = null;
+  let _humidScoringLabel = null;
   let _humidDelta = 0;
   {
     const hum = day.climbHumidity || {};
@@ -2364,6 +2396,11 @@ export function scoreDay(crag, day, prevDay, nextDay) {
         _humidLabel = 'comfortable'; _humidDelta = 0;
       }
 
+      _humidScoringLabel = _humidLabel;
+      // The actual score delta stays suppressed on wet rock. Its zero value
+      // must never imply that humid air is comfortable.
+      _humidLabel = day.currentHumidity?.label ?? day.sessionHumidity?.label ??
+        hum.label ?? describeHumidity(hum.meanRh, tAir, meanDeltaT);
       if (_humidLabel) reasons.push(_humidLabel);
     }
   }
@@ -2837,8 +2874,8 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     score += _humidDelta;
     add('humidity', 'Air moisture', _humidDelta,
       _humidDelta < 0
-        ? `${_humidLabel} — low delta T limits evaporation and can make holds feel greasy`
-        : `${_humidLabel} — strong evaporative conditions should keep holds feeling crisp`);
+        ? `${_humidScoringLabel} — low delta T limits evaporation and can make holds feel greasy`
+        : `${_humidScoringLabel} — strong evaporative conditions should keep holds feeling crisp`);
   }
 
   // Weather-only context is distinct from rock-readiness confidence.
@@ -2968,7 +3005,16 @@ export function rankByDay(forecasts, dayDates) {
         (date === fc.todayDate ? fc.todayBestWindow
           : date === fc.tomorrowDate ? fc.tomorrowBestWindow : null));
       const sessionDryness = hourlyWindow?.hours.map(hour => hour.dryness).filter(Number.isFinite);
-      const day = hourlyWindow ? { ...fc.days[dayIdx],
+      const nowHour = date === fc.todayDate
+        ? fc.todayHourly?.find(hour => hour.hour === melbourneHourNow()) : null;
+      const currentHumidity = nowHour ? humiditySummary([nowHour]) : null;
+      const dayHumidity = currentHumidity || hourlyWindow ? { ...fc.days[dayIdx],
+        ...(currentHumidity ? { currentHumidity: { ...currentHumidity,
+          hour: nowHour.hour, isoHour: nowHour.isoHour, period: 'current-hour' } } : {}),
+        ...(hourlyWindow ? { sessionHumidity: { ...humiditySummary(hourlyWindow.hours),
+          startHour: hourlyWindow.start, endHour: hourlyWindow.end, period: 'scored-session' } } : {}),
+      } : fc.days[dayIdx];
+      const day = hourlyWindow ? { ...dayHumidity,
         temperaturePeriod: 'session',
         climbTemps: windowTemperatures(fc.crag, hourlyWindow.hours),
         // Preserve the raw morning/afternoon observations, but derive the
@@ -2981,7 +3027,7 @@ export function rankByDay(forecasts, dayDates) {
           hour: hour.hour,
           ...(hour.wetRockCondition ?? wetRockCondition(fc.crag, hour)),
         }))),
-      } : fc.days[dayIdx];
+      } : dayHumidity;
       const prevDay = dayIdx > 0 ? fc.days[dayIdx - 1] : null;
       const nextDay = dayIdx + 1 < fc.days.length ? fc.days[dayIdx + 1] : null;
       const dayResult = scoreDay(fc.crag, day, prevDay, nextDay);

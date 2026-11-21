@@ -2631,11 +2631,11 @@ function renderHumidityTile(day, reasons) {
   const hum = day.climbHumidity;
   if (!hum || !(hum.climbHours >= 1) || hum.meanRh == null) return '';
   const mean = Math.round(hum.meanRh);
-  // Pull the humidity label from scoreDay reasons so the tile and the chip
-  // always agree. Labels: 'muggy', 'moist air', 'crisp air', 'dry air', 'comfortable'.
-  const HUMID_LABELS = new Set(['muggy', 'moist air', 'crisp air', 'dry air', 'comfortable']);
-  const sub = (reasons || []).find(r => HUMID_LABELS.has(r)) ?? `${mean}%`;
-  return `<div class="metric" title="Relative humidity during climbing hours"><div class="v">${mean}%</div><div class="l">Humidity <span class="metric-sub">· ${sub}</span></div></div>`;
+  const current = day.currentHumidity;
+  if (current && Number.isFinite(current.relativeHumidity)) {
+    return `<div class="metric" title="Model forecast for the current hour, not a cliff observation"><div class="v">${Math.round(current.relativeHumidity)}%</div><div class="l">Humidity now · forecast</div><div class="metric-sub">${escapeHtml(current.label || 'Humidity')} · day average ${mean}%</div></div>`;
+  }
+  return `<div class="metric" title="Forecast average during climbing hours"><div class="v">${mean}%</div><div class="l">Humidity · day average</div><div class="metric-sub">${escapeHtml(hum.label || 'Forecast')}</div></div>`;
 }
 
 function renderRainTiming(day, daysAhead = 0) {

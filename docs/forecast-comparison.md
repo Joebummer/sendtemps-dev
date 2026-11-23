@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | `cragId` | Yes | Exact ID from the existing crag catalogue, including subcrag IDs. Coordinates and elevation come from the backend catalogue. |
 | `date` | Yes | `YYYY-MM-DD`, today through today +2 inclusive in the crag's local timezone. |
-| `models` | No | Comma-separated IDs from the table below. Defaults to all five. One model is supported. Order and duplicate IDs do not affect the cache. Maximum five entries. |
+| `models` | No | Comma-separated IDs from the table below. Defaults to ECMWF IFS HRES 9 km, GFS Global, ICON Global and UK Met Office Global. One model is supported. Order and duplicate IDs do not affect the cache. Maximum six entries. |
 
 Other parameters and repeated query keys return 400. Send one request per selected date. The response identifies its timezone. Date validation happens before cache lookup, including across midnight.
 
@@ -16,11 +16,14 @@ Other parameters and repeated query keys return 400. Send one request per select
 
 | ID | Display name |
 | --- | --- |
-| `ecmwf_ifs025` | ECMWF IFS 0.25° |
+| `ecmwf_ifs` | ECMWF IFS HRES 9 km (default) |
+| `ecmwf_ifs025` | ECMWF IFS 0.25° (optional legacy feed) |
 | `gfs_global` | NOAA GFS Global |
 | `icon_global` | DWD ICON Global |
-| `jma_gsm` | JMA GSM |
+| `jma_gsm` | JMA GSM (optional) |
 | `ukmo_global_deterministic_10km` | UK Met Office Global 10 km |
+
+JMA GSM and the legacy ECMWF 0.25° feed are available through explicit `models` selections. Existing clients can continue requesting `ecmwf_ifs025`. Clients using the default set should support the new `ecmwf_ifs` ID.
 
 Every returned model includes `id` and `displayName`.
 

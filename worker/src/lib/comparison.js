@@ -2,12 +2,14 @@ import { CRAGS } from './crags.js';
 import { fetchOpenMeteo } from './forecast.js';
 
 const MODELS = {
+  ecmwf_ifs: 'ECMWF IFS HRES 9 km',
   ecmwf_ifs025: 'ECMWF IFS 0.25°',
   gfs_global: 'NOAA GFS Global',
   icon_global: 'DWD ICON Global',
   jma_gsm: 'JMA GSM',
   ukmo_global_deterministic_10km: 'UK Met Office Global 10 km',
 };
+const DEFAULT_MODELS = ['ecmwf_ifs', 'gfs_global', 'icon_global', 'ukmo_global_deterministic_10km'];
 const VARIABLES = {
   temperatureC: 'temperature_2m',
   feelsLikeC: 'apparent_temperature',
@@ -85,9 +87,9 @@ export async function handleComparison(url, headers, env) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || date < today || date > lastDate.toISOString().slice(0, 10)) {
     return error('invalid_date', `date must be between ${today} and ${lastDate.toISOString().slice(0, 10)}`, 400, headers);
   }
-  const requested = url.searchParams.has('models') ? url.searchParams.get('models').split(',') : Object.keys(MODELS);
+  const requested = url.searchParams.has('models') ? url.searchParams.get('models').split(',') : DEFAULT_MODELS;
   if (!requested.length || requested.length > Object.keys(MODELS).length || requested.some(id => !Object.hasOwn(MODELS, id))) {
-    return error('invalid_models', 'Select up to five supported model IDs', 400, headers);
+    return error('invalid_models', 'Select up to six supported model IDs', 400, headers);
   }
   const modelIds = [...new Set(requested)].sort();
   const cacheUrl = new URL('/_cache/comparison-v1', url.origin);

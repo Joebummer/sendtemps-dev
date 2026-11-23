@@ -36,7 +36,7 @@ jobs:
       # remains available locally, but legacy web-app parity tests are not a deploy gate.
       - run: npm run validate:crags
       - name: Check API protections
-        run: node --experimental-vm-modules --test tests/worker.test.cjs tests/api-protection.test.cjs
+        run: node --experimental-vm-modules --test tests/worker.test.cjs tests/api-protection.test.cjs tests/comparison.test.cjs
       - name: Check forecast scoring and cache consistency
         run: node --experimental-vm-modules --test tests/scored.test.cjs tests/falcons-shade.test.cjs
       - name: Check warm-performance session ceilings

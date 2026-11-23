@@ -4,6 +4,8 @@ import { fetchOpenMeteo } from './forecast.js';
 const MODELS = {
   ecmwf_ifs025: 'ECMWF IFS 0.25°',
   gfs_global: 'NOAA GFS Global',
+  icon_global: 'DWD ICON Global',
+  jma_gsm: 'JMA GSM',
   ukmo_global_deterministic_10km: 'UK Met Office Global 10 km',
 };
 const VARIABLES = {
@@ -84,8 +86,8 @@ export async function handleComparison(url, headers, env) {
     return error('invalid_date', `date must be between ${today} and ${lastDate.toISOString().slice(0, 10)}`, 400, headers);
   }
   const requested = url.searchParams.has('models') ? url.searchParams.get('models').split(',') : Object.keys(MODELS);
-  if (!requested.length || requested.length > 3 || requested.some(id => !Object.hasOwn(MODELS, id))) {
-    return error('invalid_models', 'Select up to three supported model IDs', 400, headers);
+  if (!requested.length || requested.length > Object.keys(MODELS).length || requested.some(id => !Object.hasOwn(MODELS, id))) {
+    return error('invalid_models', 'Select up to five supported model IDs', 400, headers);
   }
   const modelIds = [...new Set(requested)].sort();
   const cacheUrl = new URL('/_cache/comparison-v1', url.origin);

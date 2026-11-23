@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadWorker } = require('./helpers.cjs');
 const path = '/forecast/compare?cragId=camels-hump&date=2026-09-13';
 const request = suffix => new Request(`https://api.test${suffix}`);
-function fixture(models = ['ecmwf_ifs025', 'gfs_global', 'ukmo_global_deterministic_10km']) {
+function fixture(models = ['ecmwf_ifs025', 'gfs_global', 'icon_global', 'jma_gsm', 'ukmo_global_deterministic_10km']) {
   const hourly = { time: ['2026-09-13T10:00', '2026-09-13T11:00'] };
   for (const id of models) {
     for (const [variable, value] of Object.entries({ temperature_2m: 15, relative_humidity_2m: 65,
@@ -18,7 +18,7 @@ test('comparison batches trusted coordinates, omits unusable models and caches c
   const harness = await loadWorker(async input => {
     calls++;
     const url = new URL(input);
-    assert.equal(url.searchParams.get('models'), 'ecmwf_ifs025,gfs_global,ukmo_global_deterministic_10km');
+    assert.equal(url.searchParams.get('models'), 'ecmwf_ifs025,gfs_global,icon_global,jma_gsm,ukmo_global_deterministic_10km');
     assert.ok(Number(url.searchParams.get('elevation')) > 0);
     assert.equal(url.searchParams.get('timezone'), 'Australia/Melbourne');
     assert.equal(url.searchParams.get('start_date'), '2026-09-13');
@@ -31,10 +31,10 @@ test('comparison batches trusted coordinates, omits unusable models and caches c
   const body = await responses[0].json();
   assert.equal(responses[0].status, 200);
   assert.equal(body.models.length, 2);
-  assert.deepEqual(body.unavailableModels, ['ukmo_global_deterministic_10km']);
+  assert.deepEqual(body.unavailableModels, ['icon_global', 'jma_gsm', 'ukmo_global_deterministic_10km']);
   assert.equal(body.models[0].hours[0].precipitationMm, 0);
   assert.equal(body.models[0].hours[0].feelsLikeC, null);
-  const cached = await harness.worker.fetch(request(`${path}&models=ukmo_global_deterministic_10km,gfs_global,ecmwf_ifs025`), {}, harness.ctx);
+  const cached = await harness.worker.fetch(request(`${path}&models=ukmo_global_deterministic_10km,jma_gsm,gfs_global,icon_global,ecmwf_ifs025`), {}, harness.ctx);
   assert.equal(cached.headers.get('X-SendTemps-Cache'), 'HIT');
   assert.equal(cached.headers.get('Cache-Control'), 'no-store');
   assert.equal(calls, 1);
@@ -83,4 +83,26 @@ test('comparison respects shared provider limit and keeps credentials private', 
   assert.equal(response.status, 429);
   assert.equal(response.headers.get('Retry-After'), '60');
   assert.ok(!(await response.text()).includes('private-key'));
+});
+
+test('comparison returns ICON Global and JMA GSM with display names in the default set', async () => {
+  const harness = await loadWorker(async () => Response.json(fixture()));
+  const response = await harness.worker.fetch(request(path), {});
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.models.length, 5);
+  assert.deepEqual(body.unavailableModels, []);
+  assert.equal(body.models.find(model => model.id === 'icon_global').displayName, 'DWD ICON Global');
+  assert.equal(body.models.find(model => model.id === 'jma_gsm').displayName, 'JMA GSM');
+});
+test('comparison accepts each added model individually and rejects more than five entries', async () => {
+  for (const id of ['icon_global', 'jma_gsm']) {
+    const harness = await loadWorker(async () => Response.json(fixture([id])));
+    const response = await harness.worker.fetch(request(path + '&models=' + id), {});
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).models[0].id, id);
+  }
+  const harness = await loadWorker();
+  const response = await harness.worker.fetch(request(path + '&models=' + Array(6).fill('gfs_global').join(',')), {});
+  assert.equal(response.status, 400);
 });

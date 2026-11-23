@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | `cragId` | Yes | Exact ID from the existing crag catalogue, including subcrag IDs. Coordinates and elevation come from the backend catalogue. |
 | `date` | Yes | `YYYY-MM-DD`, today through today +2 inclusive in the crag's local timezone. |
-| `models` | No | Comma-separated IDs from the table below. Defaults to all three. One model is supported. Order and duplicate IDs do not affect the cache. Maximum three entries. |
+| `models` | No | Comma-separated IDs from the table below. Defaults to all five. One model is supported. Order and duplicate IDs do not affect the cache. Maximum five entries. |
 
 Other parameters and repeated query keys return 400. Send one request per selected date. The response identifies its timezone. Date validation happens before cache lookup, including across midnight.
 
@@ -18,6 +18,8 @@ Other parameters and repeated query keys return 400. Send one request per select
 | --- | --- |
 | `ecmwf_ifs025` | ECMWF IFS 0.25° |
 | `gfs_global` | NOAA GFS Global |
+| `icon_global` | DWD ICON Global |
+| `jma_gsm` | JMA GSM |
 | `ukmo_global_deterministic_10km` | UK Met Office Global 10 km |
 
 Every returned model includes `id` and `displayName`.

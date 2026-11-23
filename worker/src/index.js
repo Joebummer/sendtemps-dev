@@ -14,6 +14,7 @@
 
 import { fetchOpenMeteo, fetchAllForecasts, rankByDay, rankWeekendTrip, weekDates, weekendDates } from './lib/forecast.js';
 import { CRAGS } from './lib/crags.js';
+import { handleComparison } from './lib/comparison.js';
 
 // ─── VAPID helpers (Web Push without npm) ────────────────────────────────────
 
@@ -829,6 +830,15 @@ async function handleRequest(request, env, ctx) {
   // fetched from Cloudflare's own IPs instead of the client's.
   if (pathname === '/forecast' && request.method === 'GET') {
     return handleForecastProxy(request, url, corsHeaders, ctx, env);
+  }
+
+  if (pathname === '/forecast/compare') {
+    if (request.method !== 'GET') {
+      return Response.json({ error: { code: 'method_not_allowed', message: 'Use GET' } }, {
+        status: 405, headers: { ...corsHeaders, Allow: 'GET, OPTIONS', 'Cache-Control': 'no-store' },
+      });
+    }
+    return handleComparison(url, corsHeaders, env);
   }
 
   // GET /forecast/scored?region=VIC — full server-side scoring pipeline.

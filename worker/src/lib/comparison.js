@@ -1,6 +1,6 @@
 import { CRAGS } from './crags.js';
 import { fetchOpenMeteo } from './forecast.js';
-import { TIMEZONES, normalizeProviderTimes } from './time.js';
+import { TIMEZONES, normalizeProviderTimes, providerDateRange } from './time.js';
 
 const MODELS = {
   ecmwf_ifs: 'ECMWF IFS HRES 9 km',
@@ -45,6 +45,7 @@ function normalize(data, modelIds, date) {
       if (typeof time !== 'string' || !time.startsWith(`${date}T`) ||
           !/^\d{4}-\d{2}-\d{2}T\d{2}:00$/.test(time)) return [];
       const row = { time };
+      if (Number.isFinite(hourly.timeUtc?.[index])) row.utcTime = new Date(hourly.timeUtc[index]).toISOString();
       for (const [field, variable] of Object.entries(VARIABLES)) {
         // Open-Meteo suffixes fields for multiple models. Single-model
         // responses may use either suffixed or plain variable names.
@@ -98,7 +99,7 @@ export async function handleComparison(url, headers, env) {
     if (!inflight.has(cacheKey.url)) {
       const pending = (async () => {
         const params = new URLSearchParams({ latitude: crag.lat, longitude: crag.lon,
-          elevation: crag.elevation, timezone, timeformat: 'unixtime', start_date: date, end_date: date,
+          elevation: crag.elevation, timezone, timeformat: 'unixtime', ...providerDateRange(date, timezone),
           hourly: Object.values(VARIABLES).join(','), models: modelIds.join(','),
           temperature_unit: 'celsius', wind_speed_unit: 'kmh', precipitation_unit: 'mm' });
         const response = await fetchOpenMeteo(`https://api.open-meteo.com/v1/forecast?${params}`,

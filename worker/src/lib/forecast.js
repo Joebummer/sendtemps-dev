@@ -209,7 +209,9 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
     ].join(','),
     timezone: 'auto',
     timeformat: 'unixtime',
-    forecast_days: '10',
+    // One padding day preserves complete local daily totals across DST when
+    // the provider's aggregation offset is fixed at request time.
+    forecast_days: '11',
     past_days: '4',
   });
 
@@ -241,6 +243,7 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
     const rawForecast = normalizeProviderTimes(providerForecast, timezone);
     const todayLocal = localDate(new Date(), timezone);
     const tomorrowLocal = addDays(todayLocal, 1);
+    const lastDate = addDays(todayLocal, 9);
     const mergedHourly = mergeMarineHourly(rawForecast.hourly, marineById[crag.id]);
     const adjustedHourlyTemperature = mergedHourly.temperature_2m;
     const hourlyDeltaT = adjustedHourlyTemperature?.map((temp, hourIndex) =>
@@ -280,7 +283,7 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
     // retain compact selected sessions for the other dates in the response.
     const bestWindows = { [todayLocal]: todayBestWindow, [tomorrowLocal]: tomorrowBestWindow };
     for (const date of f.daily.time) {
-      if (date <= tomorrowLocal || isDailyEstimateDate(date, todayLocal)) continue;
+      if (date <= tomorrowLocal || date > lastDate || isDailyEstimateDate(date, todayLocal)) continue;
       bestWindows[date] = bestWindow(buildDayHourly(crag, f.hourly, drynessSeries, date), crag, 5);
     }
     // Last 4 days of daily precipitation totals for the sparkline.
@@ -341,7 +344,7 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
         elevCorrection: null,
         elevationSource: 'provider',
       });
-      }),
+      }).filter(day => day.date <= lastDate),
     };
   });
   return byId;

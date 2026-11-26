@@ -89,6 +89,9 @@ downscaling. Provider air and apparent temperatures are used directly, without
 an additional backend lapse rate. `elevCorrection` stays null for compatibility;
 `elevationSource` identifies provider downscaling. The comparison endpoint also
 uses explicit elevation and Unix input timestamps.
+One extra provider day pads the ten-day primary calendar across DST. Comparison
+requests pad individual dates only when offsets change, retain all 25 fallback
+hours and expose an additional unambiguous `utcTime` on Unix-backed hourly rows.
 
 Shared timezone helpers resolve the provider's IANA zone, with state-based
 fallbacks, including half-hour SA/NT offsets and independent DST rules. Civil

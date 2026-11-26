@@ -56,6 +56,17 @@ export function localHourToDate(iso, timezone = TIMEZONES.VIC) {
   return new Date(timestamp);
 }
 
+export function providerDateRange(date, timezone, now = new Date()) {
+  const start = localHourToDate(`${date}T00:00`, timezone).getTime();
+  const end = localHourToDate(`${addDays(date, 1)}T00:00`, timezone).getTime();
+  const currentCivil = localIsoHour(now, timezone);
+  const currentOffset = Date.parse(`${currentCivil}Z`) - localHourToDate(currentCivil, timezone).getTime();
+  const targetOffset = Date.parse(`${date}T00:00Z`) - start;
+  return end - start === 86400000 && currentOffset === targetOffset
+    ? { start_date: date, end_date: date }
+    : { start_date: addDays(date, -1), end_date: addDays(date, 1) };
+}
+
 // Unix provider timestamps avoid its fixed-offset ISO behaviour across DST.
 // Keep absolute instants alongside civil hours, including repeated night hours.
 export function normalizeProviderTimes(raw, timezone) {

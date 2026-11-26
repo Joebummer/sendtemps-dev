@@ -36,7 +36,7 @@ test('days 1–3 use sessions and days 4–8 use daily estimates with trip and p
   let calls = 0;
   const harness = await loadWorker(async url => { calls++; return Response.json(weatherFixture(url)); });
   const response = await harness.worker.fetch(
-    new Request('https://api.test/forecast/scored?region=NSW&tripStart=2026-09-13&tripEnd=2026-09-22'), {}, harness.ctx);
+    new Request('https://api.test/forecast/scored?schemaVersion=2&region=NSW&tripStart=2026-09-13&tripEnd=2026-09-22'), {}, harness.ctx);
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(calls, 1, 'all ten days reuse the one batched weather request');
@@ -611,7 +611,7 @@ test('provider Unix timestamps preserve 23 and 25-hour local days across DST', a
 
 test('national midnight rolls each crag independently and regional calendars use local dates', async () => {
   const harness = await loadWorker(async url => Response.json(fixtureForUrl(url)), '2026-09-13T14:05:00Z');
-  const response = await harness.worker.fetch(new Request('https://api.test/forecast/scored?region=ALL'), {}, harness.ctx);
+  const response = await harness.worker.fetch(new Request('https://api.test/forecast/scored?schemaVersion=2&region=ALL'), {}, harness.ctx);
   assert.equal(response.status, 200);
   const body = await response.json();
   for (const state of ['WA', 'NT', 'SA', 'VIC', 'QLD']) {
@@ -620,10 +620,10 @@ test('national midnight rolls each crag independently and regional calendars use
     assert.equal(body.today[crag.id].todayDate, expected, state);
     assert.ok(body.byDate[expected].some(row => row.cragId === crag.id));
   }
-  const west = await harness.worker.fetch(new Request('https://api.test/forecast/scored?region=WA'), {}, harness.ctx);
+  const west = await harness.worker.fetch(new Request('https://api.test/forecast/scored?schemaVersion=2&region=WA'), {}, harness.ctx);
   const westBody = await west.json();
   assert.equal(westBody.dates[0], '2026-09-13');
-  assert.equal(westBody.forecast.calendarTimezone, 'Australia/Perth');
+  assert.equal(westBody.forecastMeta.calendarTimezone, 'Australia/Perth');
   await harness.flush();
 });
 
@@ -700,24 +700,25 @@ test('interrupted windows disclose wet hours and the longest usable run', async 
 
 test('saved forecasts reselect only remaining daylight hours and disclose forecast age', async () => {
   const harness = await loadWorker(async url => Response.json(weatherFixture(url)));
-  const request = new Request('https://api.test/forecast/scored?region=VIC');
+  const request = new Request('https://api.test/forecast/scored?schemaVersion=2&region=VIC');
   const response = await harness.worker.fetch(request, {}, harness.ctx);
   const initial = await response.json();
   await harness.flush();
+  const cached = await [...harness.entries.values()][0].clone().json();
   harness.setNow('2026-09-13T05:00:00Z'); // 3 pm Melbourne; use the original payload without refetching.
-  const remaining = harness.forecasts.revalidateScoredToday(initial);
+  const remaining = harness.forecasts.revalidateScoredToday(cached.payload);
   for (const row of remaining.byDate['2026-09-13']) {
     if (row.scoreWindow) assert.ok(row.scoreWindow.start >= 15);
     assert.ok(remaining.today[row.cragId].todayHourly.every(h => h.hour >= 15));
     if (row.scoreWindow) assert.equal(100 + row.contributions.reduce((s, c) => s + c.delta, 0), row.score);
   }
   harness.setNow('2026-09-13T11:00:00Z'); // 9 pm: old morning windows must disappear.
-  const night = harness.forecasts.revalidateScoredToday(initial);
+  const night = harness.forecasts.revalidateScoredToday(cached.payload);
   assert.ok(night.byDate['2026-09-13'].every(row => row.scoreWindow === null));
   assert.ok(night.byDate['2026-09-13'].filter(row => row.scoreBasis !== 'closure')
     .every(row => row.reasons.includes('No daylight window remaining')));
-  assert.ok(initial.forecast.retrievedAt);
-  assert.equal(initial.forecast.ageSeconds, 0);
+  assert.ok(initial.forecastMeta.retrievedAt);
+  assert.equal(initial.forecastMeta.ageSeconds, 0);
 });
 
 test('a separate small granite shower retains unfinished heavy-rain recovery', async () => {
@@ -943,7 +944,7 @@ test('destination weather, score and hourly strip use the same best-subcrag fore
     return Response.json(forecasts);
   });
   const response = await harness.worker.fetch(
-    new Request('https://api.test/forecast/scored?region=VIC'), {}, harness.ctx,
+    new Request('https://api.test/forecast/scored?schemaVersion=2&region=VIC'), {}, harness.ctx,
   );
   assert.equal(response.status, 200);
   const body = await response.json();
@@ -1151,7 +1152,7 @@ test('marine provider failure leaves the weather forecast available', async () =
 test('destination hourly strips follow the subcrag selected for the headline', async () => {
   const harness = await loadWorker(async url => Response.json(fixtureForUrl(url)));
   const response = await harness.worker.fetch(
-    new Request('https://api.test/forecast/scored?region=VIC'), {}, harness.ctx);
+    new Request('https://api.test/forecast/scored?schemaVersion=2&region=VIC'), {}, harness.ctx);
   assert.equal(response.status, 200);
   const body = await response.json();
 
@@ -1181,7 +1182,7 @@ test('Wollongong destinations and sectors reach the scored API with matching par
     return Response.json(weatherFixture(url));
   });
   const response = await harness.worker.fetch(
-    new Request('https://api.test/forecast/scored?region=NSW'), {}, harness.ctx);
+    new Request('https://api.test/forecast/scored?schemaVersion=2&region=NSW'), {}, harness.ctx);
   assert.equal(response.status, 200);
   const body = await response.json();
   const groups = { 'mt-keira-main': 2, 'scarborough-main': 3, 'coalcliff-main': 5 };
@@ -1241,14 +1242,14 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
       calls++;
       return Response.json(fixtureForUrl(url));
     });
-    const req = new Request(`https://api.test/forecast/scored?region=${region}&tripStart=2026-09-18&tripEnd=2026-09-20`);
+    const req = new Request(`https://api.test/forecast/scored?schemaVersion=2&region=${region}&tripStart=2026-09-18&tripEnd=2026-09-20`);
     const first = await harness.worker.fetch(req, {}, harness.ctx);
     assert.equal(first.status, 200);
     assert.equal(first.headers.get('Cache-Control'), 'no-store');
     assert.equal(first.headers.get('X-SendTemps-Cache'), 'MISS');
     const body = await first.json();
     const expected = (await loadCrags('worker/src/lib/crags.js')).filter(c => region === 'ALL' || c.state === region);
-    assert.deepEqual(Object.keys(body).sort(), ['region', 'dates', 'tripDates', 'crags', 'byDate', 'weekendTrip', 'today', 'forecast'].sort());
+    assert.deepEqual(Object.keys(body).sort(), ['region', 'dates', 'tripDates', 'crags', 'byDate', 'weekendTrip', 'today', 'forecastMeta', 'schemaVersion'].sort());
     assert.equal(body.region, region);
     assert.equal(body.dates.length, 10);
     assert.deepEqual(body.tripDates, ['2026-09-18', '2026-09-19', '2026-09-20']);
@@ -1315,6 +1316,21 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
     }
     await harness.flush();
     assert.equal([...harness.entries.values()][0].headers.get('Cache-Control'), 'public, max-age=900');
+    // Installed clients remain unversioned; both representations reuse the
+    // same scored cache and preserve every daily/hourly score and date.
+    const legacyResponse = await harness.worker.fetch(new Request(req.url.replace('schemaVersion=2&', '')), {}, harness.ctx);
+    assert.equal(legacyResponse.headers.get('X-SendTemps-Cache'), 'HIT');
+    assert.equal(legacyResponse.headers.get('X-Climbable-Schema-Version'), '1');
+    const legacy = await legacyResponse.json();
+    assert.deepEqual(Object.keys(legacy).sort(), ['region', 'dates', 'tripDates', 'crags', 'byDate', 'weekendTrip', 'today'].sort());
+    assert.deepEqual(legacy.dates, body.dates);
+    for (const date of body.dates) assert.deepEqual(legacy.byDate[date].map(r => [r.cragId, r.score]), body.byDate[date].map(r => [r.cragId, r.score]));
+    for (const [id, forecast] of Object.entries(body.today)) {
+      for (const field of ['todayHourly', 'tomorrowHourly'])
+        assert.deepEqual(legacy.today[id][field].map(h => [h.hour, h.score]), forecast[field].map(h => [h.hour, h.score]));
+    }
+    assert.ok(!JSON.stringify(legacy).includes('scoreContext'));
+    assert.ok(!JSON.stringify(legacy).includes('dailyContext'));
     const second = await harness.worker.fetch(req, {}, harness.ctx);
     assert.equal(second.headers.get('Cache-Control'), 'no-store');
     assert.equal(second.headers.get('X-SendTemps-Cache'), 'HIT');
@@ -1334,12 +1350,13 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
       '&tripStart=2026-09-13&tripEnd=2026-09-22',
       '&tripStart=invalid&tripEnd=2026-09-20',
     ]) {
-      const response = await harness.worker.fetch(new Request(`https://api.test/forecast/scored?region=${region.toLowerCase()}${query}&unused=ignored`), {}, harness.ctx);
+      const response = await harness.worker.fetch(new Request(`https://api.test/forecast/scored?schemaVersion=2&region=${region.toLowerCase()}${query}&unused=ignored`), {}, harness.ctx);
       assert.equal(response.headers.get('X-SendTemps-Cache'), 'HIT');
       const actual = await response.json();
       const expectedTrip = baseline.forecasts.rankWeekendTrip(forecasts, actual.tripDates)
         .map(({ crag, ...rest }) => ({ cragId: crag.id, ...rest }));
-      assert.deepEqual(actual.weekendTrip, JSON.parse(JSON.stringify(expectedTrip)));
+      const expectedWire = JSON.parse(baseline.wire.serializeScoredResponse({ weekendTrip: expectedTrip }, {}, 2));
+      assert.deepEqual(actual.weekendTrip, expectedWire.weekendTrip);
       assert.deepEqual(actual.byDate, body.byDate);
     }
     assert.equal(calls, expectedCalls, 'trip changes must not download or score regional weather again');
@@ -1351,7 +1368,7 @@ test('invalid regions are rejected before cache or network access', async () => 
   let calls = 0;
   const harness = await loadWorker(async () => { calls++; throw new Error('unexpected network'); });
   for (const region of ['INVALID', 'VIIC', ' VIC ', '__proto__']) {
-    const response = await harness.worker.fetch(new Request(`https://api.test/forecast/scored?region=${encodeURIComponent(region)}`), {}, harness.ctx);
+    const response = await harness.worker.fetch(new Request(`https://api.test/forecast/scored?schemaVersion=2&region=${encodeURIComponent(region)}`), {}, harness.ctx);
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), { error: 'invalid region' });
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
@@ -1364,7 +1381,7 @@ test('region separation, expiry and midnight rollover cannot reuse the wrong dat
   let calls = 0;
   const harness = await loadWorker(async url => { calls++; return Response.json(fixtureForUrl(url)); });
   async function get(region) {
-    const response = await harness.worker.fetch(new Request(`https://api.test/forecast/scored?region=${region}`), {}, harness.ctx);
+    const response = await harness.worker.fetch(new Request(`https://api.test/forecast/scored?schemaVersion=2&region=${region}`), {}, harness.ctx);
     assert.equal(response.status, 200);
     await harness.flush();
     return response;
@@ -1388,7 +1405,7 @@ test('region separation, expiry and midnight rollover cannot reuse the wrong dat
 
 test('failed weather fetches never populate the regional cache', async () => {
   const harness = await loadWorker(async () => new Response('unavailable', { status: 503 }));
-  const response = await harness.worker.fetch(new Request('https://api.test/forecast/scored?region=NSW'), {}, harness.ctx);
+  const response = await harness.worker.fetch(new Request('https://api.test/forecast/scored?schemaVersion=2&region=NSW'), {}, harness.ctx);
   assert.equal(response.status, 502);
   await harness.flush();
   assert.equal(harness.entries.size, 0);
@@ -1458,7 +1475,7 @@ test('expired regional cache serves same-day fallback before background refresh 
     if (delay) await new Promise(resolve => { release = resolve; });
     return Response.json(weatherFixture(url));
   });
-  const req = new Request('https://api.test/forecast/scored?region=NT');
+  const req = new Request('https://api.test/forecast/scored?schemaVersion=2&region=NT');
   const first = await harness.worker.fetch(req, {}, harness.ctx);
   const original = await first.json();
   await harness.flush();
@@ -1471,8 +1488,8 @@ test('expired regional cache serves same-day fallback before background refresh 
   assert.ok(!raced.timedOut, 'stale response should not await the provider');
   assert.equal(raced.response.headers.get('X-SendTemps-Cache'), 'STALE');
   const saved = await raced.response.json();
-  assert.equal(saved.forecast.stale, true);
-  assert.equal(saved.forecast.ageSeconds, 16 * 60);
+  assert.equal(saved.forecastMeta.stale, true);
+  assert.equal(saved.forecastMeta.ageSeconds, 16 * 60);
   assert.deepEqual(withoutForecastAge(saved), withoutForecastAge(original));
   release();
   await harness.flush();
@@ -1489,7 +1506,7 @@ test('stalled regional refresh returns retryable errors and releases its shared 
     return Response.json(weatherFixture(url));
   });
   const get = () => harness.worker.fetch(
-    new Request('https://api.test/forecast/scored?region=NT'), {}, harness.ctx,
+    new Request('https://api.test/forecast/scored?schemaVersion=2&region=NT'), {}, harness.ctx,
   );
   const responses = await Promise.all([get(), get()]);
   for (const response of responses) {
@@ -1519,7 +1536,7 @@ test('scheduled snapshots survive a provider outage and Melbourne midnight on a 
   // Slot zero publishes ALL. The snapshot itself uses the clock at execution.
   const event = { cron: '*/2 * * * *', scheduledTime: 0 };
   await publisher.worker.scheduled(event, env);
-  const request = new Request('https://climbable.test/forecast/scored?region=ALL');
+  const request = new Request('https://climbable.test/forecast/scored?schemaVersion=2&region=ALL');
   let providerCalls = 0;
   const edge = await loadWorker(async () => {
     providerCalls++;
@@ -1552,7 +1569,7 @@ test('provider rate limits use a bounded fallback without extending its age', as
   const harness = await loadWorker(async url => unavailable
     ? new Response('rate limited', { status: 429 })
     : Response.json(weatherFixture(url)));
-  const req = new Request('https://api.test/forecast/scored?region=NT');
+  const req = new Request('https://api.test/forecast/scored?schemaVersion=2&region=NT');
   const fresh = await harness.worker.fetch(req, {}, harness.ctx);
   assert.equal(fresh.status, 200);
   const original = await fresh.json();
@@ -1583,7 +1600,7 @@ test('paid weather and marine requests use the server secret without exposing it
     return Response.json(fixtureForUrl(url.toString()));
   });
   const response = await harness.worker.fetch(
-    new Request('https://api.test/forecast/scored?region=TAS'),
+    new Request('https://api.test/forecast/scored?schemaVersion=2&region=TAS'),
     { OPEN_METEO_API_KEY: key }, harness.ctx);
   assert.equal(response.status, 200);
   assert.deepEqual(hosts, new Set(['customer-api.open-meteo.com', 'customer-marine-api.open-meteo.com']));
@@ -1599,7 +1616,7 @@ test('provider network errors redact the API key', async () => {
   const key = 'test-only-private-key';
   const harness = await loadWorker(async url => { throw new Error(`Request failed: ${url}`); });
   const response = await harness.worker.fetch(
-    new Request('https://api.test/forecast/scored?region=NT'),
+    new Request('https://api.test/forecast/scored?schemaVersion=2&region=NT'),
     { OPEN_METEO_API_KEY: key }, harness.ctx);
   assert.equal(response.status, 502);
   const body = await response.text();

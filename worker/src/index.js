@@ -15,6 +15,7 @@
 import { fetchOpenMeteo, fetchAllForecasts, rankByDay, rankWeekendTrip, weekDates, weekendDates, revalidateScoredToday, regionTimezone } from './lib/forecast.js';
 import { CRAGS } from './lib/crags.js';
 import { handleComparison } from './lib/comparison.js';
+import { serializeScoredResponse } from './lib/scoredWire.js';
 
 // ─── VAPID helpers (Web Push without npm) ────────────────────────────────────
 
@@ -615,6 +616,13 @@ async function readForecastSnapshot(bucket, region, today) {
 }
 
 async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
+  const requestedSchema = url.searchParams.get('schemaVersion') ?? '1';
+  if (!['1', '2'].includes(requestedSchema) || url.searchParams.getAll('schemaVersion').length > 1) {
+    return Response.json({ error: 'unsupported schemaVersion' }, {
+      status: 400, headers: { ...corsHeaders, 'Cache-Control': 'no-store' },
+    });
+  }
+  const schemaVersion = Number(requestedSchema);
   const region = (url.searchParams.get('region') || 'ALL').toUpperCase();
   if (!SCORED_REGIONS.has(region)) {
     return new Response(JSON.stringify({ error: 'invalid region' }), {
@@ -762,7 +770,7 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
       .map(id => [id, { crag: payload.crags[id], ...payload.today[id] }]));
     const weekendTrip = rankWeekendTrip(tripForecasts, tripDates, payload.byDate)
       .map(({ crag, ...entry }) => ({ cragId: crag.id, ...entry }));
-    const body = JSON.stringify({ ...payload, forecast, tripDates, weekendTrip });
+    const body = serializeScoredResponse({ ...payload, tripDates, weekendTrip }, forecast, schemaVersion);
 
     const response = new Response(body, {
       status: 200,
@@ -770,9 +778,10 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
         ...corsHeaders,
         'Cache-Control': 'no-store',
         'X-SendTemps-Cache': cacheStatus,
+        'X-Climbable-Schema-Version': String(schemaVersion),
         ...(generatedAt ? {
           'X-Climbable-Forecast-Updated-At': generatedAt,
-          'Access-Control-Expose-Headers': 'X-Climbable-Forecast-Updated-At, X-SendTemps-Cache, Warning',
+          'Access-Control-Expose-Headers': 'X-Climbable-Schema-Version, X-Climbable-Forecast-Updated-At, X-SendTemps-Cache, Warning',
         } : {}),
         ...(isStale ? { Warning: '110 - "Response is stale"' } : {}),
       },

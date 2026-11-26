@@ -11,10 +11,11 @@ binding = "FORECAST_SNAPSHOTS"
 bucket_name = "climbable-forecast-snapshots"
 
 # Requires Workers Paid. Cold regional scoring requests exceeded the previous
-# 500ms CPU allowance (live VIC requests returned error 1102). Allow 10 seconds
-# for a full-region calculation while retaining a bounded execution limit.
+# 500ms CPU allowance (live VIC requests returned error 1102). Large cold
+# regional/national loads also reached the later 10-second allowance. Use
+# 30 seconds of CPU headroom; application/provider deadlines still bound I/O.
 [limits]
-cpu_ms = 10000
+cpu_ms = 30000
 
 # Deployed via GitHub Actions
 

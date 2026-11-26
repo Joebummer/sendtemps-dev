@@ -387,7 +387,7 @@ test('daily API exposes weather quality separately from sandstone rock-readiness
   const row = harness.forecasts.rankByDay(
     { [forecast.crag.id]: forecast }, ['2026-09-14'])['2026-09-14'][0];
   assert.ok(Number.isFinite(row.weatherScore));
-  assert.equal(row.weatherScoreBasis, 'daily-estimate');
+  assert.equal(row.weatherScoreBasis, 'best-hourly-window');
   assert.ok(['wet', 'drying', 'forecast-dry'].includes(row.rockReadiness.status));
   assert.equal(row.rockReadiness.status, recovering.rockReadiness.status);
   assert.ok(row.score <= 100);
@@ -502,6 +502,113 @@ function weatherFixture(url) {
   const forecast = { daily: section('daily', dates), hourly: section('hourly', hours) };
   return params.get('latitude').split(',').map(() => forecast);
 }
+
+test('hourly rain retains probability risk when drizzle or heavier rain is added', async () => {
+  const { scoreHour } = (await loadWorker()).forecasts;
+  const crag = { rockType: 'granite', idealTemp: [8, 20], aspect: 'NW', discipline: 'routes' };
+  for (const probability of [0, 31, 61, 87, 100]) {
+    const hour = { hour: 10, temp: 14, apparentTemp: 14, wind: 10, humidity: 80,
+      precipProb: probability, cloud: 100, dryness: 30, sunOnWall: false,
+      rainEventMm: 54, currentEventMm: 54, hoursSinceRain: 3, recoveryProgressHours: 3 };
+    const scores = [0, 0.05, 0.2, 0.3, 1, 1.1, 5].map(precip =>
+      scoreHour(crag, { ...hour, precip }, 4, probability, 100));
+    for (let i = 1; i < scores.length; i++) assert.ok(scores[i] <= scores[i - 1],
+      `${probability}% risk: increasing rain must not improve ${scores}`);
+  }
+});
+
+test('a separate small granite shower retains unfinished heavy-rain recovery', async () => {
+  const harness = await loadWorker(async url => {
+    const forecasts = weatherFixture(url);
+    for (const forecast of forecasts) {
+      const at = hour => forecast.hourly.time.indexOf(`2026-09-14T${hour}:00`);
+      forecast.hourly.precipitation[at('06')] = 54;
+      forecast.hourly.precipitation[at('10')] = 0.2;
+    }
+    return Response.json(forecasts);
+  });
+  const fc = (await harness.forecasts.fetchAllForecasts('VIC'))['youyangs-royaltywalls'];
+  const at = hour => fc.tomorrowHourly.find(h => h.hour === hour);
+  assert.equal(at(9).rainEventMm, 54);
+  assert.equal(at(10).currentEventMm, 0.2, 'separate shower remains separately identifiable');
+  assert.equal(at(10).rainEventMm, 54, 'unfinished heavy event is retained');
+  assert.equal(at(10).recoveryProgressHours, 0, 'new moisture restarts recovery');
+  assert.equal(at(11).wetRockCondition.recoveryHours, harness.forecasts.rainRecoveryHours(fc.crag, 54));
+  assert.ok(at(11).wetRockCondition.cap < 90, 'one dry hour after drizzle cannot erase the heavy event');
+});
+
+test('Royalty Walls session explains actual rain, probabilities and hourly score without a window bonus', async () => {
+  const harness = await loadWorker(async url => {
+    const forecasts = weatherFixture(url);
+    for (const forecast of forecasts) {
+      forecast.hourly.time.forEach((iso, i) => {
+        if (!iso.startsWith('2026-09-15')) return;
+        const hour = Number(iso.slice(11, 13));
+        forecast.hourly.temperature_2m[i] = hour < 12 ? 17.5 : 30;
+        forecast.hourly.apparent_temperature[i] = hour < 12 ? 16 : 30;
+        forecast.hourly.cloudcover[i] = 100;
+        forecast.hourly.precipitation_probability[i] = hour < 7 ? 100 : hour < 12 ? [87, 80, 77, 75, 71][hour - 7] : 40;
+        forecast.hourly.precipitation[i] = hour === 6 ? 31.7 : hour === 10 ? 0.2 : 0;
+      });
+      const di = forecast.daily.time.indexOf('2026-09-15');
+      forecast.daily.precipitation_sum[di] = 31.9;
+      forecast.daily.precipitation_probability_max[di] = 100;
+    }
+    return Response.json(forecasts);
+  });
+  const fc = (await harness.forecasts.fetchAllForecasts('VIC'))['youyangs-royaltywalls'];
+  const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, ['2026-09-15'])['2026-09-15'][0];
+  assert.equal(row.scoreWindow.start, 7);
+  assert.equal(row.scoreWindow.end, 12);
+  assert.equal(row.day.climbRain.sum, 0.2);
+  assert.equal(row.day.climbRain.peakProb, 87);
+  assert.equal(row.day.climbRain.weightedProb, 78);
+  assert.equal(row.score, Math.round(fc.bestWindows['2026-09-15'].hours.reduce((sum, h) => sum + h.score, 0) / 5));
+  assert.equal(100 + row.contributions.reduce((sum, c) => sum + c.delta, 0), row.score);
+  assert.ok(!row.contributions.some(c => c.category === 'window' || c.label === 'Sweet spot match' || c.label === 'Sunshine bonus'));
+  assert.ok(row.contributions.filter(c => c.category === 'precip').every(c =>
+    /0.2mm during 7:00–12:00/.test(c.detail) && /87% peak/.test(c.detail) && /78% average/.test(c.detail)));
+  assert.match(row.contributions.find(c => c.label === 'Temperature').detail, /penalty above 16°C air/);
+  assert.equal(row.weatherScoreBasis, 'best-hourly-window');
+  const day = fc.days.find(d => d.date === '2026-09-15');
+  assert.equal(day.climbRain.sum, 0.2, 'broader daily climbing hours exclude overnight rain exactly');
+  assert.ok(day.climbRain.peakProb >= day.climbRain.weightedProb);
+});
+
+test('session breakdowns reconcile across all crags under mixed rain, heat, cold and marine limits', async () => {
+  const harness = await loadWorker(async url => {
+    const forecasts = fixtureForUrl(url, { wave_height: 3, swell_wave_height: 2.8 });
+    for (const forecast of forecasts) {
+      if (!forecast.daily) continue;
+      forecast.hourly.time.forEach((iso, i) => {
+        const hour = Number(iso.slice(11, 13));
+        const day = Number(iso.slice(8, 10));
+        const air = [-3, 12, 17.5, 23.7, 30][(hour + day) % 5];
+        forecast.hourly.temperature_2m[i] = air;
+        forecast.hourly.apparent_temperature[i] = air - 2.3;
+        forecast.hourly.relative_humidity_2m[i] = [45, 80, 95][hour % 3];
+        forecast.hourly.precipitation[i] = [0, 0, 0.2, 2, 0][(hour + day) % 5];
+        forecast.hourly.precipitation_probability[i] = [10, 35, 75, 100][hour % 4];
+        forecast.hourly.cloudcover[i] = [0, 40, 100][hour % 3];
+      });
+    }
+    return Response.json(forecasts);
+  });
+  const forecasts = await harness.forecasts.fetchAllForecasts('ALL');
+  const dates = ['2026-09-13', '2026-09-14', '2026-09-15'];
+  const ranked = harness.forecasts.rankByDay(forecasts, dates);
+  for (const date of dates) for (const row of ranked[date]) {
+    if (row.scoreBasis !== 'best-hourly-window') continue;
+    assert.equal(100 + row.contributions.reduce((sum, c) => sum + c.delta, 0), row.score,
+      `${row.crag.id} ${date}: all actual factors and limits reconcile`);
+    assert.ok(row.day.climbRain.peakProb >= row.day.climbRain.weightedProb);
+    assert.ok(!row.contributions.some(c => c.category === 'window'));
+    assert.equal(row.weatherScoreBasis, 'best-hourly-window');
+    const fc = forecasts[row.bestSubcragId || row.crag.id];
+    const marineLabels = fc.bestWindows[date]?.hours.map(h => h.marineCondition?.label).filter(Boolean) || [];
+    if (marineLabels.includes('high swell')) assert.ok(row.reasons.includes('high swell'));
+  }
+});
 
 function lightRainFixture(url) {
   const forecasts = weatherFixture(url);
@@ -966,7 +1073,8 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
         assert.equal(todayRow.score, Math.round(todayWindow.avg), `${crag.id} today score matches best window`);
         assert.equal(todayRow.scoreBasis, 'best-hourly-window');
         assert.equal(todayRow.scoreWindow.average, todayRow.score);
-        assert.ok(todayRow.contributions.some(c => c.category === 'window'));
+        assert.ok(!todayRow.contributions.some(c => c.category === 'window'));
+        assert.equal(100 + todayRow.contributions.reduce((sum, c) => sum + c.delta, 0), todayRow.score);
         assert.equal(todayWindow.runAvg, todayWindow.avg);
         assert.equal(todayWindow.runHours, todayWindow.count);
         assert.equal(todayWindow.runStart, todayWindow.start);
@@ -983,7 +1091,8 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
         assert.equal(tomorrowRow.score, Math.round(tomorrowWindow.avg), `${crag.id} tomorrow score matches best window`);
         assert.equal(tomorrowRow.scoreBasis, 'best-hourly-window');
         assert.equal(tomorrowRow.scoreWindow.average, tomorrowRow.score);
-        assert.ok(tomorrowRow.contributions.some(c => c.category === 'window'));
+        assert.ok(!tomorrowRow.contributions.some(c => c.category === 'window'));
+        assert.equal(100 + tomorrowRow.contributions.reduce((sum, c) => sum + c.delta, 0), tomorrowRow.score);
         assert.equal(tomorrowWindow.runAvg, tomorrowWindow.avg);
         assert.equal(tomorrowWindow.runHours, tomorrowWindow.count);
         assert.equal(tomorrowWindow.runStart, tomorrowWindow.start);
@@ -1495,7 +1604,7 @@ test('current, session and climbing-day humidity stay separate without changing 
   assert.equal(row.day.sessionHumidity.relativeHumidity, meanRh);
   assert.equal(row.day.sessionHumidity.startHour, row.scoreWindow.start);
   assert.equal(row.day.sessionHumidity.endHour, row.scoreWindow.end);
-  assert.ok(row.reasons.includes('moist air'));
+  assert.ok(row.reasons.includes(row.day.sessionHumidity.label), 'score reason describes the selected session');
   assert.ok(!row.reasons.includes('comfortable'));
   assert.equal(row.score, Math.round(fc.bestWindows[fc.todayDate].avg),
     'descriptive humidity fields do not change the hourly score');

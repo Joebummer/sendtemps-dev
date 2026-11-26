@@ -324,6 +324,7 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
         cloudMean: daytimeCloudMean(f.hourly, date), // mean daytime cloud cover %
         weatherCode: f.daily.weathercode[di],
         rainWindows: extractRainWindows(f.hourly, date),
+        climbRain: hourlyRainSummary(f.hourly, date, climbStartHour(crag), climbCutoffHour(crag)),
         // Morning dryness (8am) and afternoon dryness (2pm) for this day,
         // pulled from the hourly dryness series. UI uses these to colour cards.
         morningDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 8),
@@ -1314,7 +1315,11 @@ function computeDrynessSeries(crag, hourly) {
         // A trace-only event leaves the previous recovery clock unchanged.
         // The rain still reduces the physical dryness index.
       } else {
-        rainEventMm = activeRainEventMm;
+        // A new shower cannot erase a heavier event that is still recovering.
+        // Restart the clock, retaining the larger unfinished moisture burden.
+        const unfinished = recoveryProgressHours != null &&
+          recoveryProgressHours <= rainRecoveryHours(crag, rainEventMm);
+        rainEventMm = unfinished ? Math.max(rainEventMm, activeRainEventMm) : activeRainEventMm;
         hoursSinceRain = 0;
         recoveryProgressHours = 0;
       }
@@ -1574,6 +1579,8 @@ function closureLabelForDate(crag, dateStr) {
 //   sunAlt, sunAz, sunOnWall, score, isNow } limited to climbable hours
 // (default 6am–7pm). For "today" pass `fromHour = currentMelbourneHour` so
 // past hours are dropped from the strip.
+const hourlyScoringContext = new WeakMap();
+
 function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHour = 19) {
   if (!hourly || !hourly.time || !drynessSeries.length) return [];
   const out = [];
@@ -1662,6 +1669,7 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
     if (wetRock.cap < 100) out[i].wetRockCondition = wetRock;
     const nearby = out.slice(Math.max(0, i - 2), Math.min(out.length, i + 3));
     const rainNeighbours = nearby.filter(n => n !== out[i] && n.precipProb > 30).length;
+    hourlyScoringContext.set(out[i], { rainNeighbours, peakDayProb, meanDayCloud });
     out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb, meanDayCloud);
   }
   // Keep the native hourly contract numeric. Missing hours are omitted rather
@@ -1837,28 +1845,37 @@ function computeClimbMarine(crag, hourly, dateStr) {
 }
 
 export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 0) {
+  return scoreHourResult(crag, h, rainNeighbours, peakDayProb, meanDayCloud).score;
+}
+
+function scoreHourResult(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCloud = 0, explain = false) {
   let s = 100;
+  const contributions = [];
+  const add = (category, label, delta, detail) => {
+    if (explain && delta) contributions.push({ category, label, delta, detail });
+  };
+  const bonus = (amount, category, label, detail) => {
+    s += amount;
+    add(category, label, amount, detail);
+  };
   // Tracks whether any real penalty fired this hour (mirrors scoreDay's
   // `contributions.some(c => c.delta < 0)` check). Only actual non-zero
   // deductions count — e.g. a dryness delta that rounds to 0 doesn't.
   let hasPenalty = false;
-  const penalize = (amount) => {
-    if (amount > 0) { s -= amount; hasPenalty = true; }
+  const penalize = (amount, category, label, detail) => {
+    if (amount > 0) { s -= amount; hasPenalty = true; add(category, label, -amount, detail); }
   };
 
   // Rain — actual measured precip takes priority.
   // For probability-only rain, scale the penalty by how many surrounding
   // hours also have elevated probability (sustained = worse than a shower).
-  if (h.precip > 1) penalize(70);
-  else if (h.precip > 0.2) penalize(35);
-  else if (h.precip >= MEASURABLE_RAIN_MM) penalize(15);
-  else if (h.precipProb > 60) {
-    // Base -20, +3 per sustained neighbour, capped at -32
-    penalize(Math.min(32, 20 + rainNeighbours * 3));
-  } else if (h.precipProb > 30) {
-    // Base -8, +2 per sustained neighbour, capped at -16
-    penalize(Math.min(16, 8 + rainNeighbours * 2));
-  }
+  const amountPenalty = h.precip > 1 ? 70 : h.precip > 0.2 ? 35
+    : h.precip >= MEASURABLE_RAIN_MM ? 15 : 0;
+  const probabilityPenalty = h.precipProb > 60 ? Math.min(32, 20 + rainNeighbours * 3)
+    : h.precipProb > 30 ? Math.min(16, 8 + rainNeighbours * 2) : 0;
+  // Amount and probability describe the same rain risk. Use the stronger
+  // constraint, so introducing drizzle never removes sustained-rain risk.
+  penalize(Math.max(amountPenalty, probabilityPenalty), 'precip', 'Rain forecast');
 
   // Day-level rain shadow — applied only to hours that individually look clean
   // (precipProb ≤ 30%) but the day as a whole has significant rain risk.
@@ -1866,7 +1883,7 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   // This prevents pre-rain hours from showing 99 when a 60%+ day is incoming.
   if (h.precipProb <= 30 && peakDayProb > 40) {
     const shadowPen = Math.round(((peakDayProb - 40) / 60) * 12);
-    penalize(shadowPen);
+    penalize(shadowPen, 'precip', 'Wider-day rain risk');
   }
 
   // Day-level cloud cover — mirrors scoreDay's sun-trap and overcast penalties.
@@ -1879,18 +1896,18 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
       : 4; // 65-70%
     // Extra penalty if wall relies on sun (concrete aspect, not all-day shade)
     const aspectMult = (hasConcreteAspect(crag.aspect) && crag.shade !== 'all-day') ? 1.0 : 0.6;
-    penalize(Math.round(cloudPen * aspectMult));
+    penalize(Math.round(cloudPen * aspectMult), 'sun', 'Cloud cover', 'Daytime cloud context applied to each scored hour');
   }
 
   // Spooge replaces the old RH-only adjustment. It is hourly, temperature-
   // aware and wind-aware, and is suppressed when the stronger wet-rock model
   // already describes the problem.
   const atmosphericPenalty = spoogePenalty(crag, h);
-  penalize(atmosphericPenalty);
+  penalize(atmosphericPenalty, 'humidity', 'Air moisture');
   const dt = Number.isFinite(h.deltaT) ? h.deltaT : deltaT(h.temp, h.humidity);
   if (atmosphericPenalty === 0 && (h.dryness ?? 100) >= 95) {
-    if (dt >= 6) s += 3;
-    else if (dt >= 5) s += 2;
+    if (dt >= 6) bonus(3, 'humidity', 'Dry air');
+    else if (dt >= 5) bonus(2, 'humidity', 'Dry air');
   }
 
   // Cold discomfort uses feels-like; heat and friction use air temperature.
@@ -1901,13 +1918,13 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   const thermal = heatPenalty(crag, tAir, hourSolarFraction(crag, h));
   const thermalPenalty = temperaturePenalty(crag, tFeel, tAir, h.hour) + thermal.ambient + thermal.solar +
     additionalFeelsLikeHeat(crag, tFeel, tAir, h.hour);
-  penalize(thermalPenalty);
+  penalize(thermalPenalty, 'temp', 'Temperature');
 
   // Use one residual-moisture constraint, as in scoreDay. The recovery cap
   // already accounts for wet rock; avoid stacking a dryness penalty on it.
   const wetRock = h.wetRockCondition ?? wetRockCondition(crag, h);
   if (h.dryness != null && h.dryness < 100 && wetRock.cap >= 100) {
-    penalize(Math.round(((100 - h.dryness) / 100) * 25 * residualDryingFactor(crag)));
+    penalize(Math.round(((100 - h.dryness) / 100) * 25 * residualDryingFactor(crag)), 'dryness', 'Rock dryness');
   }
 
   // Wind — mirrors scoreDay's direction-vs-aspect multiplier.
@@ -1915,27 +1932,27 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   const windMult = h.windExposure === 'onshore' ? 1.3
     : h.windExposure === 'lee' ? 0.8
     : 1.0;
-  if (h.wind > 50) penalize(Math.round(15 * windMult));
-  else if (h.wind > 35) penalize(Math.round(5 * windMult));
+  if (h.wind > 50) penalize(Math.round(15 * windMult), 'wind', 'Wind');
+  else if (h.wind > 35) penalize(Math.round(5 * windMult), 'wind', 'Wind');
   // Lee penalty — wall sheltered means slower drying; apply a small drag.
-  else if (h.windExposure === 'lee' && h.wind > 15) penalize(2);
+  else if (h.windExposure === 'lee' && h.wind > 15) penalize(2, 'wind', 'Sheltered drying');
 
   // Local terrain can amplify a particular wind direction independently of
   // wall aspect. Apply this after the general wind penalty so both effects are
   // represented when conditions are genuinely severe.
-  penalize(directionalWindPenalty(crag, h.windDir, h.wind));
+  penalize(directionalWindPenalty(crag, h.windDir, h.wind), 'wind', 'Local wind exposure');
 
   const marine = h.marineCondition ?? marineCondition(crag, h);
-  penalize(marine.penalty);
+  penalize(marine.penalty, 'marine', 'Marine conditions');
   // Sun-on-wall interactions — use apparent temp for the threshold checks
   // so a cold-feeling 20°C day (windy, humid) doesn't falsely claim a sun bonus.
   if (h.sunOnWall === true) {
-    if (tFeel > 0 && tFeel < idealMin) s += 5; // sun-trap (bonus)
-    else if (tFeel >= idealMin && tAir <= idealMax) s += 3; // bonus
+    if (tFeel > 0 && tFeel < idealMin) bonus(5, 'sun', 'Sun on wall');
+    else if (tFeel >= idealMin && tAir <= idealMax) bonus(3, 'sun', 'Sun on wall');
   } else if (h.sunOnWall === false) {
     // In shade
-    if (tAir > idealMax) s += 4; // shade is welcome (bonus)
-    else if (tFeel < 8) penalize(4); // cold and shaded
+    if (tAir > idealMax) bonus(4, 'aspect', 'Shade relief');
+    else if (tFeel < 8) penalize(4, 'aspect', 'Cold shade');
   }
 
   // — Penalty integrity cap — same rule as scoreDay(): an hour that took
@@ -1944,7 +1961,27 @@ export function scoreHour(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayC
   // the day score, which already applies this same cap.
   const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap, wetRock.cap);
   const rawFinal = Math.max(0, Math.min(Math.floor(hourlyCeiling), Math.round(s)));
-  return (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
+  const score = (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
+  const weatherFinal = Math.max(0, Math.min(Math.floor(Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap)), Math.round(s)));
+  const weatherScore = hasPenalty && weatherFinal === 100 ? 99 : weatherFinal;
+  if (explain && score !== s) {
+    if (score === Math.round(s) && contributions.length) {
+      // Keep sub-point rounding with a real factor, rather than inventing a
+      // new category that older native decoders may not understand.
+      contributions[contributions.length - 1].delta += score - s;
+    } else {
+      const bounded = s < 0 || s > 100;
+      const integrityLimited = hasPenalty && rawFinal === 100;
+      const category = bounded || integrityLimited ? 'sun'
+        : wetRock.cap === hourlyCeiling ? 'dryness'
+          : marine.cap === hourlyCeiling ? 'marine' : 'temp';
+      const label = bounded ? 'Score bounds' : integrityLimited ? 'Penalty integrity limit'
+        : category === 'dryness' ? 'Wet-rock recovery'
+          : category === 'marine' ? 'Marine limit' : 'Temperature limit';
+      add(category, label, score - s, 'Hourly score limits and rounding');
+    }
+  }
+  return { score, weatherScore, contributions };
 }
 
 // Pick the strongest consecutive session, including poor-weather days.
@@ -2219,7 +2256,34 @@ function climbCutoffHour(crag) {
 // counted proportionally by overlap. Windows fully outside the climbing day
 // (pre-dawn drizzle, or post-cutoff evening rain) don't contribute to the
 // daily rain penalty — dryness handles their carry-over effect.
+function rainSummary(samples, startH, cutoffH) {
+  const during = samples.filter(h => h.hour >= startH && h.hour < cutoffH);
+  if (!during.length || samples.some(h => !Number.isFinite(h.precip) || !Number.isFinite(h.precipProb))) return null;
+  const sum = hours => hours.reduce((total, h) => total + h.precip, 0);
+  const sumDuring = sum(during);
+  const sumAfter = sum(samples.filter(h => h.hour >= cutoffH));
+  return {
+    sum: sumDuring,
+    peakProb: Math.max(...during.map(h => h.precipProb)),
+    weightedProb: during.reduce((total, h) => total + h.precipProb, 0) / during.length,
+    rainHours: during.filter(h => h.precip >= MEASURABLE_RAIN_MM).length,
+    allAfterDark: sumDuring < 0.2 && sumAfter >= 0.2,
+    sumBeforeClimb: sum(samples.filter(h => h.hour < startH)),
+    sumAfter,
+  };
+}
+
+function hourlyRainSummary(hourly, date, startH, cutoffH) {
+  const samples = hourly.time.flatMap((iso, i) => iso.startsWith(date) ? [{
+    hour: Number(iso.slice(11, 13)), precip: hourly.precipitation?.[i],
+    precipProb: hourly.precipitation_probability?.[i],
+  }] : []);
+  // Incomplete model days use the conservative legacy summary instead.
+  return samples.length === 24 ? rainSummary(samples, startH, cutoffH) : null;
+}
+
 function climbableRain(day, startH, cutoffH) {
+  if (day.climbRain) return day.climbRain;
   const windows = day.rainWindows || [];
   if (!windows.length) {
     return { sum: day.precipSum || 0, peakProb: day.precipProb || 0, allAfterDark: false, sumBeforeClimb: 0, sumAfter: 0 };
@@ -2250,10 +2314,9 @@ function climbableRain(day, startH, cutoffH) {
     sumDuring += w.totalMm * duringFrac;
     sumBeforeClimb += w.totalMm * beforeFrac;
     sumAfter += w.totalMm * afterFrac;
-    // Only count peak prob if the peak hour falls inside the climbing window.
-    if (w.peakHour >= overlapStart && w.peakHour < overlapEnd) {
-      peakDuring = Math.max(peakDuring, w.peakProb);
-    }
+    // Without hourly values, use the overlapping window's conservative peak.
+    // Dropping an overnight peak must never make peak risk lower than mean risk.
+    peakDuring = Math.max(peakDuring, w.peakProb);
     // Accumulate prob × overlap hours for the time-weighted mean.
     // Uses the window's peakProb as a proxy for the whole window — conservative
     // (it's the worst hour) but avoids needing per-hour arrays here.
@@ -2363,7 +2426,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     const peakMax = peakTemperatureUpper(crag);
     score -= protectedTemperaturePenalty;
     add('temp', 'Temperature', -protectedTemperaturePenalty,
-      `${Math.round(tAir)}°C air / ${Math.round(tFeel)}°C feels-like climbing average; peak up to ${peakMax}°C, good cragging ${idealMin}–${idealMax}°C` +
+      `${Math.round(tAir)}°C air / ${Math.round(tFeel)}°C feels-like climbing average; peak-performance warmth penalty above ${peakMax}°C air; general cragging range ${idealMin}–${idealMax}°C` +
       (climbHours > 0 ? `; ${ct.hoursInRange}/${climbHours}h in range` : ''));
   }
 
@@ -2605,13 +2668,12 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // precipHours is the total hours with measurable rain from the daily API.
   // We cap at the climbable window length so a 1am cloudburst doesn't inflate it.
   const climbSpanHours = cutoffH - startH; // e.g. 8–20 = 12h
-  const rawPrecipHours = day.precipHours ?? climbSpanHours; // fallback = spread
-  // Only count precip hours that fall inside the climbing window (approx).
-  // We don't have hourly breakdown here, so use the climbable rain sum as a
-  // fraction of the daily total to prorate the precip hours.
+  const rawPrecipHours = climb.rainHours ?? day.precipHours ?? climbSpanHours;
+  // Prefer the exact count. Legacy inputs without hourly samples prorate the
+  // daily rain hours by the fraction falling inside the climbing window.
   const dailyTotal = day.precipSum || effectiveSum || 0.01;
   const climbFrac = dailyTotal > 0 ? Math.min(1, effectiveSum / dailyTotal) : 1;
-  const climbPrecipHours = Math.max(0.5, rawPrecipHours * climbFrac);
+  const climbPrecipHours = Math.max(0.5, climb.rainHours != null ? rawPrecipHours : rawPrecipHours * climbFrac);
   // mm per rain hour — higher = more concentrated = worse
   const mmPerHour = effectiveSum / climbPrecipHours;
   // concentrationMult: 1.0 at ≤1 mm/h (light drizzle spread), up to 1.4 at ≥5 mm/h
@@ -2991,6 +3053,69 @@ function isDailyEstimateDate(date, todayDate) {
   return dayOffset >= 3 && dayOffset <= 7;
 }
 
+// Explain the same hourly calculation that supplied the headline. Context is
+// private and ephemeral, so it never expands the native hourly wire contract.
+function explainWindow(crag, day, window, score) {
+  if (!window.hours.every(hour => hourlyScoringContext.has(hour))) return null;
+  const results = window.hours.map(hour => {
+    const { rainNeighbours, peakDayProb, meanDayCloud } = hourlyScoringContext.get(hour);
+    return scoreHourResult(crag, hour, rainNeighbours, peakDayProb, meanDayCloud, true);
+  });
+  const period = `${window.start}:00–${window.end}:00`;
+  const rain = rainSummary(window.hours, window.start, window.end);
+  const ct = day.climbTemps;
+  const temperatureDetail = `${Math.round(ct.meanTemp)}°C air / ${Math.round(ct.meanApparent)}°C feels-like average during ${period}; ` +
+    `peak-performance warmth penalty above ${peakTemperatureUpper(crag)}°C air; general cragging range ${crag.idealTemp.join('–')}°C; ` +
+    `${ct.hoursInRange}/${ct.climbHours}h in range`;
+  const rainDetail = `${rain.sum.toFixed(1)}mm during ${period}` +
+    (Number.isFinite(day.precipSum) ? ` (of ${day.precipSum.toFixed(1)}mm full-day total)` : '') + '; ' +
+    `${Math.round(rain.peakProb)}% peak rain chance; ${Math.round(rain.weightedProb)}% average rain chance during this window`;
+  const groups = new Map();
+  for (const result of results) for (const item of result.contributions) {
+    const key = `${item.category}:${item.label}`;
+    const existing = groups.get(key) || { ...item, delta: 0 };
+    existing.delta += item.delta / results.length;
+    groups.set(key, existing);
+  }
+  const meanScore = results.reduce((sum, result) => sum + result.score, 0) / results.length;
+  if (score < Math.round(meanScore)) groups.set('temp:Session temperature limit', {
+    category: 'temp', label: 'Session temperature limit', delta: score - meanScore,
+    detail: `Temperature ceiling for ${period}`,
+  });
+  // Round the running total rather than each factor independently: the public
+  // integer contributions must reconcile exactly with the integer headline.
+  let exact = 100;
+  let rounded = 100;
+  const contributions = [];
+  for (const item of groups.values()) {
+    exact += item.delta;
+    const next = Math.round(exact);
+    const delta = next - rounded;
+    rounded = next;
+    if (!delta) continue;
+    const detail = item.category === 'precip' ? rainDetail
+      : item.label === 'Temperature' ? temperatureDetail
+        : item.label === 'Rock dryness' ? `${period}; dryness ${day.sessionDryness}/100 minimum; hourly moisture penalties averaged`
+          : item.label === 'Wet-rock recovery' ? `${period}; hourly recovery limits after recent rain`
+            : `${period}; ${item.detail || 'average effect across the scored hours'}`;
+    contributions.push({ category: item.category, label: item.label, delta, detail });
+  }
+  contributions.sort((a, b) => a.delta - b.delta);
+  const thermal = climbingTemperature(crag, ct, day);
+  const reasons = [
+    ...new Set(window.hours.map(hour => hour.marineCondition?.label).filter(Boolean)),
+    ...(rain.sum >= MEASURABLE_RAIN_MM ? ['rain expected']
+      : rain.peakProb > 30 ? [`${Math.round(rain.peakProb)}% rain chance`] : []),
+    ...(day.wetRockLabel ? [day.wetRockLabel] : []),
+    ...(!day.wetRockLabel && day.sessionDryness < 70
+      ? [day.sessionDryness < 30 ? 'rock soaked' : day.sessionDryness < 50 ? 'rock wet' : 'still drying'] : []),
+    thermal.reason,
+    ...(day.sessionHumidity?.label ? [day.sessionHumidity.label] : []),
+  ].slice(0, 3);
+  const weatherMean = results.reduce((sum, result) => sum + result.weatherScore, 0) / results.length;
+  return { contributions, reasons, weatherScore: Math.round(Math.min(weatherMean, thermal.ceiling)) };
+}
+
 // Build ranked list per day. Returns { 'YYYY-MM-DD': [{crag, score, reasons, day}] }
 export function rankByDay(forecasts, dayDates) {
   const ranked = {};
@@ -3017,6 +3142,7 @@ export function rankByDay(forecasts, dayDates) {
       const day = hourlyWindow ? { ...dayHumidity,
         temperaturePeriod: 'session',
         climbTemps: windowTemperatures(fc.crag, hourlyWindow.hours),
+        climbRain: rainSummary(hourlyWindow.hours, hourlyWindow.start, hourlyWindow.end),
         // Preserve the raw morning/afternoon observations, but derive the
         // displayed moisture reason and readiness from the scored session.
         sessionDryness: sessionDryness.length ? Math.min(...sessionDryness) : undefined,
@@ -3054,7 +3180,10 @@ export function rankByDay(forecasts, dayDates) {
           } : {}),
           provisional: date > fc.tomorrowDate,
         };
-        contributions = [...contributions, {
+        const explanation = explainWindow(fc.crag, day, hourlyWindow, windowScore);
+        if (explanation) {
+          ({ contributions, reasons, weatherScore } = explanation);
+        } else contributions = [...contributions, {
           category: 'window',
           label: 'Best climbing window',
           delta,
@@ -3074,7 +3203,8 @@ export function rankByDay(forecasts, dayDates) {
         scoreBasis,
         scoreWindow,
         weatherScore,
-        weatherScoreBasis: 'daily-estimate',
+        weatherScoreBasis: scoreBasis === 'best-hourly-window' && hourlyWindow.hours.every(hour => hourlyScoringContext.has(hour))
+          ? 'best-hourly-window' : 'daily-estimate',
         rockReadiness,
         reasons,
         contributions,

@@ -20,7 +20,13 @@ fractional window averages (`avg`, `runAvg`) retain their precision in both.
 The `X-Climbable-Schema-Version` header identifies the representation. Retrieval
 time and stale-data headers remain available in either version.
 
+Every contribution must include `category`, `label`, `delta` and a String
+`detail`. The shipped Swift `Contribution.detail` is non-optional: one missing
+detail anywhere, including a future date or trip, rejects the entire response.
+Serialization repairs missing/null details in saved payloads as well.
+
 Contract tests cover default/explicit version 1, opt-in version 2, shared-cache
-reads, all regional and national forecasts, numeric compatibility, and private
-field isolation. They do not replace an on-device test of the native decoder,
-whose source is maintained separately from this repository.
+reads, all regional and national forecasts, numeric compatibility, private
+field isolation, and required fields/types from the native Codable models in
+`SendTemps-iOS` (inspected 27 November 2026). The fixture stores only the public
+field/type contract. These checks do not replace an on-device rendering test.

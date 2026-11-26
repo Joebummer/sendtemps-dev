@@ -517,6 +517,26 @@ test('hourly rain retains probability risk when drizzle or heavier rain is added
   }
 });
 
+test('hourly rain intensity is continuous at the old thresholds and remains severity-sensitive', async () => {
+  const { scoreHour } = (await loadWorker()).forecasts;
+  const crag = { rockType: 'trachyte', idealTemp: [8, 22], aspect: 'mixed' };
+  const hour = { hour: 13, temp: 14, apparentTemp: 14, wind: 15, humidity: 98,
+    precipProb: 92, cloud: 100, dryness: 30, sunOnWall: null,
+    wetRockCondition: { cap: 60 }, // Hold rock state fixed to isolate rain intensity.
+    rainEventMm: 10, currentEventMm: 10, hoursSinceRain: 0, recoveryProgressHours: 0 };
+  const score = precip => scoreHour(crag, { ...hour, precip }, 4, 98, 100);
+  for (const boundary of [0.2, 1, 2, 5, 10]) {
+    assert.ok(Math.abs(score(boundary - 0.001) - score(boundary + 0.001)) <= 1,
+      `${boundary} mm/h must not create a scoring cliff`);
+  }
+  assert.ok(score(0.9) - score(1.2) <= 7, 'nearby shower amounts cannot create a 35-point jump');
+  assert.ok(score(0.9) > score(1.2));
+  assert.ok(score(1.2) > score(3.1), 'heavier rain still materially worsens conditions');
+  const sequence = Array.from({ length: 201 }, (_, i) => score(i / 20));
+  for (let i = 1; i < sequence.length; i++) assert.ok(sequence[i] <= sequence[i - 1]);
+  assert.ok(score(5) <= 15, 'heavy rain remains poor');
+});
+
 test('a separate small granite shower retains unfinished heavy-rain recovery', async () => {
   const harness = await loadWorker(async url => {
     const forecasts = weatherFixture(url);

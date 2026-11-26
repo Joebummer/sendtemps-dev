@@ -44,6 +44,10 @@ Rain totals and mean/peak probabilities use real hourly samples for both daily
 and session periods, rather than distributing grouped rain-window totals evenly.
 Grouped windows remain presentation summaries. Hourly rain uses the stronger of
 amount and probability penalties, so drizzle cannot remove sustained rain risk.
+The amount deduction interpolates continuously from 0 points at 0 mm/h through
+15 at 0.05, 35 at 0.2, 70 at 2, 85 at 5 and 95 at 10 mm/h. This removes the
+old 35-point jump immediately above 1 mm/h. Hourly weather and recovery remain
+unsmoothed, so genuine rain changes and wet-rock constraints stay visible.
 For non-sandstone rock, a new shower restarts recovery while retaining any larger
 unfinished event; sandstone keeps its existing trace exemption and productive
 drying rules. The temperature explanation distinguishes the peak-performance

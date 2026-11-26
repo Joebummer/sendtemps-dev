@@ -1866,11 +1866,13 @@ function scoreHourResult(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCl
     if (amount > 0) { s -= amount; hasPenalty = true; add(category, label, -amount, detail); }
   };
 
-  // Rain — actual measured precip takes priority.
-  // For probability-only rain, scale the penalty by how many surrounding
-  // hours also have elevated probability (sustained = worse than a shower).
-  const amountPenalty = h.precip > 1 ? 70 : h.precip > 0.2 ? 35
-    : h.precip >= MEASURABLE_RAIN_MM ? 15 : 0;
+  // Forecast rain intensity increases the deduction continuously. The old
+  // 1 mm/h boundary doubled the penalty for nearly identical showers.
+  // Keep light rain consequential and progressively strengthen heavier rain.
+  const amountPenalty = interpolate([
+    [0, 0], [MEASURABLE_RAIN_MM, 15], [0.2, 35], [2, 70], [5, 85], [10, 95],
+  ], Math.max(0, h.precip ?? 0));
+  // Sustained probability remains a floor, without adding the same rain twice.
   const probabilityPenalty = h.precipProb > 60 ? Math.min(32, 20 + rainNeighbours * 3)
     : h.precipProb > 30 ? Math.min(16, 8 + rainNeighbours * 2) : 0;
   // Amount and probability describe the same rain risk. Use the stronger

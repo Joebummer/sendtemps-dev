@@ -73,7 +73,8 @@ test('scored forecast: cache hit overrides stored headers and uses current CORS 
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
   assert.equal(response.headers.get('X-SendTemps-Cache'), 'HIT');
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'https://sendtemps.app');
-  assert.deepEqual(await response.json(), { ...payload, tripDates: ['2026-09-13'] });
+  assert.deepEqual(await response.json(), { ...payload, tripDates: ['2026-09-13'],
+    forecast: { retrievedAt: null, ageSeconds: null, calendarTimezone: 'Australia/Melbourne', stale: false, source: 'HIT' } });
   assert.equal(harness.entries.get(key).headers.get('Cache-Control'), 'public, max-age=900');
 });
 

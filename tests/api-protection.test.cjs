@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadWorker } = require('./helpers.cjs');
+const { loadWorker, withoutForecastAge } = require('./helpers.cjs');
 const req = (query = '', origin = 'https://climbable.app') => new Request(
   `https://api.test/forecast?latitude=-37&longitude=144${query}`,
   { headers: { Origin: origin, 'CF-Connecting-IP': '203.0.113.1' } });
@@ -152,7 +152,9 @@ test('upstream limit serves scored fallback, then returns 429 once fallback expi
   const stale = await harness.worker.fetch(request, env, harness.ctx);
   assert.equal(stale.status, 200);
   assert.equal(stale.headers.get('X-SendTemps-Cache'), 'STALE');
-  assert.deepEqual(await stale.json(), original);
+  const saved = await stale.json();
+  assert.equal(saved.forecast.stale, true);
+  assert.deepEqual(withoutForecastAge(saved), withoutForecastAge(original));
   harness.setNow('2026-09-13T03:01:00Z');
   const expired = await harness.worker.fetch(request, env, harness.ctx);
   assert.equal(expired.status, 429);

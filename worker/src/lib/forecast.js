@@ -3,6 +3,8 @@
 
 import { CRAGS } from './crags.js';
 import { CLIMATE_PROFILES, CRAG_TO_PROFILE } from './climateBaseline.js';
+import { timezoneForCrag, regionTimezone, localDate, localHour, localIsoHour, localHourToDate, addDays, normalizeProviderTimes } from './time.js';
+export { timezoneForCrag, regionTimezone, localDate, localHour, localHourToDate, normalizeProviderTimes } from './time.js';
 
 // NOTE (worker copy — intentional diff from the root forecast.js, see
 // lib/README.md): the browser copy of this file points API at the
@@ -93,7 +95,8 @@ async function fetchMarineForecasts(crags, apiKey, requestLimiter) {
       'swell_wave_direction',
       'sea_level_height_msl',
     ].join(','),
-    timezone: 'Australia/Melbourne',
+    timezone: 'auto',
+    timeformat: 'unixtime',
     forecast_days: '8',
     cell_selection: 'sea',
   });
@@ -108,14 +111,14 @@ async function fetchMarineForecasts(crags, apiKey, requestLimiter) {
   const data = await res.json();
   const list = Array.isArray(data) ? data : [data];
   return Object.fromEntries(targets.flatMap((crag, index) =>
-    list[index]?.hourly?.time ? [[crag.id, list[index].hourly]] : []));
+    list[index]?.hourly?.time ? [[crag.id, normalizeProviderTimes(list[index], timezoneForCrag(crag)).hourly]] : []));
 }
 
 function mergeMarineHourly(weatherHourly, marineHourly) {
   if (!marineHourly?.time?.length) return weatherHourly;
-  const marineIndex = new Map(marineHourly.time.map((time, index) => [time, index]));
-  const aligned = key => weatherHourly.time.map(time => {
-    const index = marineIndex.get(time);
+  const marineIndex = new Map(marineHourly.time.map((time, index) => [marineHourly.timeUtc?.[index] ?? time, index]));
+  const aligned = key => weatherHourly.time.map((time, wi) => {
+    const index = marineIndex.get(weatherHourly.timeUtc?.[wi] ?? time);
     return index == null ? null : (marineHourly[key]?.[index] ?? null);
   });
   const seaLevel = aligned('sea_level_height_msl');
@@ -161,12 +164,12 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
     if (error.status === 429) marineLimitError = error;
     return {};
   });
-  // Multiple sectors share coordinates. Request each weather location once,
+  // Multiple sectors share coordinates. Deduplicate only equal location, elevation and timezone,
   // then retain each crag's own elevation correction and scoring below.
   const locationIndex = new Map();
   const locations = [];
   const indices = targetCrags.map(crag => {
-    const key = `${crag.lat},${crag.lon}`;
+    const key = `${crag.lat},${crag.lon},${crag.elevation},${timezoneForCrag(crag)}`;
     if (!locationIndex.has(key)) {
       locationIndex.set(key, locations.length);
       locations.push(crag);
@@ -178,6 +181,7 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
   const params = new URLSearchParams({
     latitude: lats,
     longitude: lons,
+    elevation: locations.map(c => c.elevation).join(','),
     daily: [
       'temperature_2m_max',
       'temperature_2m_min',
@@ -200,10 +204,14 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
       'windgusts_10m',
       'cloudcover',
       'shortwave_radiation',
+      'sunshine_duration',
       'weathercode',
     ].join(','),
-    timezone: 'Australia/Melbourne',
-    forecast_days: '10',
+    timezone: 'auto',
+    timeformat: 'unixtime',
+    // One padding day preserves complete local daily totals across DST when
+    // the provider's aggregation offset is fixed at request time.
+    forecast_days: '11',
     past_days: '4',
   });
 
@@ -223,75 +231,75 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
   // Open-Meteo returns either a single object (one location) or an array (multiple).
   const list = Array.isArray(data) ? data : [data];
 
-  // Compute today + tomorrow in Melbourne local time once.
-  const todayMel = melbourneDateString(new Date());
-  const tomorrowMel = melbourneDateString(new Date(Date.now() + 86400000));
+  // Resolve today and tomorrow independently for every destination below.
 
-  // Map each crag to its forecast object
+  // Map each crag to its provider forecast and local civil calendar.
   const byId = {};
   targetCrags.forEach((crag, i) => {
-    const rawForecast = list[indices[i]];
-    if (!rawForecast) return;
-    const elevation = crag.elevation ?? 0;
-    const lapse = elevation > 400 ? -((elevation - 400) / 1000) * 6.5 : 0;
-    const adjust = values => values?.map(value =>
-      Number.isFinite(value) ? value + lapse : value);
+    const providerForecast = list[indices[i]];
+    if (!providerForecast) return;
+    crag = { ...crag, timezone: providerForecast.timezone || timezoneForCrag(crag) };
+    const timezone = timezoneForCrag(crag);
+    const rawForecast = normalizeProviderTimes(providerForecast, timezone);
+    const todayLocal = localDate(new Date(), timezone);
+    const tomorrowLocal = addDays(todayLocal, 1);
+    const lastDate = addDays(todayLocal, 9);
     const mergedHourly = mergeMarineHourly(rawForecast.hourly, marineById[crag.id]);
-    const adjustedHourlyTemperature = adjust(mergedHourly.temperature_2m);
+    const adjustedHourlyTemperature = mergedHourly.temperature_2m;
     const hourlyDeltaT = adjustedHourlyTemperature?.map((temp, hourIndex) =>
       deltaT(temp, mergedHourly.relative_humidity_2m?.[hourIndex]));
     // Clone per crag: forecast locations can be shared by several elevations.
-    // Apply the existing correction once, before strips, bins and daily scoring.
+    // Provider downscaling already uses the requested crag elevation. Keep its temperatures unchanged.
     const f = {
       ...rawForecast,
       hourly: {
         ...mergedHourly,
         temperature_2m: adjustedHourlyTemperature,
-        apparent_temperature: adjust(rawForecast.hourly.apparent_temperature),
+        apparent_temperature: rawForecast.hourly.apparent_temperature,
         delta_t_2m: hourlyDeltaT,
       },
       daily: {
         ...rawForecast.daily,
-        temperature_2m_max: adjust(rawForecast.daily.temperature_2m_max),
-        temperature_2m_min: adjust(rawForecast.daily.temperature_2m_min),
-        apparent_temperature_max: adjust(rawForecast.daily.apparent_temperature_max),
+        temperature_2m_max: rawForecast.daily.temperature_2m_max,
+        temperature_2m_min: rawForecast.daily.temperature_2m_min,
+        apparent_temperature_max: rawForecast.daily.apparent_temperature_max,
       },
     };
     // Compute hourly rock-dryness series for the whole hourly window.
     // This consumes past_days=4 of recent rain history plus 10 forecast days.
     const drynessSeries = computeDrynessSeries(crag, f.hourly);
-    // Current dryness = the value at the hour closest to "now".
-    const nowDryness = currentDryness(f.hourly, drynessSeries);
+    // Current dryness uses the latest completed model timestamp at this crag.
+    const nowDryness = currentDryness(f.hourly, drynessSeries, timezone);
     // Per-hour view for today (remaining hours) and tomorrow, each with its
     // own best-window pick. The today strip is built from the current hour
     // forward, so a 2pm visit sees 2pm–7pm rather than the irrelevant
     // 6am–1pm that have already passed.
-    const todayHourly = buildTodayHourly(crag, f.hourly, drynessSeries, todayMel);
-    const todayMinimumHours = Math.min(5, Math.max(0, 20 - Math.max(7, melbourneHourNow())));
+    const todayHourly = buildTodayHourly(crag, f.hourly, drynessSeries, todayLocal);
+    const todayMinimumHours = remainingDaylightHours(crag, todayLocal, localHour(new Date(), timezone));
     const todayBestWindow = bestWindow(todayHourly, crag, todayMinimumHours);
-    const tomorrowHourly = buildTomorrowHourly(crag, f.hourly, drynessSeries, tomorrowMel);
+    const tomorrowHourly = buildTomorrowHourly(crag, f.hourly, drynessSeries, tomorrowLocal);
     const tomorrowBestWindow = bestWindow(tomorrowHourly, crag, 5);
     // Only today/tomorrow strips go on the wire. Days 4–8 use daily estimates;
     // retain compact selected sessions for the other dates in the response.
-    const bestWindows = { [todayMel]: todayBestWindow, [tomorrowMel]: tomorrowBestWindow };
+    const bestWindows = { [todayLocal]: todayBestWindow, [tomorrowLocal]: tomorrowBestWindow };
     for (const date of f.daily.time) {
-      if (date <= tomorrowMel || isDailyEstimateDate(date, todayMel)) continue;
+      if (date <= tomorrowLocal || date > lastDate || isDailyEstimateDate(date, todayLocal)) continue;
       bestWindows[date] = bestWindow(buildDayHourly(crag, f.hourly, drynessSeries, date), crag, 5);
     }
     // Last 4 days of daily precipitation totals for the sparkline.
-    const pastPrecip = extractPastDailyPrecip(f.hourly, todayMel, 4);
+    const pastPrecip = extractPastDailyPrecip(f.hourly, todayLocal, 4);
 
     byId[crag.id] = {
       crag,
       hourly: f.hourly,
       drynessSeries,
       nowDryness,
-      lastRain: findLastSignificantRain(f.hourly),
+      lastRain: findLastSignificantRain(f.hourly, timezone),
       pastPrecip,
-      todayDate: todayMel,
+      todayDate: todayLocal,
       todayHourly,
       todayBestWindow,
-      tomorrowDate: tomorrowMel,
+      tomorrowDate: tomorrowLocal,
       tomorrowHourly,
       tomorrowBestWindow,
       bestWindows,
@@ -331,11 +339,12 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
         afternoonDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 14),
         dayDryness: drynessAtLocalHour(f.hourly, drynessSeries, date, 11), // mid-day single value
         ...wetRockDayCondition(crag, f.hourly, drynessSeries, date),
-        longRangeDrySession: isDailyEstimateDate(date, todayMel) &&
+        longRangeDrySession: isDailyEstimateDate(date, todayLocal) &&
           hasUsableDrySession(crag, f.hourly, drynessSeries, date),
-        elevCorrection: lapse !== 0 ? Math.round(lapse * 10) / 10 : null,
+        elevCorrection: null,
+        elevationSource: 'provider',
       });
-      }),
+      }).filter(day => day.date <= lastDate),
     };
   });
   return byId;
@@ -524,6 +533,7 @@ export function wetRockCondition(crag, hour) {
       (rock !== 'sandstone' || !isBelowSandstoneThreshold(currentEventMm))) {
     return {
       cap: RAIN_HOUR_CAP[rock] ?? 60,
+      activeRain: true,
       label: `${rock} wet`,
       detail: `${rain.toFixed(1)}mm forecast this hour`,
     };
@@ -591,7 +601,7 @@ function hasUsableDrySession(crag, hourly, drynessSeries, dateStr) {
     const iso = hourly.time[i];
     if (!iso.startsWith(dateStr)) continue;
     const hour = Number(iso.slice(11, 13));
-    if (hour < 7 || hour >= 20) continue;
+      if (hour < 7 || hour >= 20 || !daylightHour(crag, iso)) continue;
     const rain = hourly.precipitation?.[i];
     const probability = hourly.precipitation_probability?.[i];
     const dry = drynessSeries[i];
@@ -618,7 +628,7 @@ function wetRockDayCondition(crag, hourly, drynessSeries, dateStr) {
     const iso = hourly.time[i];
     if (!iso.startsWith(dateStr)) continue;
     const hour = parseInt(iso.slice(11, 13), 10);
-    if (hour < 7 || hour > 19) continue;
+    if (hour < 7 || hour > 19 || !daylightHour(crag, iso)) continue;
     const condition = wetRockCondition(crag, {
       precip: hourly.precipitation?.[i] ?? 0,
       hoursSinceRain: drynessSeries[i]?.hoursSinceRain ?? null,
@@ -651,6 +661,7 @@ function wetRockWindowCondition(crag, samples) {
     sample.cap < worst.cap ? sample : worst, samples[0]);
   const averageCap = Math.floor(samples.reduce((sum, sample) => sum + sample.cap, 0) / samples.length);
   const recovering = averageCap < 100;
+  const raining = samples.some(sample => sample.activeRain);
   const rockType = canonicalRockType(crag);
   const sandstone = rockType === 'sandstone';
   const rockLabel = rockType.charAt(0).toUpperCase() + rockType.slice(1);
@@ -661,9 +672,9 @@ function wetRockWindowCondition(crag, samples) {
       wetRockDetail: `${samples[0].hour}:00–${samples[samples.length - 1].hour + 1}:00 recovery ceiling; ${representative.detail}`,
     } : {}),
     rockReadiness: {
-      status: !recovering ? 'forecast-dry' :
+      status: raining ? 'wet' : !recovering ? 'forecast-dry' :
         averageCap <= 25 ? 'wet' : 'drying',
-      label: !recovering ? 'Forecast dry – inspect rock' :
+      label: raining ? `Rain during window – inspect ${rockType}` : !recovering ? 'Forecast dry – inspect rock' :
         averageCap <= 25
           ? (sandstone ? 'Wet sandstone – do not climb' : `Wet ${rockType} – inspect before climbing`)
           : `${rockLabel} drying – inspect before climbing`,
@@ -897,7 +908,7 @@ export function computeClimbTemps(crag, hourly, dateStr) {
     const temp = hourly.temperature_2m?.[i];
     const app = hourly.apparent_temperature?.[i] ?? temp;
     if (!Number.isFinite(temp) || !Number.isFinite(app)) continue;
-    const sun = sunPosition(melbourneHourToDate(t), crag.lat, crag.lon);
+    const sun = sunPosition(localHourToDate(t, timezoneForCrag(crag)), crag.lat, crag.lon);
     const lit = hasConcreteAspect(crag.aspect)
       ? sunOnCrag(crag, sun.azimuth, sun.altitude, hour) : null;
     temperatureSamples.push({
@@ -1090,7 +1101,7 @@ function computeSunWindow(crag, hourly, dateStr) {
     const t = hourly.time[i];
     if (!t.startsWith(dateStr)) continue;
     const hour = parseInt(t.slice(11, 13), 10);
-    const when = melbourneHourToDate(t);
+    const when = localHourToDate(t, timezoneForCrag(crag));
     const sun = sunPosition(when, crag.lat, crag.lon);
     if (sun.altitude <= 3) continue;
     if (!sunOnCrag(crag, sun.azimuth, sun.altitude, hour)) continue;
@@ -1133,7 +1144,7 @@ function computeSolarExposure(crag, hourly, dateStr) {
     const t = hourly.time[i];
     if (!t.startsWith(dateStr)) continue;
     const hour = parseInt(t.slice(11, 13), 10);
-    const when = melbourneHourToDate(t);
+    const when = localHourToDate(t, timezoneForCrag(crag));
     const sun = sunPosition(when, crag.lat, crag.lon);
     if (sun.altitude <= 3) continue;
     const cloud = hourly.cloudcover?.[i] ?? 0;
@@ -1236,7 +1247,7 @@ function sandstoneDryingCredit(crag, hourly, i, effectiveWind, windDir, rh, dt, 
       : 0;
   }
 
-  const when = melbourneHourToDate(iso);
+  const when = localHourToDate(iso, timezoneForCrag(crag));
   const sun = sunPosition(when, crag.lat, crag.lon);
   const sunOnWall = hasConcreteAspect(crag.aspect)
     ? sunOnCrag(crag, sun.azimuth, sun.altitude, hour)
@@ -1503,64 +1514,6 @@ export function sunOnAspect(aspect, sunAz, sunAlt) {
   return diff <= 75;
 }
 
-// Parse a Melbourne-local ISO hour string ('2026-05-19T08:00') back into a Date
-// (treating the string as Australia/Melbourne wall-clock time).
-const _melbourneHourTimestamps = new Map();
-function melbourneHourToDate(isoLocal) {
-  // Hundreds of sectors reuse the same forecast hours in several scoring
-  // passes. Cache only the deterministic timestamp with bounded memory use,
-  // and return a fresh Date so callers cannot mutate the cache.
-  if (_melbourneHourTimestamps.has(isoLocal)) return new Date(_melbourneHourTimestamps.get(isoLocal));
-  // Melbourne is UTC+10 (AEST) or +11 (AEDT). We need the right offset for the date.
-  // Simplest reliable approach: build a Date from the ISO string interpreted as
-  // local time-zoned via Intl, then extract.
-  // Trick: format the candidate as both UTC and Melbourne and adjust.
-  // For our purposes (only used in sun math, ~1° precision), DST error of 1 hour
-  // shifts azimuth by ~15° — acceptable; but we still want it right.
-  // Use a two-pass approach.
-  const naiveUtc = new Date(isoLocal + 'Z'); // pretend the string is UTC
-  // Find what Melbourne offset is at that instant.
-  const offsetMin = melbourneOffsetMinutes(naiveUtc);
-  const timestamp = naiveUtc.getTime() - offsetMin * 60000;
-  if (_melbourneHourTimestamps.size >= 1024) {
-    _melbourneHourTimestamps.delete(_melbourneHourTimestamps.keys().next().value);
-  }
-  _melbourneHourTimestamps.set(isoLocal, timestamp);
-  return new Date(timestamp);
-}
-
-// Hoisted to module scope (v60 perf fix) — this used to be constructed fresh
-// inside melbourneOffsetMinutes() on every call. Constructing an
-// Intl.DateTimeFormat is expensive (~65µs), and melbourneHourToDate() (which
-// calls this) runs once per hourly timestep inside computeSunWindow() and
-// computeSolarExposure() — up to ~24 × 8 × 81 = ~15,500 calls for a full VIC
-// request. That alone measured at ~2.5s of CPU time, the dominant cost
-// behind the Cloudflare error 1102 (CPU limit exceeded) on
-// GET /forecast/scored. The Intl.DateTimeFormat options never change, so a
-// single reused instance is safe and ~14x faster per call.
-const _melbourneOffsetFmt = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'Australia/Melbourne',
-  hour: '2-digit', hour12: false,
-  year: 'numeric', month: '2-digit', day: '2-digit',
-  minute: '2-digit',
-});
-
-function melbourneOffsetMinutes(date) {
-  // Compute the timezone offset of Australia/Melbourne at this instant.
-  const parts = _melbourneOffsetFmt.formatToParts(date);
-  const get = (t) => parts.find(p => p.type === t)?.value;
-  let h = parseInt(get('hour'), 10);
-  if (h === 24) h = 0;
-  const localMs = Date.UTC(
-    parseInt(get('year'), 10),
-    parseInt(get('month'), 10) - 1,
-    parseInt(get('day'), 10),
-    h,
-    parseInt(get('minute'), 10),
-  );
-  return (localMs - date.getTime()) / 60000;
-}
-
 function closureLabelForDate(crag, dateStr) {
   if (crag.closedAll) {
     return crag.closureReason ? `closed – ${crag.closureReason}` : 'currently closed';
@@ -1581,17 +1534,32 @@ function closureLabelForDate(crag, dateStr) {
 // past hours are dropped from the strip.
 const hourlyScoringContext = new WeakMap();
 
+function daylightHour(crag, isoHour) {
+  if (!Number.isFinite(crag?.lat) || !Number.isFinite(crag?.lon)) return true;
+  const start = localHourToDate(isoHour, timezoneForCrag(crag));
+  return sunPosition(start, crag.lat, crag.lon).altitude > 0 &&
+    sunPosition(new Date(start.getTime() + 3600000), crag.lat, crag.lon).altitude > 0;
+}
+
+export function remainingDaylightHours(crag, date, fromHour) {
+  let count = 0;
+  for (let h = Math.max(7, fromHour); h < 20; h++) {
+    if (daylightHour(crag, `${date}T${String(h).padStart(2, '0')}:00`)) count++;
+  }
+  return Math.min(5, count);
+}
+
 function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHour = 19) {
   if (!hourly || !hourly.time || !drynessSeries.length) return [];
   const out = [];
-  const nowHour = melbourneHourNow();
-  const isTodayStrip = dateStr === melbourneDateString(new Date());
+  const nowHour = localHour(new Date(), timezoneForCrag(crag));
+  const isTodayStrip = dateStr === localDate(new Date(), timezoneForCrag(crag));
   for (let i = 0; i < hourly.time.length; i++) {
     const t = hourly.time[i];
     if (!t.startsWith(dateStr)) continue;
     const hour = parseInt(t.slice(11, 13), 10);
     if (hour < fromHour || hour > toHour) continue;
-    const when = melbourneHourToDate(t);
+    const when = localHourToDate(t, timezoneForCrag(crag));
     const sun = sunPosition(when, crag.lat, crag.lon);
     // Mixed/unknown aspect → we don't know if the wall is lit. Surface that as
     // null so the UI can show a neutral marker rather than "in shade".
@@ -1631,6 +1599,7 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
       rainEventMm: drynessSeries[i]?.rainEventMm ?? 0,
       currentEventMm: drynessSeries[i]?.currentEventMm ?? 0,
       sunAlt: Math.round(sun.altitude),
+      daylight: daylightHour(crag, t),
       sunAz: Math.round(sun.azimuth),
       sunOnWall: lit,
       // Mark the cell whose hour matches the current Melbourne hour so the UI
@@ -1668,8 +1637,12 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
     const wetRock = wetRockCondition(crag, out[i]);
     if (wetRock.cap < 100) out[i].wetRockCondition = wetRock;
     const nearby = out.slice(Math.max(0, i - 2), Math.min(out.length, i + 3));
-    const rainNeighbours = nearby.filter(n => n !== out[i] && n.precipProb > 30).length;
+    const rainNeighbours = nearby.filter(n => n !== out[i]).reduce((sum, n) =>
+      sum + Math.max(0, Math.min(1, (n.precipProb ?? 0) / 60)), 0);
     hourlyScoringContext.set(out[i], { rainNeighbours, peakDayProb, meanDayCloud });
+    // Compact context lets saved forecasts explain a newly selected remaining
+    // session using exactly the same scoring inputs after time has advanced.
+    out[i].scoreContext = [rainNeighbours, peakDayProb, meanDayCloud];
     out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb, meanDayCloud);
   }
   // Keep the native hourly contract numeric. Missing hours are omitted rather
@@ -1685,20 +1658,8 @@ function buildTomorrowHourly(crag, hourly, drynessSeries, tomorrowDate) {
 // For the today strip we drop hours already past so the strip is forward-looking.
 // We always keep the *current* hour (use floor of now).
 function buildTodayHourly(crag, hourly, drynessSeries, todayDate) {
-  const fromHour = Math.max(6, melbourneHourNow());
+  const fromHour = Math.max(6, localHour(new Date(), timezoneForCrag(crag)));
   return buildDayHourly(crag, hourly, drynessSeries, todayDate, fromHour, 19);
-}
-
-// Hoisted (v60 perf) — same reasoning as _melbourneOffsetFmt above.
-const _melbourneHourFmt = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Australia/Melbourne', hour: '2-digit', hour12: false,
-});
-
-// Current hour-of-day in Melbourne local time, as an integer 0–23.
-function melbourneHourNow() {
-  const parts = _melbourneHourFmt.formatToParts(new Date());
-  const h = parts.find(p => p.type === 'hour')?.value ?? '0';
-  return parseInt(h, 10) % 24;
 }
 
 // Score a single hour 0–100 for climbing quality at this crag.
@@ -1728,6 +1689,9 @@ export function directionalWindPenalty(crag, windDir, windKmh) {
 export function marineCondition(crag, hour) {
   if (!crag?.marineHazard) return { penalty: 0, cap: 100, label: null, detail: null };
 
+  const fields = ['waveHeight', 'wavePeriod', 'swellHeight', 'swellPeriod'];
+  const present = fields.filter(key => Number.isFinite(hour?.[key]) && hour[key] >= 0).length;
+  const availability = present === fields.length ? 'available' : present ? 'partial' : 'unavailable';
   const waveHeight = Math.max(
     Number.isFinite(hour?.waveHeight) ? hour.waveHeight : 0,
     Number.isFinite(hour?.swellHeight) ? hour.swellHeight : 0,
@@ -1786,10 +1750,11 @@ export function marineCondition(crag, hour) {
     windLabel = 'strong coastal wind';
   }
 
-  const label = swellLabel === 'high swell' ? swellLabel
+  const hazardLabel = swellLabel === 'high swell' ? swellLabel
     : windLabel === 'strong coastal wind' ? windLabel
       : swellLabel || windLabel;
-  const detail = label ? [
+  const label = availability === 'available' ? hazardLabel : 'marine conditions unavailable';
+  const detail = hazardLabel ? [
     waveHeight > 0 ? `${waveHeight.toFixed(1)}m waves${wavePeriod ? ` at ${Math.round(wavePeriod)}s` : ''}` : null,
     windKnots > profile.start ? `${Math.round(windKnots)} kn effective wind` : null,
     highTideLift ? 'higher tide phase' : null,
@@ -1797,10 +1762,14 @@ export function marineCondition(crag, hour) {
   return {
     penalty: swellPenalty + windPenalty,
     cap: Math.min(swellCap, windCap),
+    availability,
+    availabilityCap: availability === 'available' ? 100 : 64,
     label,
-    detail: label ? `${label} – ${detail}` : null,
-    waveHeight: waveHeight || null,
-    wavePeriod: wavePeriod || null,
+    detail: availability === 'available' ? (label ? `${label} – ${detail}` : null)
+      : `${present ? 'Incomplete' : 'Missing'} wave/swell forecast; marine assessment unverified` +
+        (hazardLabel ? `; ${hazardLabel} – ${detail}` : ''),
+    waveHeight: present ? waveHeight : null,
+    wavePeriod: present ? wavePeriod : null,
     windKnots,
   };
 }
@@ -1838,9 +1807,10 @@ function computeClimbMarine(crag, hourly, dateStr) {
     sample.penalty > worst.penalty ? sample : worst, best.window[0]);
   return {
     penalty: Math.round(best.penalty),
-    cap: Math.min(...best.window.map(sample => sample.cap)),
-    label: representative.label,
-    detail: representative.detail,
+    cap: Math.min(...best.window.map(sample => Math.min(sample.cap, sample.availabilityCap))),
+    availability: best.window.every(sample => sample.availability === 'available') ? 'available' : 'unavailable',
+    label: best.window.find(sample => sample.availability !== 'available')?.label ?? representative.label,
+    detail: best.window.find(sample => sample.availability !== 'available')?.detail ?? representative.detail,
   };
 }
 
@@ -1873,20 +1843,14 @@ function scoreHourResult(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCl
     [0, 0], [MEASURABLE_RAIN_MM, 15], [0.2, 35], [2, 70], [5, 85], [10, 95],
   ], Math.max(0, h.precip ?? 0));
   // Sustained probability remains a floor, without adding the same rain twice.
-  const probabilityPenalty = h.precipProb > 60 ? Math.min(32, 20 + rainNeighbours * 3)
-    : h.precipProb > 30 ? Math.min(16, 8 + rainNeighbours * 2) : 0;
+  const neighbours = Math.max(0, Math.min(4, rainNeighbours));
+  const probabilityPenalty = interpolate([
+    [0, 0], [30, 8 + neighbours * 2], [60, 20 + neighbours * 3], [100, 20 + neighbours * 3],
+  ], Math.max(0, Math.min(100, h.precipProb ?? 0)));
+  const shadowPenalty = Math.max(0, Math.min(12, ((peakDayProb - 40) / 60) * 12));
   // Amount and probability describe the same rain risk. Use the stronger
   // constraint, so introducing drizzle never removes sustained-rain risk.
-  penalize(Math.max(amountPenalty, probabilityPenalty), 'precip', 'Rain forecast');
-
-  // Day-level rain shadow — applied only to hours that individually look clean
-  // (precipProb ≤ 30%) but the day as a whole has significant rain risk.
-  // Penalty: 0 at peakDayProb ≤ 40%, scaling to -12 at peakDayProb = 100%.
-  // This prevents pre-rain hours from showing 99 when a 60%+ day is incoming.
-  if (h.precipProb <= 30 && peakDayProb > 40) {
-    const shadowPen = Math.round(((peakDayProb - 40) / 60) * 12);
-    penalize(shadowPen, 'precip', 'Wider-day rain risk');
-  }
+  penalize(Math.max(amountPenalty, probabilityPenalty, shadowPenalty), 'precip', 'Rain forecast');
 
   // Day-level cloud cover — mirrors scoreDay's sun-trap and overcast penalties.
   // Threshold lowered to 65% so moderate persistent cloud is captured.
@@ -1922,10 +1886,10 @@ function scoreHourResult(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCl
     additionalFeelsLikeHeat(crag, tFeel, tAir, h.hour);
   penalize(thermalPenalty, 'temp', 'Temperature');
 
-  // Use one residual-moisture constraint, as in scoreDay. The recovery cap
-  // already accounts for wet rock; avoid stacking a dryness penalty on it.
+  // The final result is min(weather minus physical wetness, recovery ceiling).
+  // This takes the stronger constraint, never adds both deficits together.
   const wetRock = h.wetRockCondition ?? wetRockCondition(crag, h);
-  if (h.dryness != null && h.dryness < 100 && wetRock.cap >= 100) {
+  if (h.dryness != null && h.dryness < 100) {
     penalize(Math.round(((100 - h.dryness) / 100) * 25 * residualDryingFactor(crag)), 'dryness', 'Rock dryness');
   }
 
@@ -1961,7 +1925,7 @@ function scoreHourResult(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCl
   // any real penalty can't claim a perfect 100, even if bonuses clawed it
   // all the way back there. Keeps hour-by-hour scores honest relative to
   // the day score, which already applies this same cap.
-  const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap, wetRock.cap);
+  const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap, marine.availabilityCap ?? 100, wetRock.cap);
   const rawFinal = Math.max(0, Math.min(Math.floor(hourlyCeiling), Math.round(s)));
   const score = (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
   const weatherFinal = Math.max(0, Math.min(Math.floor(Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap)), Math.round(s)));
@@ -1976,11 +1940,11 @@ function scoreHourResult(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCl
       const integrityLimited = hasPenalty && rawFinal === 100;
       const category = bounded || integrityLimited ? 'sun'
         : wetRock.cap === hourlyCeiling ? 'dryness'
-          : marine.cap === hourlyCeiling ? 'marine' : 'temp';
+          : Math.min(marine.cap, marine.availabilityCap ?? 100) === hourlyCeiling ? 'marine' : 'temp';
       const label = bounded ? 'Score bounds' : integrityLimited ? 'Penalty integrity limit'
         : category === 'dryness' ? 'Wet-rock recovery'
           : category === 'marine' ? 'Marine limit' : 'Temperature limit';
-      add(category, label, score - s, 'Hourly score limits and rounding');
+      add(category, label, score - s, category === 'marine' ? marine.detail : 'Hourly score limits and rounding');
     }
   }
   return { score, weatherScore, contributions };
@@ -1996,7 +1960,8 @@ export function bestWindow(hourly, crag = null, minimumHours = 1) {
   // Keep 6am in the hourly strip for planning context, but do not let it
   // influence the representative climbing session. Daily scoring starts at
   // 7am at the earliest.
-  const eligible = hourly.filter(sample => sample.hour >= 7 && Number.isFinite(sample.score));
+  const eligible = hourly.filter(sample => sample.hour >= 7 && Number.isFinite(sample.score) &&
+    sample.daylight !== false && !(Number.isFinite(sample.sunAlt) && sample.sunAlt <= 0));
   if (eligible.length === 0) return null;
 
   // A climbing day is represented by the strongest usable session, not one
@@ -2041,6 +2006,29 @@ export function bestWindow(hourly, crag = null, minimumHours = 1) {
     runEnd: end,
     runHours: count,
     runAvg: avg,
+    usability: windowUsability(hours, crag),
+  };
+}
+
+function windowUsability(hours, crag) {
+  crag = crag ?? {};
+  let usableHours = 0, dryHours = 0, wetHours = 0, run = 0, longestUsableRun = 0;
+  for (const h of hours) {
+    const dry = Number.isFinite(h.precip) && h.precip < MEASURABLE_RAIN_MM;
+    if (dry) dryHours++;
+    if (Number.isFinite(h.precip) && !dry) wetHours++;
+    const wet = h.wetRockCondition ?? wetRockCondition(crag, h);
+    const marine = h.marineCondition ?? marineCondition(crag, h);
+    const usable = dry && Number.isFinite(h.precipProb) && h.precipProb <= 35 &&
+      h.score >= 50 && wet.cap >= 80 && (!crag?.marineHazard || marine.availability === 'available');
+    if (usable) { usableHours++; run++; longestUsableRun = Math.max(run, longestUsableRun); }
+    else run = 0;
+  }
+  return { dryHours, wetHours, usableHours, longestUsableRun,
+    interrupted: wetHours > 0 && wetHours < hours.length,
+    label: wetHours === hours.length ? 'Rain throughout window'
+      : wetHours ? `Rain in ${wetHours}/${hours.length}h of window`
+        : `${usableHours}/${hours.length}h meet dry, low-risk session criteria`,
   };
 }
 
@@ -2053,18 +2041,26 @@ export function drynessBand(score) {
   return { label: 'Soaked', short: 'Soaked', color: 'error' };
 }
 
-function currentDryness(hourly, series) {
+function currentDryness(hourly, series, timezone) {
   if (!hourly || !hourly.time || !series.length) return null;
-  const idx = nearestHourIndex(hourly.time, new Date());
+  const idx = nearestHourIndex(hourly.time, new Date(), timezone, hourly.timeUtc);
   if (idx == null) return null;
   return series[idx]?.dryness ?? null;
 }
 
-// Find the index in hourly.time closest to a given Date (in Australia/Melbourne).
-function nearestHourIndex(timeArr, when) {
-  // hourly.time is in local Melbourne time as 'YYYY-MM-DDTHH:00' (because we set timezone)
+// Find the current local model hour, retaining absolute timestamps across DST.
+function nearestHourIndex(timeArr, when, timezone, timeUtc) {
+  // hourly.time is in the destination timezone as YYYY-MM-DDTHH:00.
   // Build the target local hour string for comparison.
-  const targetIso = melbourneIsoHour(when);
+  if (timeUtc?.length) {
+    let best = -1, diff = Infinity;
+    for (let i = 0; i < timeUtc.length; i++) {
+      const delta = when.getTime() - timeUtc[i];
+      if (delta >= 0 && delta < diff) { best = i; diff = delta; }
+    }
+    return best < 0 ? null : best;
+  }
+  const targetIso = localIsoHour(when, timezone);
   // Exact match preferred.
   const exact = timeArr.indexOf(targetIso);
   if (exact !== -1) return exact;
@@ -2083,21 +2079,6 @@ function stringToHourDiff(a, b) {
   const da = new Date(a);
   const db = new Date(b);
   return (da - db) / 3600000;
-}
-
-// Hoisted (v60 perf) — same reasoning as _melbourneOffsetFmt above.
-const _melbourneIsoHourFmt = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Australia/Melbourne',
-  year: 'numeric', month: '2-digit', day: '2-digit',
-  hour: '2-digit', minute: '2-digit', hour12: false,
-});
-
-function melbourneIsoHour(when) {
-  const parts = _melbourneIsoHourFmt.formatToParts(when);
-  const get = (t) => parts.find(p => p.type === t)?.value;
-  let hour = get('hour');
-  if (hour === '24') hour = '00';
-  return `${get('year')}-${get('month')}-${get('day')}T${hour}:00`;
 }
 
 function drynessAtLocalHour(hourly, series, dateStr, hour) {
@@ -2135,9 +2116,9 @@ function extractPastDailyPrecip(hourly, todayDate, days = 4) {
   }));
 }
 
-function findLastSignificantRain(hourly) {
+function findLastSignificantRain(hourly, timezone) {
   if (!hourly || !hourly.time) return null;
-  const nowIdx = nearestHourIndex(hourly.time, new Date());
+  const nowIdx = nearestHourIndex(hourly.time, new Date(), timezone, hourly.timeUtc);
   if (nowIdx == null) return null;
   // Walk backward to find the end of the most recent wet cluster.
   let endIdx = -1;
@@ -2281,7 +2262,9 @@ function hourlyRainSummary(hourly, date, startH, cutoffH) {
     precipProb: hourly.precipitation_probability?.[i],
   }] : []);
   // Incomplete model days use the conservative legacy summary instead.
-  return samples.length === 24 ? rainSummary(samples, startH, cutoffH) : null;
+  return samples.length >= 23 && samples.length <= 25 &&
+    Array.from({ length: cutoffH - startH }, (_, i) => startH + i).every(h => samples.some(s => s.hour === h))
+    ? rainSummary(samples, startH, cutoffH) : null;
 }
 
 function climbableRain(day, startH, cutoffH) {
@@ -2683,33 +2666,19 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     ? Math.min(1.4, 1.0 + (mmPerHour - 1) * 0.1)
     : 1.0;
 
-  if (effectiveSum > 5) {
-    const pen = Math.round(60 * concentrationMult);
-    score -= pen;
-    reasons.push('rain expected');
-    add('precip', 'Rain forecast', -pen, rainDetail);
-  } else if (effectiveSum > 1) {
-    const pen = Math.round(30 * concentrationMult);
-    score -= pen;
-    reasons.push('showers likely');
-    add('precip', 'Showers likely', -pen, rainDetail);
-  } else if (effectiveProb > 60) {
-    score -= 20;
-    reasons.push(`${Math.round(peakProb)}% rain chance`);
-    add('precip', 'Rain chance', -20, rainDetail);
-  } else if (effectiveSum >= 0.2) {
-    const pen = 12;
-    score -= pen;
-    reasons.push('light rain');
-    add('precip', 'Light rain', -pen, rainDetail);
-  } else if (effectiveProb > 30) {
-    score -= 8;
-    add('precip', 'Rain chance', -8, rainDetail);
-  } else if (effectiveSum > 0) {
-    const pen = 6;
-    score -= pen;
-    reasons.push('possible drizzle');
-    add('precip', 'Possible drizzle', -pen, rainDetail);
+  const dailyAmountPenalty = effectiveSum > 5 ? Math.round(60 * concentrationMult)
+    : effectiveSum > 1 ? Math.round(30 * concentrationMult)
+      : effectiveSum >= 0.2 ? 12 : effectiveSum > 0 ? 6 : 0;
+  const dailyProbabilityPenalty = interpolate([[0, 0], [30, 8], [60, 20], [100, 20]], effectiveProb);
+  const rainPenalty = Math.round(Math.max(dailyAmountPenalty, dailyProbabilityPenalty));
+  if (rainPenalty > 0) {
+    score -= rainPenalty;
+    const amountDominates = dailyAmountPenalty >= dailyProbabilityPenalty;
+    const label = !amountDominates ? 'Rain chance' : effectiveSum > 5 ? 'Rain forecast'
+      : effectiveSum > 1 ? 'Showers likely' : effectiveSum >= 0.2 ? 'Light rain' : 'Possible drizzle';
+    reasons.push(amountDominates ? effectiveSum > 5 ? 'rain expected' : effectiveSum > 1 ? 'showers likely'
+      : effectiveSum >= 0.2 ? 'light rain' : 'possible drizzle' : `${Math.round(peakProb)}% rain chance`);
+    add('precip', label, -rainPenalty, rainDetail);
   }
   // For days 4–8 keep the broad daily rain outlook, but avoid treating a
   // short shower outside a verified dry five-hour period as all-day rain.
@@ -2742,9 +2711,9 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     : (day.morningDryness != null && day.afternoonDryness != null)
       ? Math.min(day.morningDryness, day.afternoonDryness)
       : (day.dayDryness ?? day.morningDryness ?? day.afternoonDryness ?? 100);
-  if (dryness < 100 && wetRockScoreCap >= 100) {
-    // While a wet-rock recovery cap is active, that cap already represents
-    // residual moisture. Do not charge a second physical-dryness penalty.
+  if (dryness < 100) {
+    // Keep physical wetness represented. The final recovery ceiling selects
+    // the stronger constraint rather than adding its deficit to this penalty.
     const penalty = Math.round(((100 - dryness) / 100) * 30 * residualDryingFactor(crag));
     score -= penalty;
     if (dryness < 70 && residualDryingFactor(crag) < 1) reasons.push('recent rain – check for seepage');
@@ -2832,7 +2801,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   }
 
   const marine = day.climbMarine;
-  if (marine?.penalty > 0) {
+  if (marine && (marine.penalty > 0 || marine.cap < 100)) {
     score -= marine.penalty;
     marineScoreCap = marine.cap;
     reasons.push(marine.label);
@@ -2963,6 +2932,10 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // A crag that earned any score penalty cannot claim a perfect 100.
   // If penalties fired but bonuses compensated back to 100, cap at 99
   // so the score honestly reflects that something is working against it.
+  if (score > marineScoreCap) {
+    add('marine', 'Marine limit', marineScoreCap - score, day.climbMarine?.detail);
+    score = marineScoreCap;
+  }
   const hasPenalty = contributions.some(c => c.delta < 0);
   // Bonuses may improve other factors but cannot erase temperature severity.
   const tooWarmForHardClimbing = reasons.some(reason =>
@@ -3058,9 +3031,12 @@ function isDailyEstimateDate(date, todayDate) {
 // Explain the same hourly calculation that supplied the headline. Context is
 // private and ephemeral, so it never expands the native hourly wire contract.
 function explainWindow(crag, day, window, score) {
-  if (!window.hours.every(hour => hourlyScoringContext.has(hour))) return null;
+  const contextFor = hour => hourlyScoringContext.get(hour) ??
+    (hour.scoreContext?.length === 3 ? { rainNeighbours: hour.scoreContext[0],
+      peakDayProb: hour.scoreContext[1], meanDayCloud: hour.scoreContext[2] } : null);
+  if (!window.hours.every(hour => contextFor(hour))) return null;
   const results = window.hours.map(hour => {
-    const { rainNeighbours, peakDayProb, meanDayCloud } = hourlyScoringContext.get(hour);
+    const { rainNeighbours, peakDayProb, meanDayCloud } = contextFor(hour);
     return scoreHourResult(crag, hour, rainNeighbours, peakDayProb, meanDayCloud, true);
   });
   const period = `${window.start}:00–${window.end}:00`;
@@ -3080,6 +3056,10 @@ function explainWindow(crag, day, window, score) {
     groups.set(key, existing);
   }
   const meanScore = results.reduce((sum, result) => sum + result.score, 0) / results.length;
+  // External callers can supply hand-built windows. Never use persisted
+  // context to explain scores that were calculated from different inputs.
+  if (results.some((result, i) => result.score !== window.hours[i].score) ||
+      Math.round(Math.min(meanScore, window.temperatureCap ?? 100)) !== score) return null;
   if (score < Math.round(meanScore)) groups.set('temp:Session temperature limit', {
     category: 'temp', label: 'Session temperature limit', delta: score - meanScore,
     detail: `Temperature ceiling for ${period}`,
@@ -3106,7 +3086,7 @@ function explainWindow(crag, day, window, score) {
   const thermal = climbingTemperature(crag, ct, day);
   const reasons = [
     ...new Set(window.hours.map(hour => hour.marineCondition?.label).filter(Boolean)),
-    ...(rain.sum >= MEASURABLE_RAIN_MM ? ['rain expected']
+    ...(rain.sum >= MEASURABLE_RAIN_MM ? [window.usability?.label ?? 'rain expected']
       : rain.peakProb > 30 ? [`${Math.round(rain.peakProb)}% rain chance`] : []),
     ...(day.wetRockLabel ? [day.wetRockLabel] : []),
     ...(!day.wetRockLabel && day.sessionDryness < 70
@@ -3133,7 +3113,7 @@ export function rankByDay(forecasts, dayDates) {
           : date === fc.tomorrowDate ? fc.tomorrowBestWindow : null));
       const sessionDryness = hourlyWindow?.hours.map(hour => hour.dryness).filter(Number.isFinite);
       const nowHour = date === fc.todayDate
-        ? fc.todayHourly?.find(hour => hour.hour === melbourneHourNow()) : null;
+        ? fc.todayHourly?.find(hour => hour.hour === localHour(new Date(), timezoneForCrag(fc.crag))) : null;
       const currentHumidity = nowHour ? humiditySummary([nowHour]) : null;
       const dayHumidity = currentHumidity || hourlyWindow ? { ...fc.days[dayIdx],
         ...(currentHumidity ? { currentHumidity: { ...currentHumidity,
@@ -3142,6 +3122,14 @@ export function rankByDay(forecasts, dayDates) {
           startHour: hourlyWindow.start, endHour: hourlyWindow.end, period: 'scored-session' } } : {}),
       } : fc.days[dayIdx];
       const day = hourlyWindow ? { ...dayHumidity,
+        dailyContext: fc.days[dayIdx].dailyContext ?? {
+          climbTemps: { ...fc.days[dayIdx].climbTemps, temperatureSamples: undefined },
+          climbRain: fc.days[dayIdx].climbRain,
+          wetRockCap: fc.days[dayIdx].wetRockCap,
+          wetRockLabel: fc.days[dayIdx].wetRockLabel,
+          wetRockDetail: fc.days[dayIdx].wetRockDetail,
+          rockReadiness: fc.days[dayIdx].rockReadiness,
+        },
         temperaturePeriod: 'session',
         climbTemps: windowTemperatures(fc.crag, hourlyWindow.hours),
         climbRain: rainSummary(hourlyWindow.hours, hourlyWindow.start, hourlyWindow.end),
@@ -3176,6 +3164,7 @@ export function rankByDay(forecasts, dayDates) {
           end: hourlyWindow.end,
           hours: hourlyWindow.count,
           average: windowScore,
+          ...(hourlyWindow.usability ? { usability: hourlyWindow.usability } : {}),
           ...(hourlyWindow.temperatureCap != null ? {
             hourlyAverage: hourlyWindow.hourlyAvg,
             temperatureCap: hourlyWindow.temperatureCap,
@@ -3196,16 +3185,22 @@ export function rankByDay(forecasts, dayDates) {
       } else if (isClosed) {
         scoreBasis = 'closure';
       }
+      if (!hourlyWindow && date === fc.todayDate && !isClosed) {
+        reasons = [remainingDaylightHours(fc.crag, date, localHour(new Date(), timezoneForCrag(fc.crag))) === 0
+          ? 'No daylight window remaining' : 'Hourly window unavailable', ...reasons].slice(0, 3);
+      }
 
       rows.push({
         crag: fc.crag,
+        timezone: timezoneForCrag(fc.crag),
+        localToday: fc.todayDate,
         day,
         prevDay,
         score,
         scoreBasis,
         scoreWindow,
         weatherScore,
-        weatherScoreBasis: scoreBasis === 'best-hourly-window' && hourlyWindow.hours.every(hour => hourlyScoringContext.has(hour))
+        weatherScoreBasis: scoreBasis === 'best-hourly-window' && hourlyWindow.hours.every(hour => hourlyScoringContext.has(hour) || hour.scoreContext)
           ? 'best-hourly-window' : 'daily-estimate',
         rockReadiness,
         reasons,
@@ -3239,6 +3234,66 @@ export function rankByDay(forecasts, dayDates) {
     ranked[date] = rows;
   }
   return ranked;
+}
+
+// Re-select today's remaining session from saved hourly weather without a new
+// provider request. Saved scores retain their original context and data age.
+export function revalidateScoredToday(payload) {
+  const now = new Date();
+  const needsReselection = Object.entries(payload.today).some(([id, details]) => {
+    const zone = timezoneForCrag(payload.crags[id]);
+    const date = localDate(now, zone), from = localHour(now, zone);
+    return (details.todayDate && details.todayDate !== date) ||
+      details.todayHourly.some(h => h.hour < from || h.isNow !== (h.hour === from));
+  });
+  if (!needsReselection) return payload;
+  const groups = new Map();
+  const today = { ...payload.today };
+  for (const [id, original] of Object.entries(payload.today)) {
+    const crag = payload.crags[id];
+    const zone = timezoneForCrag(crag);
+    const date = localDate(now, zone), from = localHour(now, zone);
+    const row = payload.byDate[date]?.find(row => row.cragId === id);
+    if (!row) continue;
+    const rolled = original.todayDate && original.todayDate !== date;
+    const details = rolled ? { ...original,
+      todayDate: date, tomorrowDate: addDays(date, 1),
+      todayHourly: original.tomorrowDate === date ? original.tomorrowHourly : [],
+      todayBestSubcragId: original.tomorrowBestSubcragId,
+      tomorrowHourly: [], tomorrowBestWindow: null, tomorrowBestSubcragId: null,
+      nowDryness: null, lastRain: null, pastPrecip: [],
+    } : original;
+    today[id] = details;
+    const hours = details.todayHourly.filter(h => h.hour >= from)
+      .map(h => ({ ...h, isNow: h.hour === from }));
+    const context = row.day.dailyContext ?? {};
+    const day = { ...row.day, ...context, temperaturePeriod: 'climbing',
+      currentHumidity: undefined, sessionHumidity: undefined, sessionDryness: undefined,
+      ...(row.day.dailyContext ? {} : { climbTemps: undefined, climbRain: null }),
+    };
+    const window = bestWindow(hours, crag, remainingDaylightHours(crag, date, from));
+    if (!groups.has(date)) groups.set(date, {});
+    groups.get(date)[id] = { crag, days: [...(row.prevDay ? [row.prevDay] : []), day],
+      todayDate: date, todayHourly: hours, todayBestWindow: window,
+      nowDryness: details.nowDryness, lastRain: details.lastRain, pastPrecip: details.pastPrecip,
+    };
+  }
+  const byDate = { ...payload.byDate };
+  for (const [date, forecasts] of groups) {
+    const ranked = rankByDay(forecasts, [date])[date];
+    const updated = new Map();
+    for (const { crag, ...row } of ranked) {
+      const source = forecasts[row.bestSubcragId || crag.id];
+      today[crag.id] = { ...today[crag.id],
+        todayDate: date, tomorrowDate: addDays(date, 1), timezone: timezoneForCrag(crag),
+        todayBestSubcragId: row.bestSubcragId || null,
+        todayHourly: source.todayHourly, todayBestWindow: source.todayBestWindow,
+      };
+      updated.set(crag.id, { cragId: crag.id, ...row });
+    }
+    byDate[date] = byDate[date].map(row => updated.get(row.cragId) || row).sort((a, b) => b.score - a.score);
+  }
+  return { ...payload, today, byDate };
 }
 
 // Weekend-Away trip score: combines Fri/Sat/Sun into a single 0–100 score
@@ -3305,37 +3360,11 @@ export function shortDayName(dateStr) {
   return d.toLocaleDateString('en-AU', { weekday: 'short' });
 }
 
-// Returns a YYYY-MM-DD string for a Date interpreted in Australia/Melbourne.
-function melbourneDateString(date) {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Australia/Melbourne',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  });
-  return fmt.format(date);
-}
-
-// Returns today's date in Australia/Melbourne as a Date at midnight local.
-function todayInMelbourne(now = new Date()) {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Australia/Melbourne',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  });
-  return new Date(fmt.format(now) + 'T00:00:00');
-}
-
-// Returns 10 dates: today + next 9 days, as YYYY-MM-DD strings.
-export function weekDates(now = new Date()) {
-  const today = todayInMelbourne(now);
-  const dates = [];
-  for (let i = 0; i < 10; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    dates.push(`${yyyy}-${mm}-${dd}`);
-  }
-  return dates;
+// Regional API calendars use the destination's zone; ALL keeps its documented
+// Melbourne reference calendar and exposes per-crag local today/tomorrow dates.
+export function weekDates(now = new Date(), timezone = 'Australia/Melbourne') {
+  const today = localDate(now, timezone);
+  return Array.from({ length: 10 }, (_, i) => addDays(today, i));
 }
 
 // Get the dates that make up the relevant "weekend trip" window.
@@ -3348,10 +3377,10 @@ export function weekDates(now = new Date()) {
 //
 // We deliberately do NOT roll forward to next week on Sat/Sun — a weekend trip
 // you can still leave for is more useful than one a week away.
-export function weekendDates(now = new Date()) {
-  // Today's date in Melbourne local time.
+export function weekendDates(now = new Date(), timezone = 'Australia/Melbourne') {
+  // Today's date in the destination timezone.
   const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Australia/Melbourne',
+    timeZone: timezone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

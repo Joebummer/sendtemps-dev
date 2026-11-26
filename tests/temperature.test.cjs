@@ -215,7 +215,7 @@ function weatherFixture(url) {
 }
 
 
-test('forecast pipeline applies elevation once to hourly cells, temperature bins and daily means', async () => {
+test('forecast pipeline uses provider elevation without a second temperature correction', async () => {
   const harness = await loadWorker(async url => {
     const data = weatherFixture(url);
     for (const f of data) {
@@ -227,8 +227,7 @@ test('forecast pipeline applies elevation once to hourly cells, temperature bins
   const forecasts = await harness.forecasts.fetchAllForecasts('NSW');
   for (const id of ['bluemtns-shipley', 'bluemtns-bowenscreek', 'bluemtns-thefreezer', 'bluemtns-bell-shady', 'westside-main']) {
     const f = forecasts[id];
-    const correction = Math.max(0, f.crag.elevation - 400) / 1000 * 6.5;
-    const expected = 10 - correction;
+    const expected = 10;
     const day = f.days.find(d => d.date === '2026-09-13');
     assert.ok(Math.abs(day.climbTemps.meanApparent - expected) < 1e-9);
     assert.ok(Math.abs(day.tFeel - expected) < 1e-9);
@@ -237,12 +236,8 @@ test('forecast pipeline applies elevation once to hourly cells, temperature bins
       assert.ok(Math.abs(hour.apparentTemp - expected) < 1e-9, id + ': hourly correction');
       assert.ok(Math.abs(hour.temp - expected) < 1e-9, id + ': air correction');
     }
-    if (correction > 0) {
-      assert.equal(day.climbTemps.hoursInRange, 0, id + ': bins use corrected temperatures');
-      assert.equal(day.climbTemps.hoursCold, day.climbTemps.climbHours);
-    } else {
-      assert.equal(day.climbTemps.hoursInRange, day.climbTemps.climbHours);
-    }
+    assert.equal(day.climbTemps.hoursInRange, day.climbTemps.climbHours);
+    assert.equal(day.elevCorrection, null);
   }
 });
 

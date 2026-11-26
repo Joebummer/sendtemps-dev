@@ -12,7 +12,7 @@
  *     2. Checks each subscriber's favourited crags against their score threshold
  */
 
-import { fetchOpenMeteo, fetchAllForecasts, rankByDay, rankWeekendTrip, weekDates, weekendDates } from './lib/forecast.js';
+import { fetchOpenMeteo, fetchAllForecasts, rankByDay, rankWeekendTrip, weekDates, weekendDates, revalidateScoredToday, regionTimezone } from './lib/forecast.js';
 import { CRAGS } from './lib/crags.js';
 import { handleComparison } from './lib/comparison.js';
 
@@ -463,7 +463,7 @@ const SCORED_FALLBACK_TTL = 3600; // at most one hour old, same local date and s
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-11-26-continuous-hourly-rain-v17';
+const SCORED_CACHE_VERSION = '2026-11-26-local-time-provider-elevation-v19';
 const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 
 const SCORED_DEADLINE_MS = 12000;
@@ -510,7 +510,7 @@ function normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip, 
   };
 
   const byDate = {};
-  for (const date of dates) {
+  for (const date of Object.keys(ranked)) {
     const rows = ranked[date] || [];
     byDate[date] = rows.map((row) => {
       rememberCrag(row.crag);
@@ -526,14 +526,19 @@ function normalizeScoredResponse(region, dates, tripDates, ranked, weekendTrip, 
   });
 
   const today = {};
-  const todayRows = new Map((ranked[dates[0]] || []).map(row => [row.crag.id, row]));
-  const tomorrowRows = new Map((ranked[dates[1]] || []).map(row => [row.crag.id, row]));
+  const todayRows = new Map(Object.values(forecasts).map(f => [f.crag.id,
+    ranked[f.todayDate]?.find(row => row.crag.id === f.crag.id)]));
+  const tomorrowRows = new Map(Object.values(forecasts).map(f => [f.crag.id,
+    ranked[f.tomorrowDate]?.find(row => row.crag.id === f.crag.id)]));
   for (const cragId in forecasts) {
     if (!crags[cragId]) continue; // only include crags actually referenced in this region's output
     const f = forecasts[cragId];
     const todaySource = forecasts[todayRows.get(cragId)?.bestSubcragId] || f;
     const tomorrowSource = forecasts[tomorrowRows.get(cragId)?.bestSubcragId] || f;
     today[cragId] = {
+      timezone: f.crag.timezone || regionTimezone(f.crag.state),
+      todayDate: f.todayDate,
+      tomorrowDate: f.tomorrowDate,
       todayBestSubcragId: todayRows.get(cragId)?.bestSubcragId || null,
       todayHourly: todaySource.todayHourly,
       todayBestWindow: todaySource.todayBestWindow,
@@ -555,7 +560,11 @@ const SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const SNAPSHOT_FRESH_AGE_MS = 30 * 60 * 1000;
 const SNAPSHOT_READ_MS = 2000;
 // Keep snapshots from earlier scoring models out of newly scored responses.
-const snapshotKey = region => `scored/v10/${region}.json`;
+const snapshotKey = region => `scored/v12/${region}.json`;
+
+function scoringDates(forecasts, dates) {
+  return [...new Set([...dates, ...Object.values(forecasts).map(f => f.todayDate)])].sort();
+}
 
 async function refreshForecastSnapshot(event, env) {
   const bucket = env.FORECAST_SNAPSHOTS;
@@ -563,14 +572,14 @@ async function refreshForecastSnapshot(event, env) {
   const regions = [...SCORED_REGIONS];
   const region = regions[Math.floor(event.scheduledTime / 120000) % regions.length];
   const generatedAt = new Date().toISOString();
-  const dates = weekDates(new Date(generatedAt));
+  const dates = weekDates(new Date(generatedAt), regionTimezone(region));
   try {
     const forecasts = await fetchAllForecasts(region, env.OPEN_METEO_API_KEY, env.WEATHER_REQUEST_LIMITER);
     const expected = CRAGS.filter(crag => region === 'ALL' || crag.state === region);
     if (expected.some(crag => !forecasts[crag.id]?.days?.some(day => day.date === dates[0]))) {
       throw new Error('incomplete forecast');
     }
-    const ranked = rankByDay(forecasts, dates);
+    const ranked = rankByDay(forecasts, scoringDates(forecasts, dates));
     const snapshot = {
       generatedAt,
       payload: normalizeScoredResponse(region, dates, [], ranked, [], forecasts),
@@ -595,20 +604,12 @@ async function readForecastSnapshot(bucket, region, today) {
   if (offset === 1) {
     // The previously calculated tomorrow hours now belong to today. Hourly
     // data for the new tomorrow was never stored in this response format.
-    const todayDetails = Object.fromEntries(Object.entries(payload.today).map(([id, row]) => [id, {
-      todayBestSubcragId: row.tomorrowBestSubcragId,
-      todayHourly: row.tomorrowHourly,
-      todayBestWindow: row.tomorrowBestWindow,
-      tomorrowBestSubcragId: null,
-      tomorrowHourly: [],
-      tomorrowBestWindow: null,
-      nowDryness: null,
-      lastRain: null,
-      pastPrecip: [],
-    }]));
     const dates = payload.dates.slice(1);
-    const byDate = Object.fromEntries(dates.map(date => [date, payload.byDate[date]]));
-    snapshot.payload = { ...payload, dates, byDate, today: todayDetails };
+    // Keep any earlier civil date still current in a western time zone. The
+    // revalidator rolls each crag independently using its own today metadata.
+    const byDate = { ...payload.byDate };
+    if (region !== 'ALL') delete byDate[payload.dates[0]];
+    snapshot.payload = { ...payload, dates, byDate };
   }
   return { ...snapshot, snapshotStale: offset === 1 || age > SNAPSHOT_FRESH_AGE_MS };
 }
@@ -624,7 +625,8 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
   const tripEnd = url.searchParams.get('tripEnd') || null;
 
   const cache = caches.default;
-  const dates = weekDates();
+  const timezone = regionTimezone(region);
+  const dates = weekDates(new Date(), timezone);
   // One regional dataset per edge location, independent of trip dates and
   // irrelevant query parameters. The local date prevents reuse across midnight.
   // This internal key is not a public route and never contains CORS headers.
@@ -686,8 +688,9 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
           refreshSignal.throwIfAborted();
           timing.providerMs = Date.now() - refreshStarted;
           refreshPhase = 'scoreAndCache';
-          const ranked = rankByDay(forecasts, dates);
+          const ranked = rankByDay(forecasts, scoringDates(forecasts, dates));
           const refreshed = {
+            generatedAt: new Date().toISOString(),
             payload: normalizeScoredResponse(region, dates, [], ranked, [], forecasts),
             cragOrder: Object.keys(forecasts),
           };
@@ -729,13 +732,26 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
       }
     });
     phase = 'response';
-    const { payload, cragOrder, generatedAt } = regional;
+    const { cragOrder, generatedAt } = regional;
+    let payload = revalidateScoredToday(regional.payload);
+    const ageSeconds = generatedAt ? Math.max(0, Math.floor((Date.now() - Date.parse(generatedAt)) / 1000)) : null;
+    const isStale = ['STALE', 'SNAPSHOT-STALE'].includes(cacheStatus) ||
+      (ageSeconds != null && ageSeconds > SNAPSHOT_FRESH_AGE_MS / 1000);
+    const forecast = { retrievedAt: generatedAt ?? null, ageSeconds, calendarTimezone: timezone,
+      stale: isStale, source: cacheStatus };
+    if (isStale) {
+      const note = ageSeconds >= 3600 ? `Saved forecast – ${Math.floor(ageSeconds / 3600)}h old`
+        : `Saved forecast – ${Math.floor((ageSeconds ?? 0) / 60)}m old`;
+      payload = { ...payload, byDate: Object.fromEntries(Object.entries(payload.byDate).map(([date, rows]) =>
+        [date, rows.map(row => ({ ...row, reasons: row.scoreBasis === 'closure' ? row.reasons
+          : [note, ...row.reasons], forecastStale: true }))])) };
+    }
     const availableDates = payload.dates;
     const tripDates = (() => {
-      if (!tripStart || !tripEnd) return weekendDates().filter(date => availableDates.includes(date)).slice(0, 7);
+      if (!tripStart || !tripEnd) return weekendDates(new Date(), timezone).filter(date => availableDates.includes(date)).slice(0, 7);
       const idxStart = availableDates.indexOf(tripStart);
       const idxEnd = availableDates.indexOf(tripEnd);
-      if (idxStart === -1 || idxEnd === -1) return weekendDates().filter(date => availableDates.includes(date)).slice(0, 7);
+      if (idxStart === -1 || idxEnd === -1) return weekendDates(new Date(), timezone).filter(date => availableDates.includes(date)).slice(0, 7);
       return availableDates.slice(Math.min(idxStart, idxEnd), Math.max(idxStart, idxEnd) + 1);
     })();
 
@@ -746,7 +762,7 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
       .map(id => [id, { crag: payload.crags[id], ...payload.today[id] }]));
     const weekendTrip = rankWeekendTrip(tripForecasts, tripDates, payload.byDate)
       .map(({ crag, ...entry }) => ({ cragId: crag.id, ...entry }));
-    const body = JSON.stringify({ ...payload, tripDates, weekendTrip });
+    const body = JSON.stringify({ ...payload, forecast, tripDates, weekendTrip });
 
     const response = new Response(body, {
       status: 200,
@@ -758,7 +774,7 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
           'X-Climbable-Forecast-Updated-At': generatedAt,
           'Access-Control-Expose-Headers': 'X-Climbable-Forecast-Updated-At, X-SendTemps-Cache, Warning',
         } : {}),
-        ...(['STALE', 'SNAPSHOT-STALE'].includes(cacheStatus) ? { Warning: '110 - "Response is stale"' } : {}),
+        ...(isStale ? { Warning: '110 - "Response is stale"' } : {}),
       },
     });
     log('scored_forecast_response_ready', { status: response.status });

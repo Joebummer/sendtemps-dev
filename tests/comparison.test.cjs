@@ -13,6 +13,36 @@ function fixture(models = ['ecmwf_ifs', 'gfs_global', 'icon_global', 'ukmo_globa
   }
   return { hourly };
 }
+test('comparison preserves destination-local hours across a DST transition', async () => {
+  const harness = await loadWorker(async input => {
+    assert.equal(new URL(input).searchParams.get('timeformat'), 'unixtime');
+    const data = fixture();
+    data.hourly.time = [Date.parse('2026-10-03T20:00:00Z') / 1000, Date.parse('2026-10-03T21:00:00Z') / 1000];
+    data.utc_offset_seconds = 36000; // Request before the daylight saving transition.
+    return Response.json(data);
+  }, '2026-10-02T01:00:00Z');
+  const response = await harness.worker.fetch(request('/forecast/compare?cragId=camels-hump&date=2026-10-04'), {});
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).models[0].hours.map(h => h.time), ['2026-10-04T07:00', '2026-10-04T08:00']);
+});
+test('comparison padding retains all 25 hours on the daylight-saving fallback date', async () => {
+  const harness = await loadWorker(async input => {
+    const params = new URL(input).searchParams;
+    assert.equal(params.get('start_date'), '2026-04-04');
+    assert.equal(params.get('end_date'), '2026-04-06');
+    const data = fixture();
+    for (const key of Object.keys(data.hourly).filter(key => key !== 'time')) data.hourly[key] = Array(25).fill(data.hourly[key][0]);
+    data.hourly.time = Array.from({ length: 25 }, (_, i) => Date.parse('2026-04-04T13:00:00Z') / 1000 + i * 3600);
+    data.utc_offset_seconds = 39600;
+    return Response.json(data);
+  }, '2026-04-03T01:00:00Z');
+  const response = await harness.worker.fetch(request('/forecast/compare?cragId=camels-hump&date=2026-04-05'), {});
+  assert.equal(response.status, 200);
+  const hours = (await response.json()).models[0].hours;
+  assert.equal(hours.length, 25);
+  assert.equal(new Set(hours.map(h => h.utcTime)).size, 25);
+  assert.equal(hours.at(-1).time, '2026-04-05T23:00');
+});
 test('comparison batches trusted coordinates, omits unusable models and caches canonical model sets', async () => {
   let calls = 0;
   const harness = await loadWorker(async input => {

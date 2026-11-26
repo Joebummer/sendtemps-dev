@@ -576,6 +576,81 @@ test('daily-estimate rain probability is continuous around 30 and 60 percent', a
   }
 });
 
+test('crag-local time handles WA, QLD, NT, SA and eastern daylight saving independently', async () => {
+  const f = (await loadWorker()).forecasts;
+  for (const [state, civil, utc] of [
+    ['WA', '2026-01-15T10:00', '2026-01-15T02:00:00.000Z'],
+    ['QLD', '2026-01-15T10:00', '2026-01-15T00:00:00.000Z'],
+    ['NT', '2026-01-15T10:00', '2026-01-15T00:30:00.000Z'],
+    ['SA', '2026-01-15T10:00', '2026-01-14T23:30:00.000Z'],
+    ['SA', '2026-07-15T10:00', '2026-07-15T00:30:00.000Z'],
+    ['VIC', '2026-01-15T10:00', '2026-01-14T23:00:00.000Z'],
+    ['VIC', '2026-07-15T10:00', '2026-07-15T00:00:00.000Z'],
+    ['NSW', '2026-10-04T07:00', '2026-10-03T20:00:00.000Z'],
+  ]) assert.equal(f.localHourToDate(civil, f.timezoneForCrag({ state })).toISOString(), utc, state + civil);
+});
+
+test('provider Unix timestamps preserve 23 and 25-hour local days across DST', async () => {
+  const f = (await loadWorker()).forecasts;
+  for (const [start, offset, count, date] of [
+    ['2026-10-03T14:00:00Z', 36000, 23, '2026-10-04'],
+    ['2026-04-04T13:00:00Z', 39600, 25, '2026-04-05'],
+  ]) {
+    const first = Date.parse(start) / 1000;
+    const time = Array.from({ length: 26 }, (_, i) => first + i * 3600);
+    const normalized = f.normalizeProviderTimes({ utc_offset_seconds: offset,
+      hourly: { time, precipitation: time.map(() => 1) },
+      daily: { time: [first], precipitation_sum: [999] },
+    }, 'Australia/Melbourne');
+    assert.equal(normalized.hourly.time.filter(t => t.startsWith(date)).length, count);
+    assert.equal(normalized.daily.time[0], date);
+    assert.equal(normalized.daily.precipitation_sum[0], count, 'local totals include all actual hours once');
+    for (let i = 1; i < time.length; i++) assert.equal(normalized.hourly.timeUtc[i] - normalized.hourly.timeUtc[i - 1], 3600000);
+  }
+});
+
+test('national midnight rolls each crag independently and regional calendars use local dates', async () => {
+  const harness = await loadWorker(async url => Response.json(fixtureForUrl(url)), '2026-09-13T14:05:00Z');
+  const response = await harness.worker.fetch(new Request('https://api.test/forecast/scored?region=ALL'), {}, harness.ctx);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  for (const state of ['WA', 'NT', 'SA', 'VIC', 'QLD']) {
+    const crag = Object.values(body.crags).find(c => c.state === state);
+    const expected = ['WA', 'NT', 'SA'].includes(state) ? '2026-09-13' : '2026-09-14';
+    assert.equal(body.today[crag.id].todayDate, expected, state);
+    assert.ok(body.byDate[expected].some(row => row.cragId === crag.id));
+  }
+  const west = await harness.worker.fetch(new Request('https://api.test/forecast/scored?region=WA'), {}, harness.ctx);
+  const westBody = await west.json();
+  assert.equal(westBody.dates[0], '2026-09-13');
+  assert.equal(westBody.forecast.calendarTimezone, 'Australia/Perth');
+  await harness.flush();
+});
+
+test('provider elevation is explicit and provider temperatures are used without a second lapse rate', async () => {
+  const harness = await loadWorker(async url => {
+    const params = new URL(url).searchParams;
+    assert.equal(params.get('timezone'), 'auto');
+    assert.equal(params.get('timeformat'), 'unixtime');
+    const elevations = params.get('elevation').split(',').map(Number);
+    const fixtures = weatherFixture(url).map((f, i) => {
+      const copy = JSON.parse(JSON.stringify(f));
+      const value = 10 + elevations[i] / 1000;
+      for (const key of ['temperature_2m', 'apparent_temperature']) copy.hourly[key].fill(value);
+      for (const key of ['temperature_2m_max', 'temperature_2m_min', 'apparent_temperature_max']) copy.daily[key].fill(value);
+      return copy;
+    });
+    return Response.json(fixtures);
+  });
+  const forecasts = await harness.forecasts.fetchAllForecasts('VIC');
+  for (const fc of Object.values(forecasts)) {
+    const expected = 10 + fc.crag.elevation / 1000;
+    assert.ok(fc.tomorrowHourly.every(h => h.temp === expected && h.apparentTemp === expected));
+    assert.equal(fc.days.find(d => d.date === fc.tomorrowDate).tMax, expected);
+    assert.equal(fc.days.find(d => d.date === fc.tomorrowDate).elevCorrection, null);
+  }
+});
+
 test('winter session selection respects daylight and short remaining days', async () => {
   const harness = await loadWorker(async url => Response.json(weatherFixture(url)));
   const f = harness.forecasts;
@@ -1339,11 +1414,11 @@ test('heat exposure scales only solar heat and preserves ambient heat in shade',
 
 test('weather requests deduplicate coordinates while preserving every crag', async () => {
   const crags = (await loadCrags('worker/src/lib/crags.js')).filter(c => c.state === 'VIC');
-  const unique = new Set(crags.map(c => `${c.lat},${c.lon}`));
+  const unique = new Set(crags.map(c => `${c.lat},${c.lon},${c.elevation}`));
   assert.ok(unique.size < crags.length);
   const harness = await loadWorker(async url => {
     const params = new URL(url).searchParams;
-    const coords = params.get('latitude').split(',').map((lat, i) => `${lat},${params.get('longitude').split(',')[i]}`);
+    const coords = params.get('latitude').split(',').map((lat, i) => `${lat},${params.get('longitude').split(',')[i]},${params.get('elevation').split(',')[i]}`);
     assert.equal(coords.length, unique.size);
     assert.deepEqual(new Set(coords), unique);
     return Response.json(weatherFixture(url));
@@ -1438,7 +1513,8 @@ test('scheduled snapshots survive a provider outage and Melbourne midnight on a 
   assert.equal(rollover.headers.get('X-SendTemps-Cache'), 'SNAPSHOT-STALE');
   const current = await rollover.json();
   assert.equal(current.dates[0], '2026-09-14');
-  assert.equal(current.byDate['2026-09-13'], undefined);
+  assert.ok(current.byDate['2026-09-13'].some(row => current.crags[row.cragId].state === 'WA'),
+    'the national response retains the civil date still current in Perth');
   const crag = Object.keys(previous.today)[0];
   assert.deepEqual(current.today[crag].todayHourly, previous.today[crag].tomorrowHourly);
   assert.deepEqual(current.today[crag].tomorrowHourly, []);

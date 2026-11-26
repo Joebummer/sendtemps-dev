@@ -1,5 +1,6 @@
 import { CRAGS } from './crags.js';
 import { fetchOpenMeteo } from './forecast.js';
+import { TIMEZONES, normalizeProviderTimes } from './time.js';
 
 const MODELS = {
   ecmwf_ifs: 'ECMWF IFS HRES 9 km',
@@ -18,11 +19,6 @@ const VARIABLES = {
   windDirectionDegrees: 'wind_direction_10m',
   precipitationMm: 'precipitation',
   cloudCoverPercent: 'cloud_cover',
-};
-const TIMEZONES = {
-  VIC: 'Australia/Melbourne', NSW: 'Australia/Sydney', ACT: 'Australia/Sydney',
-  TAS: 'Australia/Hobart', QLD: 'Australia/Brisbane', SA: 'Australia/Adelaide',
-  WA: 'Australia/Perth', NT: 'Australia/Darwin',
 };
 const inflight = new Map();
 const TTL = 1200;
@@ -92,7 +88,7 @@ export async function handleComparison(url, headers, env) {
     return error('invalid_models', 'Select up to six supported model IDs', 400, headers);
   }
   const modelIds = [...new Set(requested)].sort();
-  const cacheUrl = new URL('/_cache/comparison-v1', url.origin);
+  const cacheUrl = new URL('/_cache/comparison-v2', url.origin);
   cacheUrl.search = new URLSearchParams({ cragId: crag.id, date, models: modelIds.join(','),
     lat: crag.lat, lon: crag.lon, elevation: crag.elevation, timezone }).toString();
   const cacheKey = new Request(cacheUrl);
@@ -102,7 +98,7 @@ export async function handleComparison(url, headers, env) {
     if (!inflight.has(cacheKey.url)) {
       const pending = (async () => {
         const params = new URLSearchParams({ latitude: crag.lat, longitude: crag.lon,
-          elevation: crag.elevation, timezone, start_date: date, end_date: date,
+          elevation: crag.elevation, timezone, timeformat: 'unixtime', start_date: date, end_date: date,
           hourly: Object.values(VARIABLES).join(','), models: modelIds.join(','),
           temperature_unit: 'celsius', wind_speed_unit: 'kmh', precipitation_unit: 'mm' });
         const response = await fetchOpenMeteo(`https://api.open-meteo.com/v1/forecast?${params}`,
@@ -112,7 +108,7 @@ export async function handleComparison(url, headers, env) {
           failure.status = response.status;
           throw failure;
         }
-        const models = normalize(await response.json(), modelIds, date);
+        const models = normalize(normalizeProviderTimes(await response.json(), timezone), modelIds, date);
         if (!models.length) throw new Error('No usable model data');
         const body = { schemaVersion: 1, cragId: crag.id, date, timezone,
           latitude: crag.lat, longitude: crag.lon, elevationM: crag.elevation,

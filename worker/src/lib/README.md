@@ -79,6 +79,31 @@ inputs for this recalculation. `day.dailyContext` retains broad-day summaries
 for fallback when no session remains. `forecast` metadata reports retrieval
 time, age in seconds, stale status and source. Stale responses also add a plain
 language notice to existing reason strings, including after midnight rollover.
+
+## Local time and elevation
+
+Primary weather requests pass `timezone=auto`, `timeformat=unixtime` and each
+crag's explicit elevation to the provider. Deduplication includes elevation, so
+sectors at identical coordinates but different heights retain distinct provider
+downscaling. Provider air and apparent temperatures are used directly, without
+an additional backend lapse rate. `elevCorrection` stays null for compatibility;
+`elevationSource` identifies provider downscaling. The comparison endpoint also
+uses explicit elevation and Unix input timestamps.
+
+Shared timezone helpers resolve the provider's IANA zone, with state-based
+fallbacks, including half-hour SA/NT offsets and independent DST rules. Civil
+dates, current hours, solar geometry, drying context and sessions use the crag
+timezone. Unix timestamps preserve actual elapsed hours on 23/25-hour DST days;
+affected daily aggregates are rebuilt from local hourly samples.
+
+Regional endpoint calendars, cache dates, snapshots and default trip dates use
+the region timezone. `ALL` retains a Melbourne reference calendar, explicitly
+reported in `forecast.calendarTimezone`; its `byDate` also retains an earlier
+civil date still current in the west. Each `today` entry provides `timezone`,
+`todayDate` and `tomorrowDate`, and each daily row provides `timezone` and
+`localToday`. National consumers should use those fields for local today and
+tomorrow labels. Snapshot rollover and cached remaining sessions revalidate each
+crag independently, rather than advancing every destination at eastern midnight.
 For non-sandstone rock, a new shower restarts recovery while retaining any larger
 unfinished event; sandstone keeps its existing trace exemption and productive
 drying rules. The temperature explanation distinguishes the peak-performance

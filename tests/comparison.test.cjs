@@ -13,6 +13,18 @@ function fixture(models = ['ecmwf_ifs', 'gfs_global', 'icon_global', 'ukmo_globa
   }
   return { hourly };
 }
+test('comparison preserves destination-local hours across a DST transition', async () => {
+  const harness = await loadWorker(async input => {
+    assert.equal(new URL(input).searchParams.get('timeformat'), 'unixtime');
+    const data = fixture();
+    data.hourly.time = [Date.parse('2026-10-03T20:00:00Z') / 1000, Date.parse('2026-10-03T21:00:00Z') / 1000];
+    data.utc_offset_seconds = 36000; // Request before the daylight saving transition.
+    return Response.json(data);
+  }, '2026-10-02T01:00:00Z');
+  const response = await harness.worker.fetch(request('/forecast/compare?cragId=camels-hump&date=2026-10-04'), {});
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).models[0].hours.map(h => h.time), ['2026-10-04T07:00', '2026-10-04T08:00']);
+});
 test('comparison batches trusted coordinates, omits unusable models and caches canonical model sets', async () => {
   let calls = 0;
   const harness = await loadWorker(async input => {

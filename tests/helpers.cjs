@@ -48,4 +48,19 @@ async function loadWorker(fetchMock, now = '2026-09-13T02:00:00Z') {
   };
 }
 
-module.exports = { loadWorker };
+// Weather values stay identical across fresh/stale reads within one hour;
+// retrieval metadata and the visible stale-data notice intentionally change.
+function withoutForecastAge(body) {
+  const copy = JSON.parse(JSON.stringify(body));
+  delete copy.forecast;
+  function strip(value) {
+    if (!value || typeof value !== 'object') return;
+    delete value.forecastStale;
+    if (Array.isArray(value.reasons)) value.reasons = value.reasons.filter(reason => !reason.startsWith('Saved forecast –'));
+    for (const child of Object.values(value)) strip(child);
+  }
+  strip(copy);
+  return copy;
+}
+
+module.exports = { loadWorker, withoutForecastAge };

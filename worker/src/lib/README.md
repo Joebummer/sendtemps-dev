@@ -48,6 +48,37 @@ The amount deduction interpolates continuously from 0 points at 0 mm/h through
 15 at 0.05, 35 at 0.2, 70 at 2, 85 at 5 and 95 at 10 mm/h. This removes the
 old 35-point jump immediately above 1 mm/h. Hourly weather and recovery remain
 unsmoothed, so genuine rain changes and wet-rock constraints stay visible.
+Probability deductions and surrounding-hour rain context also vary continuously.
+The wider-day rain-risk floor persists across all probability values. Daily
+estimates use continuous probability deductions as well.
+
+Physical wetness is retained even under a recovery ceiling. The final moisture
+constraint is the stronger of the physical deduction and the recovery ceiling,
+not the sum of their deficits. Existing drying rates and local relief factors
+are unchanged. Active rain is described as wet rather than drying.
+
+Session candidates require daylight for the full hourly interval, based on the
+crag coordinates. Today's minimum length shrinks only with remaining daylight;
+future days still require five complete samples. `scoreWindow.usability` and
+the native-compatible reason describe wet-hour counts, dry-hour counts, usable
+hours and the longest usable run. A usable hour requires no measurable rain,
+rain probability at most 35%, score at least 50, recovery ceiling at least 80,
+and complete marine data for sea cliffs. This is forecast usability, not proof
+of actual dry rock. Average scores are not artificially smoothed or raised to
+hide interruptions.
+
+Configured sea cliffs expose marine `availability` as available, partial or
+unavailable. Zero-valued wave observations are valid. Incomplete wave/swell
+data retains any known hazard and limits the conditions score to 64, while
+leaving ordinary weather available; this is a confidence limit, not a calm-sea
+estimate. Inland crags do not receive it.
+
+Saved regional payloads reselect today's remaining daylight session on every
+response. The compact `scoreContext` on hourly samples preserves exact scoring
+inputs for this recalculation. `day.dailyContext` retains broad-day summaries
+for fallback when no session remains. `forecast` metadata reports retrieval
+time, age in seconds, stale status and source. Stale responses also add a plain
+language notice to existing reason strings, including after midnight rollover.
 For non-sandstone rock, a new shower restarts recovery while retaining any larger
 unfinished event; sandstone keeps its existing trace exemption and productive
 drying rules. The temperature explanation distinguishes the peak-performance

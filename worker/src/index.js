@@ -12,7 +12,7 @@
  *     2. Checks each subscriber's favourited crags against their score threshold
  */
 
-import { fetchOpenMeteo, fetchAllForecasts, rankByDay, rankWeekendTrip, weekDates, weekendDates } from './lib/forecast.js';
+import { fetchOpenMeteo, fetchAllForecasts, rankByDay, rankWeekendTrip, weekDates, weekendDates, revalidateScoredToday } from './lib/forecast.js';
 import { CRAGS } from './lib/crags.js';
 import { handleComparison } from './lib/comparison.js';
 
@@ -463,7 +463,7 @@ const SCORED_FALLBACK_TTL = 3600; // at most one hour old, same local date and s
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-11-26-continuous-hourly-rain-v17';
+const SCORED_CACHE_VERSION = '2026-11-26-session-safeguards-v18';
 const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 
 const SCORED_DEADLINE_MS = 12000;
@@ -555,7 +555,7 @@ const SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const SNAPSHOT_FRESH_AGE_MS = 30 * 60 * 1000;
 const SNAPSHOT_READ_MS = 2000;
 // Keep snapshots from earlier scoring models out of newly scored responses.
-const snapshotKey = region => `scored/v10/${region}.json`;
+const snapshotKey = region => `scored/v11/${region}.json`;
 
 async function refreshForecastSnapshot(event, env) {
   const bucket = env.FORECAST_SNAPSHOTS;
@@ -688,6 +688,7 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
           refreshPhase = 'scoreAndCache';
           const ranked = rankByDay(forecasts, dates);
           const refreshed = {
+            generatedAt: new Date().toISOString(),
             payload: normalizeScoredResponse(region, dates, [], ranked, [], forecasts),
             cragOrder: Object.keys(forecasts),
           };
@@ -729,7 +730,20 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
       }
     });
     phase = 'response';
-    const { payload, cragOrder, generatedAt } = regional;
+    const { cragOrder, generatedAt } = regional;
+    let payload = revalidateScoredToday(regional.payload);
+    const ageSeconds = generatedAt ? Math.max(0, Math.floor((Date.now() - Date.parse(generatedAt)) / 1000)) : null;
+    const isStale = ['STALE', 'SNAPSHOT-STALE'].includes(cacheStatus) ||
+      (ageSeconds != null && ageSeconds > SNAPSHOT_FRESH_AGE_MS / 1000);
+    const forecast = { retrievedAt: generatedAt ?? null, ageSeconds,
+      stale: isStale, source: cacheStatus };
+    if (isStale) {
+      const note = ageSeconds >= 3600 ? `Saved forecast – ${Math.floor(ageSeconds / 3600)}h old`
+        : `Saved forecast – ${Math.floor((ageSeconds ?? 0) / 60)}m old`;
+      payload = { ...payload, byDate: Object.fromEntries(Object.entries(payload.byDate).map(([date, rows]) =>
+        [date, rows.map(row => ({ ...row, reasons: row.scoreBasis === 'closure' ? row.reasons
+          : [note, ...row.reasons], forecastStale: true }))])) };
+    }
     const availableDates = payload.dates;
     const tripDates = (() => {
       if (!tripStart || !tripEnd) return weekendDates().filter(date => availableDates.includes(date)).slice(0, 7);
@@ -746,7 +760,7 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
       .map(id => [id, { crag: payload.crags[id], ...payload.today[id] }]));
     const weekendTrip = rankWeekendTrip(tripForecasts, tripDates, payload.byDate)
       .map(({ crag, ...entry }) => ({ cragId: crag.id, ...entry }));
-    const body = JSON.stringify({ ...payload, tripDates, weekendTrip });
+    const body = JSON.stringify({ ...payload, forecast, tripDates, weekendTrip });
 
     const response = new Response(body, {
       status: 200,
@@ -758,7 +772,7 @@ async function handleScoredForecast(request, url, corsHeaders, ctx, env) {
           'X-Climbable-Forecast-Updated-At': generatedAt,
           'Access-Control-Expose-Headers': 'X-Climbable-Forecast-Updated-At, X-SendTemps-Cache, Warning',
         } : {}),
-        ...(['STALE', 'SNAPSHOT-STALE'].includes(cacheStatus) ? { Warning: '110 - "Response is stale"' } : {}),
+        ...(isStale ? { Warning: '110 - "Response is stale"' } : {}),
       },
     });
     log('scored_forecast_response_ready', { status: response.status });

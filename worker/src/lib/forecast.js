@@ -267,7 +267,7 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
     // forward, so a 2pm visit sees 2pm–7pm rather than the irrelevant
     // 6am–1pm that have already passed.
     const todayHourly = buildTodayHourly(crag, f.hourly, drynessSeries, todayMel);
-    const todayMinimumHours = Math.min(5, Math.max(0, 20 - Math.max(7, melbourneHourNow())));
+    const todayMinimumHours = remainingDaylightHours(crag, todayMel, melbourneHourNow());
     const todayBestWindow = bestWindow(todayHourly, crag, todayMinimumHours);
     const tomorrowHourly = buildTomorrowHourly(crag, f.hourly, drynessSeries, tomorrowMel);
     const tomorrowBestWindow = bestWindow(tomorrowHourly, crag, 5);
@@ -524,6 +524,7 @@ export function wetRockCondition(crag, hour) {
       (rock !== 'sandstone' || !isBelowSandstoneThreshold(currentEventMm))) {
     return {
       cap: RAIN_HOUR_CAP[rock] ?? 60,
+      activeRain: true,
       label: `${rock} wet`,
       detail: `${rain.toFixed(1)}mm forecast this hour`,
     };
@@ -591,7 +592,7 @@ function hasUsableDrySession(crag, hourly, drynessSeries, dateStr) {
     const iso = hourly.time[i];
     if (!iso.startsWith(dateStr)) continue;
     const hour = Number(iso.slice(11, 13));
-    if (hour < 7 || hour >= 20) continue;
+      if (hour < 7 || hour >= 20 || !daylightHour(crag, iso)) continue;
     const rain = hourly.precipitation?.[i];
     const probability = hourly.precipitation_probability?.[i];
     const dry = drynessSeries[i];
@@ -618,7 +619,7 @@ function wetRockDayCondition(crag, hourly, drynessSeries, dateStr) {
     const iso = hourly.time[i];
     if (!iso.startsWith(dateStr)) continue;
     const hour = parseInt(iso.slice(11, 13), 10);
-    if (hour < 7 || hour > 19) continue;
+    if (hour < 7 || hour > 19 || !daylightHour(crag, iso)) continue;
     const condition = wetRockCondition(crag, {
       precip: hourly.precipitation?.[i] ?? 0,
       hoursSinceRain: drynessSeries[i]?.hoursSinceRain ?? null,
@@ -651,6 +652,7 @@ function wetRockWindowCondition(crag, samples) {
     sample.cap < worst.cap ? sample : worst, samples[0]);
   const averageCap = Math.floor(samples.reduce((sum, sample) => sum + sample.cap, 0) / samples.length);
   const recovering = averageCap < 100;
+  const raining = samples.some(sample => sample.activeRain);
   const rockType = canonicalRockType(crag);
   const sandstone = rockType === 'sandstone';
   const rockLabel = rockType.charAt(0).toUpperCase() + rockType.slice(1);
@@ -661,9 +663,9 @@ function wetRockWindowCondition(crag, samples) {
       wetRockDetail: `${samples[0].hour}:00–${samples[samples.length - 1].hour + 1}:00 recovery ceiling; ${representative.detail}`,
     } : {}),
     rockReadiness: {
-      status: !recovering ? 'forecast-dry' :
+      status: raining ? 'wet' : !recovering ? 'forecast-dry' :
         averageCap <= 25 ? 'wet' : 'drying',
-      label: !recovering ? 'Forecast dry – inspect rock' :
+      label: raining ? `Rain during window – inspect ${rockType}` : !recovering ? 'Forecast dry – inspect rock' :
         averageCap <= 25
           ? (sandstone ? 'Wet sandstone – do not climb' : `Wet ${rockType} – inspect before climbing`)
           : `${rockLabel} drying – inspect before climbing`,
@@ -1581,6 +1583,21 @@ function closureLabelForDate(crag, dateStr) {
 // past hours are dropped from the strip.
 const hourlyScoringContext = new WeakMap();
 
+function daylightHour(crag, isoHour) {
+  if (!Number.isFinite(crag?.lat) || !Number.isFinite(crag?.lon)) return true;
+  const start = melbourneHourToDate(isoHour);
+  return sunPosition(start, crag.lat, crag.lon).altitude > 0 &&
+    sunPosition(new Date(start.getTime() + 3600000), crag.lat, crag.lon).altitude > 0;
+}
+
+export function remainingDaylightHours(crag, date, fromHour) {
+  let count = 0;
+  for (let h = Math.max(7, fromHour); h < 20; h++) {
+    if (daylightHour(crag, `${date}T${String(h).padStart(2, '0')}:00`)) count++;
+  }
+  return Math.min(5, count);
+}
+
 function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHour = 19) {
   if (!hourly || !hourly.time || !drynessSeries.length) return [];
   const out = [];
@@ -1631,6 +1648,7 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
       rainEventMm: drynessSeries[i]?.rainEventMm ?? 0,
       currentEventMm: drynessSeries[i]?.currentEventMm ?? 0,
       sunAlt: Math.round(sun.altitude),
+      daylight: daylightHour(crag, t),
       sunAz: Math.round(sun.azimuth),
       sunOnWall: lit,
       // Mark the cell whose hour matches the current Melbourne hour so the UI
@@ -1668,8 +1686,12 @@ function buildDayHourly(crag, hourly, drynessSeries, dateStr, fromHour = 6, toHo
     const wetRock = wetRockCondition(crag, out[i]);
     if (wetRock.cap < 100) out[i].wetRockCondition = wetRock;
     const nearby = out.slice(Math.max(0, i - 2), Math.min(out.length, i + 3));
-    const rainNeighbours = nearby.filter(n => n !== out[i] && n.precipProb > 30).length;
+    const rainNeighbours = nearby.filter(n => n !== out[i]).reduce((sum, n) =>
+      sum + Math.max(0, Math.min(1, (n.precipProb ?? 0) / 60)), 0);
     hourlyScoringContext.set(out[i], { rainNeighbours, peakDayProb, meanDayCloud });
+    // Compact context lets saved forecasts explain a newly selected remaining
+    // session using exactly the same scoring inputs after time has advanced.
+    out[i].scoreContext = [rainNeighbours, peakDayProb, meanDayCloud];
     out[i].score = scoreHour(crag, out[i], rainNeighbours, peakDayProb, meanDayCloud);
   }
   // Keep the native hourly contract numeric. Missing hours are omitted rather
@@ -1728,6 +1750,9 @@ export function directionalWindPenalty(crag, windDir, windKmh) {
 export function marineCondition(crag, hour) {
   if (!crag?.marineHazard) return { penalty: 0, cap: 100, label: null, detail: null };
 
+  const fields = ['waveHeight', 'wavePeriod', 'swellHeight', 'swellPeriod'];
+  const present = fields.filter(key => Number.isFinite(hour?.[key]) && hour[key] >= 0).length;
+  const availability = present === fields.length ? 'available' : present ? 'partial' : 'unavailable';
   const waveHeight = Math.max(
     Number.isFinite(hour?.waveHeight) ? hour.waveHeight : 0,
     Number.isFinite(hour?.swellHeight) ? hour.swellHeight : 0,
@@ -1786,10 +1811,11 @@ export function marineCondition(crag, hour) {
     windLabel = 'strong coastal wind';
   }
 
-  const label = swellLabel === 'high swell' ? swellLabel
+  const hazardLabel = swellLabel === 'high swell' ? swellLabel
     : windLabel === 'strong coastal wind' ? windLabel
       : swellLabel || windLabel;
-  const detail = label ? [
+  const label = availability === 'available' ? hazardLabel : 'marine conditions unavailable';
+  const detail = hazardLabel ? [
     waveHeight > 0 ? `${waveHeight.toFixed(1)}m waves${wavePeriod ? ` at ${Math.round(wavePeriod)}s` : ''}` : null,
     windKnots > profile.start ? `${Math.round(windKnots)} kn effective wind` : null,
     highTideLift ? 'higher tide phase' : null,
@@ -1797,10 +1823,14 @@ export function marineCondition(crag, hour) {
   return {
     penalty: swellPenalty + windPenalty,
     cap: Math.min(swellCap, windCap),
+    availability,
+    availabilityCap: availability === 'available' ? 100 : 64,
     label,
-    detail: label ? `${label} – ${detail}` : null,
-    waveHeight: waveHeight || null,
-    wavePeriod: wavePeriod || null,
+    detail: availability === 'available' ? (label ? `${label} – ${detail}` : null)
+      : `${present ? 'Incomplete' : 'Missing'} wave/swell forecast; marine assessment unverified` +
+        (hazardLabel ? `; ${hazardLabel} – ${detail}` : ''),
+    waveHeight: present ? waveHeight : null,
+    wavePeriod: present ? wavePeriod : null,
     windKnots,
   };
 }
@@ -1838,9 +1868,10 @@ function computeClimbMarine(crag, hourly, dateStr) {
     sample.penalty > worst.penalty ? sample : worst, best.window[0]);
   return {
     penalty: Math.round(best.penalty),
-    cap: Math.min(...best.window.map(sample => sample.cap)),
-    label: representative.label,
-    detail: representative.detail,
+    cap: Math.min(...best.window.map(sample => Math.min(sample.cap, sample.availabilityCap))),
+    availability: best.window.every(sample => sample.availability === 'available') ? 'available' : 'unavailable',
+    label: best.window.find(sample => sample.availability !== 'available')?.label ?? representative.label,
+    detail: best.window.find(sample => sample.availability !== 'available')?.detail ?? representative.detail,
   };
 }
 
@@ -1873,20 +1904,14 @@ function scoreHourResult(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCl
     [0, 0], [MEASURABLE_RAIN_MM, 15], [0.2, 35], [2, 70], [5, 85], [10, 95],
   ], Math.max(0, h.precip ?? 0));
   // Sustained probability remains a floor, without adding the same rain twice.
-  const probabilityPenalty = h.precipProb > 60 ? Math.min(32, 20 + rainNeighbours * 3)
-    : h.precipProb > 30 ? Math.min(16, 8 + rainNeighbours * 2) : 0;
+  const neighbours = Math.max(0, Math.min(4, rainNeighbours));
+  const probabilityPenalty = interpolate([
+    [0, 0], [30, 8 + neighbours * 2], [60, 20 + neighbours * 3], [100, 20 + neighbours * 3],
+  ], Math.max(0, Math.min(100, h.precipProb ?? 0)));
+  const shadowPenalty = Math.max(0, Math.min(12, ((peakDayProb - 40) / 60) * 12));
   // Amount and probability describe the same rain risk. Use the stronger
   // constraint, so introducing drizzle never removes sustained-rain risk.
-  penalize(Math.max(amountPenalty, probabilityPenalty), 'precip', 'Rain forecast');
-
-  // Day-level rain shadow — applied only to hours that individually look clean
-  // (precipProb ≤ 30%) but the day as a whole has significant rain risk.
-  // Penalty: 0 at peakDayProb ≤ 40%, scaling to -12 at peakDayProb = 100%.
-  // This prevents pre-rain hours from showing 99 when a 60%+ day is incoming.
-  if (h.precipProb <= 30 && peakDayProb > 40) {
-    const shadowPen = Math.round(((peakDayProb - 40) / 60) * 12);
-    penalize(shadowPen, 'precip', 'Wider-day rain risk');
-  }
+  penalize(Math.max(amountPenalty, probabilityPenalty, shadowPenalty), 'precip', 'Rain forecast');
 
   // Day-level cloud cover — mirrors scoreDay's sun-trap and overcast penalties.
   // Threshold lowered to 65% so moderate persistent cloud is captured.
@@ -1922,10 +1947,10 @@ function scoreHourResult(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCl
     additionalFeelsLikeHeat(crag, tFeel, tAir, h.hour);
   penalize(thermalPenalty, 'temp', 'Temperature');
 
-  // Use one residual-moisture constraint, as in scoreDay. The recovery cap
-  // already accounts for wet rock; avoid stacking a dryness penalty on it.
+  // The final result is min(weather minus physical wetness, recovery ceiling).
+  // This takes the stronger constraint, never adds both deficits together.
   const wetRock = h.wetRockCondition ?? wetRockCondition(crag, h);
-  if (h.dryness != null && h.dryness < 100 && wetRock.cap >= 100) {
+  if (h.dryness != null && h.dryness < 100) {
     penalize(Math.round(((100 - h.dryness) / 100) * 25 * residualDryingFactor(crag)), 'dryness', 'Rock dryness');
   }
 
@@ -1961,7 +1986,7 @@ function scoreHourResult(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCl
   // any real penalty can't claim a perfect 100, even if bonuses clawed it
   // all the way back there. Keeps hour-by-hour scores honest relative to
   // the day score, which already applies this same cap.
-  const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap, wetRock.cap);
+  const hourlyCeiling = Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap, marine.availabilityCap ?? 100, wetRock.cap);
   const rawFinal = Math.max(0, Math.min(Math.floor(hourlyCeiling), Math.round(s)));
   const score = (hasPenalty && rawFinal === 100) ? 99 : rawFinal;
   const weatherFinal = Math.max(0, Math.min(Math.floor(Math.min(temperatureScoreCeiling(thermalPenalty), marine.cap)), Math.round(s)));
@@ -1976,11 +2001,11 @@ function scoreHourResult(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCl
       const integrityLimited = hasPenalty && rawFinal === 100;
       const category = bounded || integrityLimited ? 'sun'
         : wetRock.cap === hourlyCeiling ? 'dryness'
-          : marine.cap === hourlyCeiling ? 'marine' : 'temp';
+          : Math.min(marine.cap, marine.availabilityCap ?? 100) === hourlyCeiling ? 'marine' : 'temp';
       const label = bounded ? 'Score bounds' : integrityLimited ? 'Penalty integrity limit'
         : category === 'dryness' ? 'Wet-rock recovery'
           : category === 'marine' ? 'Marine limit' : 'Temperature limit';
-      add(category, label, score - s, 'Hourly score limits and rounding');
+      add(category, label, score - s, category === 'marine' ? marine.detail : 'Hourly score limits and rounding');
     }
   }
   return { score, weatherScore, contributions };
@@ -1996,7 +2021,8 @@ export function bestWindow(hourly, crag = null, minimumHours = 1) {
   // Keep 6am in the hourly strip for planning context, but do not let it
   // influence the representative climbing session. Daily scoring starts at
   // 7am at the earliest.
-  const eligible = hourly.filter(sample => sample.hour >= 7 && Number.isFinite(sample.score));
+  const eligible = hourly.filter(sample => sample.hour >= 7 && Number.isFinite(sample.score) &&
+    sample.daylight !== false && !(Number.isFinite(sample.sunAlt) && sample.sunAlt <= 0));
   if (eligible.length === 0) return null;
 
   // A climbing day is represented by the strongest usable session, not one
@@ -2041,6 +2067,29 @@ export function bestWindow(hourly, crag = null, minimumHours = 1) {
     runEnd: end,
     runHours: count,
     runAvg: avg,
+    usability: windowUsability(hours, crag),
+  };
+}
+
+function windowUsability(hours, crag) {
+  crag = crag ?? {};
+  let usableHours = 0, dryHours = 0, wetHours = 0, run = 0, longestUsableRun = 0;
+  for (const h of hours) {
+    const dry = Number.isFinite(h.precip) && h.precip < MEASURABLE_RAIN_MM;
+    if (dry) dryHours++;
+    if (Number.isFinite(h.precip) && !dry) wetHours++;
+    const wet = h.wetRockCondition ?? wetRockCondition(crag, h);
+    const marine = h.marineCondition ?? marineCondition(crag, h);
+    const usable = dry && Number.isFinite(h.precipProb) && h.precipProb <= 35 &&
+      h.score >= 50 && wet.cap >= 80 && (!crag?.marineHazard || marine.availability === 'available');
+    if (usable) { usableHours++; run++; longestUsableRun = Math.max(run, longestUsableRun); }
+    else run = 0;
+  }
+  return { dryHours, wetHours, usableHours, longestUsableRun,
+    interrupted: wetHours > 0 && wetHours < hours.length,
+    label: wetHours === hours.length ? 'Rain throughout window'
+      : wetHours ? `Rain in ${wetHours}/${hours.length}h of window`
+        : `${usableHours}/${hours.length}h meet dry, low-risk session criteria`,
   };
 }
 
@@ -2683,33 +2732,19 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     ? Math.min(1.4, 1.0 + (mmPerHour - 1) * 0.1)
     : 1.0;
 
-  if (effectiveSum > 5) {
-    const pen = Math.round(60 * concentrationMult);
-    score -= pen;
-    reasons.push('rain expected');
-    add('precip', 'Rain forecast', -pen, rainDetail);
-  } else if (effectiveSum > 1) {
-    const pen = Math.round(30 * concentrationMult);
-    score -= pen;
-    reasons.push('showers likely');
-    add('precip', 'Showers likely', -pen, rainDetail);
-  } else if (effectiveProb > 60) {
-    score -= 20;
-    reasons.push(`${Math.round(peakProb)}% rain chance`);
-    add('precip', 'Rain chance', -20, rainDetail);
-  } else if (effectiveSum >= 0.2) {
-    const pen = 12;
-    score -= pen;
-    reasons.push('light rain');
-    add('precip', 'Light rain', -pen, rainDetail);
-  } else if (effectiveProb > 30) {
-    score -= 8;
-    add('precip', 'Rain chance', -8, rainDetail);
-  } else if (effectiveSum > 0) {
-    const pen = 6;
-    score -= pen;
-    reasons.push('possible drizzle');
-    add('precip', 'Possible drizzle', -pen, rainDetail);
+  const dailyAmountPenalty = effectiveSum > 5 ? Math.round(60 * concentrationMult)
+    : effectiveSum > 1 ? Math.round(30 * concentrationMult)
+      : effectiveSum >= 0.2 ? 12 : effectiveSum > 0 ? 6 : 0;
+  const dailyProbabilityPenalty = interpolate([[0, 0], [30, 8], [60, 20], [100, 20]], effectiveProb);
+  const rainPenalty = Math.round(Math.max(dailyAmountPenalty, dailyProbabilityPenalty));
+  if (rainPenalty > 0) {
+    score -= rainPenalty;
+    const amountDominates = dailyAmountPenalty >= dailyProbabilityPenalty;
+    const label = !amountDominates ? 'Rain chance' : effectiveSum > 5 ? 'Rain forecast'
+      : effectiveSum > 1 ? 'Showers likely' : effectiveSum >= 0.2 ? 'Light rain' : 'Possible drizzle';
+    reasons.push(amountDominates ? effectiveSum > 5 ? 'rain expected' : effectiveSum > 1 ? 'showers likely'
+      : effectiveSum >= 0.2 ? 'light rain' : 'possible drizzle' : `${Math.round(peakProb)}% rain chance`);
+    add('precip', label, -rainPenalty, rainDetail);
   }
   // For days 4–8 keep the broad daily rain outlook, but avoid treating a
   // short shower outside a verified dry five-hour period as all-day rain.
@@ -2742,9 +2777,9 @@ export function scoreDay(crag, day, prevDay, nextDay) {
     : (day.morningDryness != null && day.afternoonDryness != null)
       ? Math.min(day.morningDryness, day.afternoonDryness)
       : (day.dayDryness ?? day.morningDryness ?? day.afternoonDryness ?? 100);
-  if (dryness < 100 && wetRockScoreCap >= 100) {
-    // While a wet-rock recovery cap is active, that cap already represents
-    // residual moisture. Do not charge a second physical-dryness penalty.
+  if (dryness < 100) {
+    // Keep physical wetness represented. The final recovery ceiling selects
+    // the stronger constraint rather than adding its deficit to this penalty.
     const penalty = Math.round(((100 - dryness) / 100) * 30 * residualDryingFactor(crag));
     score -= penalty;
     if (dryness < 70 && residualDryingFactor(crag) < 1) reasons.push('recent rain – check for seepage');
@@ -2832,7 +2867,7 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   }
 
   const marine = day.climbMarine;
-  if (marine?.penalty > 0) {
+  if (marine && (marine.penalty > 0 || marine.cap < 100)) {
     score -= marine.penalty;
     marineScoreCap = marine.cap;
     reasons.push(marine.label);
@@ -2963,6 +2998,10 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // A crag that earned any score penalty cannot claim a perfect 100.
   // If penalties fired but bonuses compensated back to 100, cap at 99
   // so the score honestly reflects that something is working against it.
+  if (score > marineScoreCap) {
+    add('marine', 'Marine limit', marineScoreCap - score, day.climbMarine?.detail);
+    score = marineScoreCap;
+  }
   const hasPenalty = contributions.some(c => c.delta < 0);
   // Bonuses may improve other factors but cannot erase temperature severity.
   const tooWarmForHardClimbing = reasons.some(reason =>
@@ -3058,9 +3097,12 @@ function isDailyEstimateDate(date, todayDate) {
 // Explain the same hourly calculation that supplied the headline. Context is
 // private and ephemeral, so it never expands the native hourly wire contract.
 function explainWindow(crag, day, window, score) {
-  if (!window.hours.every(hour => hourlyScoringContext.has(hour))) return null;
+  const contextFor = hour => hourlyScoringContext.get(hour) ??
+    (hour.scoreContext?.length === 3 ? { rainNeighbours: hour.scoreContext[0],
+      peakDayProb: hour.scoreContext[1], meanDayCloud: hour.scoreContext[2] } : null);
+  if (!window.hours.every(hour => contextFor(hour))) return null;
   const results = window.hours.map(hour => {
-    const { rainNeighbours, peakDayProb, meanDayCloud } = hourlyScoringContext.get(hour);
+    const { rainNeighbours, peakDayProb, meanDayCloud } = contextFor(hour);
     return scoreHourResult(crag, hour, rainNeighbours, peakDayProb, meanDayCloud, true);
   });
   const period = `${window.start}:00–${window.end}:00`;
@@ -3080,6 +3122,10 @@ function explainWindow(crag, day, window, score) {
     groups.set(key, existing);
   }
   const meanScore = results.reduce((sum, result) => sum + result.score, 0) / results.length;
+  // External callers can supply hand-built windows. Never use persisted
+  // context to explain scores that were calculated from different inputs.
+  if (results.some((result, i) => result.score !== window.hours[i].score) ||
+      Math.round(Math.min(meanScore, window.temperatureCap ?? 100)) !== score) return null;
   if (score < Math.round(meanScore)) groups.set('temp:Session temperature limit', {
     category: 'temp', label: 'Session temperature limit', delta: score - meanScore,
     detail: `Temperature ceiling for ${period}`,
@@ -3106,7 +3152,7 @@ function explainWindow(crag, day, window, score) {
   const thermal = climbingTemperature(crag, ct, day);
   const reasons = [
     ...new Set(window.hours.map(hour => hour.marineCondition?.label).filter(Boolean)),
-    ...(rain.sum >= MEASURABLE_RAIN_MM ? ['rain expected']
+    ...(rain.sum >= MEASURABLE_RAIN_MM ? [window.usability?.label ?? 'rain expected']
       : rain.peakProb > 30 ? [`${Math.round(rain.peakProb)}% rain chance`] : []),
     ...(day.wetRockLabel ? [day.wetRockLabel] : []),
     ...(!day.wetRockLabel && day.sessionDryness < 70
@@ -3142,6 +3188,14 @@ export function rankByDay(forecasts, dayDates) {
           startHour: hourlyWindow.start, endHour: hourlyWindow.end, period: 'scored-session' } } : {}),
       } : fc.days[dayIdx];
       const day = hourlyWindow ? { ...dayHumidity,
+        dailyContext: fc.days[dayIdx].dailyContext ?? {
+          climbTemps: { ...fc.days[dayIdx].climbTemps, temperatureSamples: undefined },
+          climbRain: fc.days[dayIdx].climbRain,
+          wetRockCap: fc.days[dayIdx].wetRockCap,
+          wetRockLabel: fc.days[dayIdx].wetRockLabel,
+          wetRockDetail: fc.days[dayIdx].wetRockDetail,
+          rockReadiness: fc.days[dayIdx].rockReadiness,
+        },
         temperaturePeriod: 'session',
         climbTemps: windowTemperatures(fc.crag, hourlyWindow.hours),
         climbRain: rainSummary(hourlyWindow.hours, hourlyWindow.start, hourlyWindow.end),
@@ -3176,6 +3230,7 @@ export function rankByDay(forecasts, dayDates) {
           end: hourlyWindow.end,
           hours: hourlyWindow.count,
           average: windowScore,
+          ...(hourlyWindow.usability ? { usability: hourlyWindow.usability } : {}),
           ...(hourlyWindow.temperatureCap != null ? {
             hourlyAverage: hourlyWindow.hourlyAvg,
             temperatureCap: hourlyWindow.temperatureCap,
@@ -3196,6 +3251,10 @@ export function rankByDay(forecasts, dayDates) {
       } else if (isClosed) {
         scoreBasis = 'closure';
       }
+      if (!hourlyWindow && date === fc.todayDate && !isClosed) {
+        reasons = [remainingDaylightHours(fc.crag, date, melbourneHourNow()) === 0
+          ? 'No daylight window remaining' : 'Hourly window unavailable', ...reasons].slice(0, 3);
+      }
 
       rows.push({
         crag: fc.crag,
@@ -3205,7 +3264,7 @@ export function rankByDay(forecasts, dayDates) {
         scoreBasis,
         scoreWindow,
         weatherScore,
-        weatherScoreBasis: scoreBasis === 'best-hourly-window' && hourlyWindow.hours.every(hour => hourlyScoringContext.has(hour))
+        weatherScoreBasis: scoreBasis === 'best-hourly-window' && hourlyWindow.hours.every(hour => hourlyScoringContext.has(hour) || hour.scoreContext)
           ? 'best-hourly-window' : 'daily-estimate',
         rockReadiness,
         reasons,
@@ -3239,6 +3298,48 @@ export function rankByDay(forecasts, dayDates) {
     ranked[date] = rows;
   }
   return ranked;
+}
+
+// Re-select today's remaining session from saved hourly weather without a new
+// provider request. Saved scores retain their original context and data age.
+export function revalidateScoredToday(payload) {
+  const date = melbourneDateString(new Date());
+  const rows = payload.byDate[date];
+  if (!rows) return payload;
+  const from = melbourneHourNow();
+  const needsReselection = Object.values(payload.today).some(details =>
+    details.todayHourly.some(h => h.hour < from || h.isNow !== (h.hour === from)));
+  if (!needsReselection) return payload;
+  const forecasts = {};
+  for (const row of rows) {
+    const details = payload.today[row.cragId];
+    const crag = payload.crags[row.cragId];
+    if (!details || !crag) continue;
+    const hours = details.todayHourly.filter(h => h.hour >= from)
+      .map(h => ({ ...h, isNow: h.hour === from }));
+    const context = row.day.dailyContext ?? {};
+    const day = { ...row.day, ...context, temperaturePeriod: 'climbing',
+      currentHumidity: undefined, sessionHumidity: undefined, sessionDryness: undefined,
+      ...(row.day.dailyContext ? {} : { climbTemps: undefined, climbRain: null }),
+    };
+    const window = bestWindow(hours, crag, remainingDaylightHours(crag, date, from));
+    forecasts[row.cragId] = { crag, days: [...(row.prevDay ? [row.prevDay] : []), day],
+      todayDate: date, todayHourly: hours, todayBestWindow: window,
+      nowDryness: details.nowDryness, lastRain: details.lastRain, pastPrecip: details.pastPrecip,
+    };
+  }
+  const ranked = rankByDay(forecasts, [date])[date];
+  const today = { ...payload.today };
+  for (const row of ranked) {
+    const source = forecasts[row.bestSubcragId || row.crag.id];
+    today[row.crag.id] = { ...today[row.crag.id],
+      todayBestSubcragId: row.bestSubcragId || null,
+      todayHourly: source.todayHourly, todayBestWindow: source.todayBestWindow,
+    };
+  }
+  return { ...payload, today, byDate: { ...payload.byDate,
+    [date]: ranked.map(({ crag, ...rest }) => ({ cragId: crag.id, ...rest })),
+  } };
 }
 
 // Weekend-Away trip score: combines Fri/Sat/Sun into a single 0–100 score

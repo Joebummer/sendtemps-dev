@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadWorker } = require('./helpers.cjs');
+const { loadWorker, withoutForecastAge } = require('./helpers.cjs');
 const { loadCrags, validateCrags } = require('../scripts/validate-crags.cjs');
 
 test('session scoring keeps cool mornings independent of hot afternoons', async () => {
@@ -284,8 +284,8 @@ test('Falcons Lookout uses its faster conglomerate recovery without sandstone wa
   });
   const fc = (await wetHarness.forecasts.fetchAllForecasts('VIC'))['falcons-lookout'];
   const day = fc.days.find(d => d.date === '2026-09-14');
-  assert.equal(day.rockReadiness.status, 'forecast-dry');
-  assert.equal(day.rockReadiness.label, 'Forecast dry – inspect rock');
+  assert.equal(day.rockReadiness.status, 'drying', 'the best daylight session still includes recovery after heavy dawn rain');
+  assert.match(day.rockReadiness.label, /Conglomerate drying/);
   assert.doesNotMatch(day.rockReadiness.advisory, /sandstone/i);
 });
 
@@ -535,6 +535,114 @@ test('hourly rain intensity is continuous at the old thresholds and remains seve
   const sequence = Array.from({ length: 201 }, (_, i) => score(i / 20));
   for (let i = 1; i < sequence.length; i++) assert.ok(sequence[i] <= sequence[i - 1]);
   assert.ok(score(5) <= 15, 'heavy rain remains poor');
+});
+
+test('rain probability and neighbouring rain risk have no cliffs or score reversals', async () => {
+  const { scoreHour } = (await loadWorker()).forecasts;
+  const crag = { idealTemp: [8, 22], rockType: 'granite', aspect: 'mixed' };
+  const hour = { hour: 12, temp: 14, apparentTemp: 14, wind: 10, humidity: 50,
+    precip: 0, dryness: 100, sunOnWall: null };
+  for (const neighbours of [0, 0.5, 2, 4]) {
+    const scores = Array.from({ length: 1001 }, (_, i) =>
+      scoreHour(crag, { ...hour, precipProb: i / 10 }, neighbours, 100, 0));
+    for (let i = 1; i < scores.length; i++) {
+      assert.ok(scores[i] <= scores[i - 1], 'rising probability cannot improve an hour');
+      assert.ok(scores[i - 1] - scores[i] <= 1, 'probability changes have no scoring cliffs');
+    }
+  }
+});
+
+test('new drizzle cannot erase a stronger physical wetness deduction', async () => {
+  const { scoreHour } = (await loadWorker()).forecasts;
+  const crag = { idealTemp: [8, 22], rockType: 'trachyte', aspect: 'mixed' };
+  for (const dryness of [20, 30, 60, 90]) {
+    const hour = { hour: 12, temp: 14, apparentTemp: 14, wind: 10, humidity: 98,
+      precipProb: 80, dryness, sunOnWall: null, rainEventMm: 0.2,
+      currentEventMm: 0.2, hoursSinceRain: 6, recoveryProgressHours: 6 };
+    assert.ok(scoreHour(crag, { ...hour, precip: 0.05, hoursSinceRain: 0,
+      recoveryProgressHours: 0 }, 4, 98, 100) <= scoreHour(crag, { ...hour, precip: 0 }, 4, 98, 100));
+  }
+});
+
+test('daily-estimate rain probability is continuous around 30 and 60 percent', async () => {
+  const { scoreDay } = (await loadWorker()).forecasts;
+  const crag = { idealTemp: [8, 22], rockType: 'granite', aspect: 'mixed' };
+  const day = { date: '2026-11-30', tMax: 14, tMin: 10, tFeel: 14,
+    precipSum: 0, precipHours: 0, wind: 5, sunshine: 0, dayDryness: 100 };
+  const scores = Array.from({ length: 101 }, (_, precipProb) => scoreDay(crag, { ...day, precipProb }).score);
+  for (let i = 1; i < scores.length; i++) {
+    assert.ok(scores[i] <= scores[i - 1]);
+    assert.ok(scores[i - 1] - scores[i] <= 1);
+  }
+});
+
+test('winter session selection respects daylight and short remaining days', async () => {
+  const harness = await loadWorker(async url => Response.json(weatherFixture(url)));
+  const f = harness.forecasts;
+  const crag = { idealTemp: [8, 22], lat: -37.3947, lon: 144.5547, rockType: 'trachyte' };
+  assert.equal(f.remainingDaylightHours(crag, '2026-06-21', 17), 0);
+  assert.ok(f.remainingDaylightHours(crag, '2026-06-21', 15) < 5);
+  const dark = [15, 16, 17, 18, 19].map(hour => ({ hour, score: 99, sunAlt: -10 }));
+  assert.equal(f.bestWindow(dark, crag, 5), null);
+  const fc = (await f.fetchAllForecasts('VIC'))['camels-hump'];
+  for (const w of Object.values(fc.bestWindows).filter(Boolean)) {
+    assert.ok(w.hours.every(h => h.daylight && h.sunAlt > 0));
+  }
+});
+
+test('missing marine data is explicitly incomplete and cannot produce a good conditions score', async () => {
+  const harness = await loadWorker(async url => new URL(url).hostname.includes('marine')
+    ? new Response(null, { status: 503 }) : Response.json(weatherFixture(url)));
+  const forecasts = await harness.forecasts.fetchAllForecasts('TAS');
+  const fc = forecasts['fortescue-totem-pole'];
+  const row = harness.forecasts.rankByDay(forecasts, [fc.tomorrowDate])[fc.tomorrowDate]
+    .find(r => r.crag.id === fc.crag.id);
+  assert.ok(row.score <= 64);
+  assert.ok(row.reasons.includes('marine conditions unavailable'));
+  assert.ok(fc.tomorrowHourly.every(h => h.marineCondition.availability === 'unavailable'));
+  const calm = harness.forecasts.marineCondition(fc.crag, {
+    waveHeight: 0, wavePeriod: 0, swellHeight: 0, swellPeriod: 0, wind: 0 });
+  assert.equal(calm.availability, 'available', 'numeric zero is genuine calm data');
+  assert.equal(calm.availabilityCap, 100);
+  const partial = harness.forecasts.marineCondition(fc.crag, { waveHeight: 3, wind: 5 });
+  assert.equal(partial.availability, 'partial');
+  assert.ok(partial.cap <= 35, 'missing data cannot suppress an observed large swell');
+});
+
+test('interrupted windows disclose wet hours and the longest usable run', async () => {
+  const f = (await loadWorker()).forecasts;
+  const crag = { idealTemp: [8, 22], rockType: 'granite' };
+  const hours = [7, 8, 9, 10, 11].map(hour => ({ hour, temp: 14, apparentTemp: 14,
+    score: hour === 9 ? 20 : 90, precip: hour === 9 ? 2 : 0,
+    precipProb: hour === 9 ? 90 : 10, dryness: 100, rainEventMm: 0 }));
+  const w = f.bestWindow(hours, crag, 5);
+  assert.equal(w.usability.interrupted, true);
+  assert.equal(w.usability.wetHours, 1);
+  assert.equal(w.usability.usableHours, 4);
+  assert.equal(w.usability.longestUsableRun, 2);
+  assert.match(w.usability.label, /Rain in 1\/5h/);
+});
+
+test('saved forecasts reselect only remaining daylight hours and disclose forecast age', async () => {
+  const harness = await loadWorker(async url => Response.json(weatherFixture(url)));
+  const request = new Request('https://api.test/forecast/scored?region=VIC');
+  const response = await harness.worker.fetch(request, {}, harness.ctx);
+  const initial = await response.json();
+  await harness.flush();
+  harness.setNow('2026-09-13T05:00:00Z'); // 3 pm Melbourne; use the original payload without refetching.
+  const remaining = harness.forecasts.revalidateScoredToday(initial);
+  for (const row of remaining.byDate['2026-09-13']) {
+    if (row.scoreWindow) assert.ok(row.scoreWindow.start >= 15);
+    assert.ok(remaining.today[row.cragId].todayHourly.every(h => h.hour >= 15));
+    if (row.scoreWindow) assert.equal(100 + row.contributions.reduce((s, c) => s + c.delta, 0), row.score);
+  }
+  harness.setNow('2026-09-13T11:00:00Z'); // 9 pm: old morning windows must disappear.
+  const night = harness.forecasts.revalidateScoredToday(initial);
+  assert.ok(night.byDate['2026-09-13'].every(row => row.scoreWindow === null));
+  assert.ok(night.byDate['2026-09-13'].filter(row => row.scoreBasis !== 'closure')
+    .every(row => row.reasons.includes('No daylight window remaining')));
+  assert.ok(initial.forecast.retrievedAt);
+  assert.equal(initial.forecast.ageSeconds, 0);
 });
 
 test('a separate small granite shower retains unfinished heavy-rain recovery', async () => {
@@ -835,7 +943,7 @@ test('isolated sub-1 mm shower does not restart a substantial sandstone recovery
   assert.ok(at(15).recoveryProgressHours >= at(14).recoveryProgressHours);
 });
 
-test('daily sandstone recovery cap is not charged a second dryness penalty', async () => {
+test('daily sandstone retains physical wetness when it is stronger than the recovery ceiling', async () => {
   const harness = await loadWorker();
   const crag = { ...harness.crags?.find?.(c => c.id === 'gramps-main'),
     id: 'test-sandstone', rockType: 'sandstone', idealTemp: [8, 22],
@@ -848,8 +956,8 @@ test('daily sandstone recovery cap is not charged a second dryness penalty', asy
   };
   const recovered = harness.forecasts.scoreDay(crag, baseline);
   const withoutCap = harness.forecasts.scoreDay(crag, { ...baseline, wetRockCap: 100 });
-  assert.ok(!recovered.contributions.some(c => c.label === 'Rock dryness'),
-    'recovery ceiling already accounts for residual wetness');
+  assert.ok(recovered.contributions.some(c => c.label === 'Rock dryness'),
+    'a recovery ceiling cannot erase a stronger physical wetness constraint');
   assert.ok(withoutCap.contributions.some(c => c.label === 'Rock dryness'),
     'physical dryness penalty remains when no recovery ceiling applies');
   assert.ok(recovered.score <= 60);
@@ -1065,7 +1173,7 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
     assert.equal(first.headers.get('X-SendTemps-Cache'), 'MISS');
     const body = await first.json();
     const expected = (await loadCrags('worker/src/lib/crags.js')).filter(c => region === 'ALL' || c.state === region);
-    assert.deepEqual(Object.keys(body).sort(), ['region', 'dates', 'tripDates', 'crags', 'byDate', 'weekendTrip', 'today'].sort());
+    assert.deepEqual(Object.keys(body).sort(), ['region', 'dates', 'tripDates', 'crags', 'byDate', 'weekendTrip', 'today', 'forecast'].sort());
     assert.equal(body.region, region);
     assert.equal(body.dates.length, 10);
     assert.deepEqual(body.tripDates, ['2026-09-18', '2026-09-19', '2026-09-20']);
@@ -1135,7 +1243,7 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
     const second = await harness.worker.fetch(req, {}, harness.ctx);
     assert.equal(second.headers.get('Cache-Control'), 'no-store');
     assert.equal(second.headers.get('X-SendTemps-Cache'), 'HIT');
-    assert.deepEqual(await second.json(), body);
+    assert.deepEqual(withoutForecastAge(await second.json()), withoutForecastAge(body));
     const expectedCalls = ['TAS', 'ALL'].includes(region) ? 2 : 1;
     assert.equal(calls, expectedCalls);
 
@@ -1264,7 +1372,10 @@ test('expired regional cache serves same-day fallback before background refresh 
   ]);
   assert.ok(!raced.timedOut, 'stale response should not await the provider');
   assert.equal(raced.response.headers.get('X-SendTemps-Cache'), 'STALE');
-  assert.deepEqual(await raced.response.json(), original);
+  const saved = await raced.response.json();
+  assert.equal(saved.forecast.stale, true);
+  assert.equal(saved.forecast.ageSeconds, 16 * 60);
+  assert.deepEqual(withoutForecastAge(saved), withoutForecastAge(original));
   release();
   await harness.flush();
   const refreshed = await harness.worker.fetch(req, {}, harness.ctx);
@@ -1353,7 +1464,7 @@ test('provider rate limits use a bounded fallback without extending its age', as
   assert.equal(fallback.status, 200);
   assert.equal(fallback.headers.get('X-SendTemps-Cache'), 'STALE');
   assert.ok(fallback.headers.get('Warning').includes('stale'));
-  assert.deepEqual(await fallback.json(), original);
+  assert.deepEqual(withoutForecastAge(await fallback.json()), withoutForecastAge(original));
   await harness.flush();
   harness.setNow('2026-09-13T03:01:00Z');
   const expired = await harness.worker.fetch(req, {}, harness.ctx);
@@ -1419,14 +1530,16 @@ test('global drying calibration shortens recovery across rock types while retain
   }
 });
 
-test('hourly recovery does not stack a second residual-moisture penalty', async () => {
+test('hourly moisture uses the stronger physical wetness or recovery constraint', async () => {
   const { scoreHour } = (await loadWorker()).forecasts;
   const crag = { rockType: 'granite', idealTemp: [10, 20], aspect: 'N' };
   const hour = { hour: 10, temp: 15, apparentTemp: 15, humidity: 60, wind: 5,
     precip: 0, precipProb: 0, cloud: 50, sunOnWall: null,
     wetRockCondition: { cap: 90 } };
-  assert.equal(scoreHour(crag, { ...hour, dryness: 20 }),
+  assert.ok(scoreHour(crag, { ...hour, dryness: 20 }) <=
     scoreHour(crag, { ...hour, dryness: 100 }));
+  assert.equal(scoreHour(crag, { ...hour, dryness: 20, wetRockCondition: { cap: 70 } }), 70,
+    'take the stronger constraint rather than summing a 20-point deduction and a 30-point cap deficit');
   assert.ok(scoreHour(crag, { ...hour, dryness: 20 }) <= 90);
 });
 
@@ -1493,7 +1606,7 @@ test('session moisture readiness retains wet-rock constraints within the selecte
   const harness = await loadWorker(async url => Response.json(weatherFixture(url)));
   const original = (await harness.forecasts.fetchAllForecasts('VIC'))['youyangs-flatrock'];
   const date = original.tomorrowDate;
-  for (const [rockType, cap, status] of [['granite', 60, 'drying'], ['sandstone', 0, 'wet']]) {
+  for (const [rockType, cap, status] of [['granite', 60, 'wet'], ['sandstone', 0, 'wet']]) {
     const hours = original.bestWindows[date].hours.map(hour => ({ ...hour,
       dryness: 20, precip: 1, rainEventMm: 5, currentEventMm: 5,
       hoursSinceRain: 0, recoveryProgressHours: 0, wetRockCondition: undefined,
@@ -1509,8 +1622,8 @@ test('session moisture readiness retains wet-rock constraints within the selecte
     assert.equal(row.day.wetRockCap, cap);
     assert.equal(row.rockReadiness.status, status);
     assert.ok(row.reasons.includes(`${rockType} wet`));
-    assert.ok(!row.contributions.some(c => c.label === 'Rock dryness'),
-      'recovery ceiling already represents moisture');
+    assert.ok(row.contributions.some(c => c.label === 'Rock dryness'),
+      'physical moisture remains represented under a recovery ceiling');
   }
 });
 

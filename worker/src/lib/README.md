@@ -28,9 +28,26 @@ mean and `temperatureCap` explains the limit.
 The existing ten-day weather request already contains hourly data. Future
 sessions reuse it without adding provider requests or full future hourly strips
 to the public response. `scoreWindow.provisional` is true after tomorrow and the
-window contribution describes these as provisional hourly model estimates. This
+window metadata identifies these as provisional hourly model estimates. This
 is horizon guidance, not a calibrated probability of forecast accuracy. Native
 clients can use the metadata without a breaking schema change.
+
+Session contributions now average the actual hourly scoring factors, including
+hourly limits, and reconcile from 100 to the headline after integer rounding.
+There is no synthetic window bonus. `scoreWindow` retains the selected period
+and provisional metadata; `weatherScoreBasis` is `best-hourly-window` for these
+sessions. Weather quality excludes residual recovery ceilings but retains rain
+and temperature constraints. Hand-built pre-scored windows without internal
+hourly context retain the legacy explanation fallback.
+
+Rain totals and mean/peak probabilities use real hourly samples for both daily
+and session periods, rather than distributing grouped rain-window totals evenly.
+Grouped windows remain presentation summaries. Hourly rain uses the stronger of
+amount and probability penalties, so drizzle cannot remove sustained rain risk.
+For non-sandstone rock, a new shower restarts recovery while retaining any larger
+unfinished event; sandstone keeps its existing trace exemption and productive
+drying rules. The temperature explanation distinguishes the peak-performance
+warmth threshold from the broader general cragging temperature range.
 
 Destination rows inherit the selected best child's score, session and weather.
 `rankWeekendTrip(forecasts, tripDates, ranked)` reuses daily rows, including their

@@ -131,7 +131,7 @@ test('simultaneous scored requests share a regional job across trip and origin v
   let calls = 0;
   const harness = await loadWorker(async input => { calls++; return Response.json(weatherFixture(input)); });
   const responses = await Promise.all(Array.from({ length: 5 }, (_, i) => harness.worker.fetch(
-    new Request(`https://api.test/forecast/scored?region=NT&unused=${i}&tripStart=2026-09-1${i + 3}&tripEnd=2026-09-20`),
+    new Request(`https://api.test/forecast/scored?schemaVersion=2&region=NT&unused=${i}&tripStart=2026-09-1${i + 3}&tripEnd=2026-09-20`),
     { WEATHER_REQUEST_LIMITER: limiter(30) }, harness.ctx)));
   assert.equal(calls, 1);
   for (const response of responses) assert.equal(response.status, 200);
@@ -144,7 +144,7 @@ test('upstream limit serves scored fallback, then returns 429 once fallback expi
   let calls = 0;
   const harness = await loadWorker(async input => { calls++; return Response.json(weatherFixture(input)); });
   const env = { WEATHER_REQUEST_LIMITER: limiter(1) };
-  const request = new Request('https://api.test/forecast/scored?region=NT');
+  const request = new Request('https://api.test/forecast/scored?schemaVersion=2&region=NT');
   const first = await harness.worker.fetch(request, env, harness.ctx);
   const original = await first.json();
   assert.equal(first.status, 200);
@@ -153,7 +153,7 @@ test('upstream limit serves scored fallback, then returns 429 once fallback expi
   assert.equal(stale.status, 200);
   assert.equal(stale.headers.get('X-SendTemps-Cache'), 'STALE');
   const saved = await stale.json();
-  assert.equal(saved.forecast.stale, true);
+  assert.equal(saved.forecastMeta.stale, true);
   assert.deepEqual(withoutForecastAge(saved), withoutForecastAge(original));
   harness.setNow('2026-09-13T03:01:00Z');
   const expired = await harness.worker.fetch(request, env, harness.ctx);

@@ -69,13 +69,63 @@ test('scored forecast: cache hit overrides stored headers and uses current CORS 
   harness.entries.set(key, Response.json({ payload, cragOrder: [] }, {
     headers: { 'Cache-Control': 'public, max-age=900', 'Access-Control-Allow-Origin': 'https://climbable.app' },
   }));
-  const response = await harness.worker.fetch(request('/forecast/scored?region=VIC', 'GET', undefined, 'https://sendtemps.app'), env, harness.ctx);
+  const response = await harness.worker.fetch(request('/forecast/scored?schemaVersion=2&region=VIC', 'GET', undefined, 'https://sendtemps.app'), env, harness.ctx);
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
   assert.equal(response.headers.get('X-SendTemps-Cache'), 'HIT');
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'https://sendtemps.app');
   assert.deepEqual(await response.json(), { ...payload, tripDates: ['2026-09-13'],
-    forecast: { retrievedAt: null, ageSeconds: null, calendarTimezone: 'Australia/Melbourne', stale: false, source: 'HIT' } });
+    schemaVersion: 2, forecastMeta: { retrievedAt: null, ageSeconds: null, calendarTimezone: 'Australia/Melbourne', stale: false, source: 'HIT' } });
   assert.equal(harness.entries.get(key).headers.get('Cache-Control'), 'public, max-age=900');
+  for (const schema of ['', '&schemaVersion=1']) {
+    const legacy = await harness.worker.fetch(request(`/forecast/scored?region=VIC${schema}`), env, harness.ctx);
+    assert.equal(legacy.status, 200);
+    assert.equal(legacy.headers.get('X-Climbable-Schema-Version'), '1');
+    assert.deepEqual(await legacy.json(), { ...payload, tripDates: ['2026-09-13'] });
+  }
+});
+
+test('scored wire format keeps legacy envelopes and integer fields stable without losing internal precision', async () => {
+  const { wire } = await loadWorker();
+  const hour = { hour: 9, score: 71, temp: 14.4, recoveryProgressHours: 2.75,
+    weightedProb: 72.4, scoreContext: [1.5, 90, 100], wetRockCondition: { activeRain: true, cap: 60 } };
+  const row = { score: 71, timezone: 'Australia/Perth', localToday: '2026-09-13',
+    scoreWindow: { average: 71, hourlyAverage: 71.4, usability: { wetHours: 1 } },
+    day: { date: '2026-09-13', dailyContext: { climbTemps: {} }, elevationSource: 'provider' } };
+  const payload = { region: 'WA', dates: ['2026-09-13'], tripDates: ['2026-09-13'],
+    crags: { test: { timezone: 'Australia/Perth', elevation: 532 } },
+    byDate: { '2026-09-13': [row] }, weekendTrip: [],
+    today: { test: { todayDate: '2026-09-13', todayHourly: [hour], daylight: true } } };
+  const meta = { retrievedAt: '2026-09-13T02:00:00Z', ageSeconds: 0, stale: false };
+  const old = JSON.parse(wire.serializeScoredResponse(payload, meta));
+  assert.deepEqual(Object.keys(old).sort(), ['region', 'dates', 'tripDates', 'crags', 'byDate', 'weekendTrip', 'today'].sort());
+  assert.deepEqual(old.byDate['2026-09-13'][0], { score: 71, scoreWindow: { average: 71, hourlyAverage: 71 }, day: { date: '2026-09-13' } });
+  assert.deepEqual(old.today.test.todayHourly[0], { hour: 9, score: 71, temp: 14.4,
+    recoveryProgressHours: 2, weightedProb: 72, wetRockCondition: { cap: 60 } });
+  assert.deepEqual(old.crags.test, { elevation: 532 });
+  const modern = JSON.parse(wire.serializeScoredResponse(payload, meta, 2));
+  assert.equal(modern.schemaVersion, 2);
+  assert.deepEqual(modern.forecastMeta, meta);
+  assert.equal(modern.forecast, undefined, 'reserved legacy envelope key is never used for metadata');
+  assert.equal(modern.byDate['2026-09-13'][0].timezone, 'Australia/Perth');
+  assert.equal(modern.byDate['2026-09-13'][0].scoreWindow.hourlyAverage, 71.4);
+  assert.equal(modern.today.test.todayHourly[0].recoveryProgressHours, 2.75);
+  for (const body of [old, modern]) {
+    assert.ok(!JSON.stringify(body).includes('scoreContext'));
+    assert.ok(!JSON.stringify(body).includes('dailyContext'));
+  }
+  assert.equal(hour.recoveryProgressHours, 2.75);
+  assert.deepEqual(hour.scoreContext, [1.5, 90, 100], 'serialization never mutates cached calculations');
+});
+
+test('unsupported scored schemas stop before any provider access', async () => {
+  const harness = await loadWorker();
+  for (const schema of ['0', '3', '2.0', '', '2&schemaVersion=1']) {
+    const response = await harness.worker.fetch(request(`/forecast/scored?region=VIC&schemaVersion=${schema}`), env, harness.ctx);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'unsupported schemaVersion' });
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  }
+  assert.equal(harness.entries.size, 0);
 });
 
 test('forecast proxy preserves upstream failure status and does not cache it', async () => {

@@ -45,6 +45,7 @@ async function loadWorker(fetchMock, now = '2026-09-13T02:00:00Z') {
     ctx: { waitUntil: promise => pending.push(promise) },
     flush: () => Promise.all(pending.splice(0)),
     forecasts: modules.get(path.join(__dirname, '..', 'worker/src/lib/forecast.js')).namespace,
+    wire: modules.get(path.join(__dirname, '..', 'worker/src/lib/scoredWire.js')).namespace,
   };
 }
 
@@ -53,6 +54,8 @@ async function loadWorker(fetchMock, now = '2026-09-13T02:00:00Z') {
 function withoutForecastAge(body) {
   const copy = JSON.parse(JSON.stringify(body));
   delete copy.forecast;
+  delete copy.forecastMeta;
+  delete copy.schemaVersion;
   function strip(value) {
     if (!value || typeof value !== 'object') return;
     delete value.forecastStale;

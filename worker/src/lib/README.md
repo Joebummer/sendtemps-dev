@@ -92,6 +92,11 @@ uses explicit elevation and Unix input timestamps.
 One extra provider day pads the ten-day primary calendar across DST. Comparison
 requests pad individual dates only when offsets change, retain all 25 fallback
 hours and expose an additional unambiguous `utcTime` on Unix-backed hourly rows.
+Large national queries split the deduplicated locations into parallel provider
+requests with encoded URLs at most 4,000 characters. Responses are flattened in
+request order to preserve coordinate/elevation alignment. Regional caches and
+trip reuse operate on the assembled dataset; a failed batch never becomes a
+partial successful forecast.
 
 Shared timezone helpers resolve the provider's IANA zone, with state-based
 fallbacks, including half-hour SA/NT offsets and independent DST rules. Civil

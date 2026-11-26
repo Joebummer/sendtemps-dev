@@ -176,12 +176,7 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
     }
     return locationIndex.get(key);
   });
-  const lats = locations.map(c => c.lat).join(',');
-  const lons = locations.map(c => c.lon).join(',');
   const params = new URLSearchParams({
-    latitude: lats,
-    longitude: lons,
-    elevation: locations.map(c => c.elevation).join(','),
     daily: [
       'temperature_2m_max',
       'temperature_2m_min',
@@ -215,21 +210,45 @@ export async function fetchAllForecasts(region = 'ALL', apiKey = '', requestLimi
     past_days: '4',
   });
 
-  const url = `${API}?${params}`;
-  // Retry up to 3 times with backoff — handles transient 429s
-  let res;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500));
-    res = await fetchOpenMeteo(url, apiKey, requestLimiter);
-    if (res.status !== 429) break;
+  const urlFor = batch => {
+    const query = new URLSearchParams(params);
+    query.set('latitude', batch.map(c => c.lat).join(','));
+    query.set('longitude', batch.map(c => c.lon).join(','));
+    query.set('elevation', batch.map(c => c.elevation).join(','));
+    return `${API}?${query}`;
+  };
+  // Provider/proxy URI limits apply to encoded coordinates AND elevations.
+  // Preserve order while keeping each request below a conservative 4 KB.
+  const batches = [];
+  let batch = [];
+  for (const location of locations) {
+    const candidate = [...batch, location];
+    if (batch.length && urlFor(candidate).length > 4000) {
+      batches.push(batch);
+      batch = [location];
+    } else batch = candidate;
   }
-  if (!res.ok) throw new Error(`Forecast API error ${res.status}`);
-  const data = await res.json();
+  if (batch.length) batches.push(batch);
+  const results = await Promise.all(batches.map(async batch => {
+    let res;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500));
+      res = await fetchOpenMeteo(urlFor(batch), apiKey, requestLimiter);
+      if (res.status !== 429) break;
+    }
+    if (!res.ok) throw new Error(`Forecast API error ${res.status}`);
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : [data];
+    if (items.length !== batch.length || items.some(item => !item?.hourly?.time || !item?.daily?.time)) {
+      throw new Error('Forecast API returned incomplete locations');
+    }
+    return items;
+  }));
   const marineById = await marinePromise;
   if (marineLimitError) throw marineLimitError;
 
   // Open-Meteo returns either a single object (one location) or an array (multiple).
-  const list = Array.isArray(data) ? data : [data];
+  const list = results.flat();
 
   // Resolve today and tomorrow independently for every destination below.
 

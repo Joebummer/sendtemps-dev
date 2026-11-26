@@ -1841,7 +1841,8 @@ function scoreHourResult(crag, h, rainNeighbours = 0, peakDayProb = 0, meanDayCl
   let s = 100;
   const contributions = [];
   const add = (category, label, delta, detail) => {
-    if (explain && delta) contributions.push({ category, label, delta, detail });
+    if (explain && delta) contributions.push({ category, label, delta,
+      detail: typeof detail === 'string' ? detail : label });
   };
   const bonus = (amount, category, label, detail) => {
     s += amount;
@@ -2372,7 +2373,8 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   const contributions = [];
   const add = (category, label, delta, detail) => {
     if (delta === 0) return;
-    contributions.push({ category, label, delta: Math.round(delta), detail });
+    contributions.push({ category, label, delta: Math.round(delta),
+      detail: typeof detail === 'string' ? detail : label });
   };
 
   // — Climate baseline lookup (v59.17) —
@@ -2951,8 +2953,11 @@ export function scoreDay(crag, day, prevDay, nextDay) {
   // A crag that earned any score penalty cannot claim a perfect 100.
   // If penalties fired but bonuses compensated back to 100, cap at 99
   // so the score honestly reflects that something is working against it.
-  if (score > marineScoreCap) {
-    add('marine', 'Marine limit', marineScoreCap - score, day.climbMarine?.detail);
+  // A normal 100-point ceiling is not a marine hazard. Inland bonuses can
+  // exceed 100 before the final clamp; never invent a marine contribution.
+  if (marineScoreCap < 100 && score > marineScoreCap) {
+    add('marine', 'Marine limit', marineScoreCap - score,
+      day.climbMarine?.detail || 'Forecast marine conditions limit the score');
     score = marineScoreCap;
   }
   const hasPenalty = contributions.some(c => c.delta < 0);

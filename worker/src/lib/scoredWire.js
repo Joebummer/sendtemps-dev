@@ -14,6 +14,11 @@ export function serializeScoredResponse(payload, forecastMeta, schemaVersion = 1
   const body = schemaVersion === 2 ? { ...legacy, schemaVersion: 2, forecastMeta } : legacy;
   return JSON.stringify(body, (key, value) => {
     if (privateFields.has(key) || (schemaVersion === 1 && extensions.has(key))) return undefined;
+    // The shipped Swift Contribution requires a non-optional String. Repair
+    // saved payloads too: one omitted detail otherwise rejects the whole feed.
+    if (key === 'contributions' && Array.isArray(value)) return value.map(item => ({
+      ...item, detail: typeof item.detail === 'string' ? item.detail : item.label,
+    }));
     // Preserve integer wire fields for installed decoders. Calculations and
     // human-readable recovery details keep their precise values internally;
     // version 2 exposes the unrounded numeric values for new consumers.

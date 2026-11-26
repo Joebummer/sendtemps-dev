@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadWorker } = require('./helpers.cjs');
+const { assertNativeContract } = require('./native-contract.cjs');
 const env = { SUPABASE_URL: 'https://database.test', SUPABASE_SERVICE_KEY: 'test-only' };
 const routes = [
   ['/checkin', 'POST', { crag_id: 'camels-hump', rock: 'dry' }],
@@ -126,6 +127,23 @@ test('unsupported scored schemas stop before any provider access', async () => {
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
   }
   assert.equal(harness.entries.size, 0);
+});
+
+test('native Contribution.detail is required and saved contributions are repaired in both representations', async () => {
+  const { wire } = await loadWorker();
+  // Matches the failing live contribution: missing String detail is fatal to
+  // Swift JSONDecoder even though the rest of the HTTP 200 payload is valid.
+  const broken = { category: 'marine', label: 'Marine limit', delta: -3 };
+  assert.throws(() => assertNativeContract(broken, 'Contribution'), /\$\.detail: expected String/);
+  const payload = { byDate: { '2026-11-30': [{ contributions: [broken] }] },
+    weekendTrip: [{ dailyScores: [{ contributions: [{ ...broken, detail: null }] }] }] };
+  for (const schema of [1, 2]) {
+    const fixed = JSON.parse(wire.serializeScoredResponse(payload, {}, schema));
+    assertNativeContract(fixed.byDate['2026-11-30'][0].contributions[0], 'Contribution');
+    assertNativeContract(fixed.weekendTrip[0].dailyScores[0].contributions[0], 'Contribution');
+    assert.equal(fixed.byDate['2026-11-30'][0].contributions[0].detail, 'Marine limit');
+  }
+  assert.equal(broken.detail, undefined, 'repair never mutates stored input');
 });
 
 test('forecast proxy preserves upstream failure status and does not cache it', async () => {

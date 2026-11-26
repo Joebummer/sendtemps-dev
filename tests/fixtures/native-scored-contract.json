@@ -1,0 +1,183 @@
+{
+  "Crag": {
+    "id": "String",
+    "name": "String",
+    "parentId": "String?",
+    "area": "String",
+    "lat": "Double",
+    "lon": "Double",
+    "elevation": "Int?",
+    "aspect": "String",
+    "rockType": "String",
+    "dryRating": "Int",
+    "idealTemp": "[Int]",
+    "shade": "String",
+    "driveTime": "String?",
+    "baseCity": "String?",
+    "trip": "String?",
+    "state": "String",
+    "notes": "String",
+    "bestIn": "String",
+    "sunOnWall": "String?",
+    "closedAll": "Bool?",
+    "closedMonths": "[Int]?",
+    "closureReason": "String?",
+    "closures": "String?",
+    "compact": "Bool?",
+    "heatCap": "Int?"
+  },
+  "DayForecast": {
+    "date": "String",
+    "tMax": "Double",
+    "tMin": "Double",
+    "tFeel": "Double",
+    "precipSum": "Double",
+    "precipProb": "Int",
+    "precipHours": "Int",
+    "wind": "Double",
+    "windDir": "Double",
+    "windAvg": "Double",
+    "windExposure": "String",
+    "sunHoursOnWall": "Double",
+    "sunHoursOnWallWarm": "Double",
+    "sunHoursOnWallCool": "Double",
+    "sunHoursTotal": "Double",
+    "sunWindow": "SunWindow?",
+    "climbTemps": "ClimbTemps",
+    "climbHumidity": "ClimbHumidity",
+    "sunshine": "Double",
+    "cloudMean": "Double",
+    "weatherCode": "Int",
+    "rainWindows": "[RainWindow]",
+    "morningDryness": "Int",
+    "afternoonDryness": "Int",
+    "dayDryness": "Int",
+    "elevCorrection": "JSONValue?"
+  },
+  "SunWindow": {
+    "firstHour": "Int",
+    "lastHour": "Int",
+    "hours": "Int"
+  },
+  "ClimbTemps": {
+    "climbHours": "Int",
+    "hoursInRange": "Int",
+    "hoursCold": "Int",
+    "hoursHot": "Int",
+    "meanTemp": "Double",
+    "meanApparent": "Double",
+    "maxApparent": "Double"
+  },
+  "ClimbHumidity": {
+    "climbHours": "Int",
+    "hoursHumid": "Int",
+    "hoursModerate": "Int",
+    "hoursDry": "Int",
+    "meanRh": "Double",
+    "maxRh": "Double"
+  },
+  "RainWindow": {
+    "startHour": "Int",
+    "endHour": "Int",
+    "peakHour": "Int",
+    "peakProb": "Int",
+    "totalMm": "Double",
+    "label": "String"
+  },
+  "WeekendTripEntry": {
+    "cragId": "String",
+    "tripScore": "Int",
+    "dailyScores": "[TripDailyScore]",
+    "worstDate": "String",
+    "worstScore": "Int",
+    "nowDryness": "Int",
+    "lastRain": "LastRain?",
+    "pastPrecip": "[PastPrecipDay]"
+  },
+  "TripDailyScore": {
+    "date": "String",
+    "score": "Int",
+    "reasons": "[String]",
+    "contributions": "[Contribution]",
+    "day": "DayForecast",
+    "prevDay": "DayForecast"
+  },
+  "ScoredDayRow": {
+    "cragId": "String",
+    "day": "DayForecast",
+    "prevDay": "DayForecast",
+    "score": "Int",
+    "reasons": "[String]",
+    "contributions": "[Contribution]",
+    "seasonalContext": "String?",
+    "nowDryness": "Int",
+    "lastRain": "LastRain?",
+    "pastPrecip": "[PastPrecipDay]"
+  },
+  "Contribution": {
+    "category": "String",
+    "label": "String",
+    "delta": "Int",
+    "detail": "String"
+  },
+  "LastRain": {
+    "hoursAgo": "Int",
+    "totalMm": "Double",
+    "endTime": "String"
+  },
+  "PastPrecipDay": {
+    "date": "String",
+    "mm": "Double"
+  },
+  "TodayEntry": {
+    "todayHourly": "[HourForecast]",
+    "todayBestWindow": "BestWindow?",
+    "tomorrowHourly": "[HourForecast]",
+    "tomorrowBestWindow": "BestWindow?",
+    "nowDryness": "Int",
+    "lastRain": "LastRain?",
+    "pastPrecip": "[PastPrecipDay]"
+  },
+  "HourForecast": {
+    "hour": "Int",
+    "isoHour": "String",
+    "temp": "Double",
+    "apparentTemp": "Double",
+    "wind": "Double",
+    "windDir": "Double",
+    "windGust": "Double",
+    "windExposure": "String",
+    "humidity": "Int",
+    "precip": "Double",
+    "precipProb": "Int",
+    "cloud": "Int",
+    "weatherCode": "Int",
+    "dryness": "Int",
+    "sunAlt": "Int",
+    "sunAz": "Int",
+    "sunOnWall": "Bool?",
+    "isNow": "Bool",
+    "score": "Int"
+  },
+  "BestWindow": {
+    "start": "Int",
+    "end": "Int",
+    "sumScore": "Int",
+    "count": "Int",
+    "hours": "[HourForecast]",
+    "avg": "Double",
+    "runStart": "Int",
+    "runEnd": "Int",
+    "runHours": "Int",
+    "runAvg": "Double"
+  },
+  "ScoredForecastResponse": {
+    "region": "String",
+    "dates": "[String]",
+    "tripDates": "[String]",
+    "crags": "[String: Crag]",
+    "byDate": "[String: [ScoredDayRow]]",
+    "weekendTrip": "[WeekendTripEntry]",
+    "today": "[String: TodayEntry]"
+  }
+}

@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadWorker, withoutForecastAge } = require('./helpers.cjs');
+const { assertNativeContract } = require('./native-contract.cjs');
 const { loadCrags, validateCrags } = require('../scripts/validate-crags.cjs');
 
 test('session scoring keeps cool mornings independent of hot afternoons', async () => {
@@ -1248,6 +1249,7 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
     assert.equal(first.headers.get('Cache-Control'), 'no-store');
     assert.equal(first.headers.get('X-SendTemps-Cache'), 'MISS');
     const body = await first.json();
+    assertNativeContract(body);
     const expected = (await loadCrags('worker/src/lib/crags.js')).filter(c => region === 'ALL' || c.state === region);
     assert.deepEqual(Object.keys(body).sort(), ['region', 'dates', 'tripDates', 'crags', 'byDate', 'weekendTrip', 'today', 'forecastMeta', 'schemaVersion'].sort());
     assert.equal(body.region, region);
@@ -1263,6 +1265,9 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
         assert.ok(Number.isFinite(row.score) && row.score >= 0 && row.score <= 100);
         assert.equal(row.day.date, date);
         assert.ok(Array.isArray(row.reasons));
+        const representedCrag = body.crags[row.bestSubcragId || row.cragId];
+        if (!representedCrag.marineHazard) assert.ok(!row.contributions.some(c => c.category === 'marine'),
+          `${row.cragId} ${date}: ordinary 100-point clamping must not invent a marine hazard`);
         if (i) assert.ok(rows[i - 1].score >= row.score);
       }
     }
@@ -1322,6 +1327,7 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
     assert.equal(legacyResponse.headers.get('X-SendTemps-Cache'), 'HIT');
     assert.equal(legacyResponse.headers.get('X-Climbable-Schema-Version'), '1');
     const legacy = await legacyResponse.json();
+    assertNativeContract(legacy);
     assert.deepEqual(Object.keys(legacy).sort(), ['region', 'dates', 'tripDates', 'crags', 'byDate', 'weekendTrip', 'today'].sort());
     assert.deepEqual(legacy.dates, body.dates);
     for (const date of body.dates) assert.deepEqual(legacy.byDate[date].map(r => [r.cragId, r.score]), body.byDate[date].map(r => [r.cragId, r.score]));

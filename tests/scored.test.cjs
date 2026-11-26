@@ -1319,8 +1319,9 @@ for (const region of ['VIC', 'TAS', 'NSW', 'ACT', 'NT', 'ALL']) {
     assert.equal(second.headers.get('Cache-Control'), 'no-store');
     assert.equal(second.headers.get('X-SendTemps-Cache'), 'HIT');
     assert.deepEqual(withoutForecastAge(await second.json()), withoutForecastAge(body));
-    const expectedCalls = ['TAS', 'ALL'].includes(region) ? 2 : 1;
-    assert.equal(calls, expectedCalls);
+    const expectedCalls = calls;
+    if (region === 'ALL') assert.ok(calls > 2, 'national weather is split into bounded provider requests');
+    else assert.equal(calls, region === 'TAS' ? 2 : 1);
 
     // The uncached two-argument path must use the same sessions and rollups.
     // Compare every trip field and ordering, not just the aggregate score.
@@ -1426,6 +1427,28 @@ test('weather requests deduplicate coordinates while preserving every crag', asy
   const forecasts = await harness.forecasts.fetchAllForecasts('VIC');
   assert.equal(Object.keys(forecasts).length, crags.length);
   for (const crag of crags) assert.ok(forecasts[crag.id].todayHourly.length, crag.id);
+});
+
+test('national provider requests stay below URI limits and preserve location/elevation alignment', async () => {
+  const seen = [];
+  const harness = await loadWorker(async url => {
+    if (new URL(url).hostname.includes('marine')) return Response.json(marineFixture(url));
+    assert.ok(String(url).length <= 4000, 'encoded national requests must fit the provider URI limit');
+    const p = new URL(url).searchParams;
+    const lat = p.get('latitude').split(','), lon = p.get('longitude').split(','), elevation = p.get('elevation').split(',');
+    const fixtures = weatherFixture(url).map((f, i) => {
+      seen.push(`${lat[i]},${lon[i]},${elevation[i]}`);
+      const copy = JSON.parse(JSON.stringify(f));
+      copy.hourly.temperature_2m.fill(10 + Number(elevation[i]) / 1000);
+      return copy;
+    });
+    return Response.json(fixtures);
+  });
+  const forecasts = await harness.forecasts.fetchAllForecasts('ALL');
+  const expected = new Set((await loadCrags('worker/src/lib/crags.js')).map(c => `${c.lat},${c.lon},${c.elevation}`));
+  assert.equal(seen.length, expected.size, 'each unique location/elevation is requested once');
+  assert.deepEqual(new Set(seen), expected);
+  for (const f of Object.values(forecasts)) assert.equal(f.hourly.temperature_2m[0], 10 + f.crag.elevation / 1000);
 });
 
 test('expired regional cache serves same-day fallback before background refresh resolves', async () => {

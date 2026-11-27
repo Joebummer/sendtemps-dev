@@ -1787,7 +1787,11 @@ test('all Grampians crags lighten residual drying but preserve active rain and r
       const regular = { ...crag }; delete regular.residualDryingPenaltyFactor;
       assert.equal(f.wetRockCondition(regular, overnight).cap, 25);
       const adjusted = f.wetRockCondition(crag, overnight);
-      assert.equal(adjusted.cap, 82, crag.id);
+      assert.equal(adjusted.cap, 25, `${crag.id}: no productive drying means no early regional relief`);
+      const productive = f.wetRockCondition(crag, { ...overnight,
+        recoveryProgressHours: 1, dryness: 75 });
+      assert.ok(productive.cap > f.wetRockCondition(regular, { ...overnight,
+        recoveryProgressHours: 1, dryness: 75 }).cap, 'local relief remains once the surface has dried');
       assert.equal(adjusted.recoveryHours, f.rainRecoveryHours(regular, 15),
         'lighter penalty does not pretend the recovery warning has finished');
       assert.equal(adjusted.label, 'recent rain – check for seepage');
@@ -1802,7 +1806,7 @@ test('all Grampians crags lighten residual drying but preserve active rain and r
   }
 });
 
-test('Grampians pipeline keeps recent rain visible with substantially lighter drying scores', async () => {
+test('Grampians pipeline keeps recent rain visible without a humid overnight rebound', async () => {
   const harness = await loadWorker(async url => {
     const data = weatherFixture(url);
     for (const { hourly } of data) {
@@ -1816,12 +1820,12 @@ test('Grampians pipeline keeps recent rain visible with substantially lighter dr
   const fc = (await harness.forecasts.fetchAllForecasts('VIC'))['gramps-westflank'];
   const morning = fc.tomorrowHourly.find(h => h.hour === 9);
   assert.equal(morning.recoveryProgressHours, 0);
-  assert.equal(morning.wetRockCondition.cap, 82);
-  assert.ok(morning.score > 70);
+  assert.equal(morning.wetRockCondition.cap, 25);
+  assert.ok(morning.score <= 25);
   const row = harness.forecasts.rankByDay({ [fc.crag.id]: fc }, [fc.tomorrowDate])[fc.tomorrowDate][0];
   assert.ok(row.reasons.includes('recent rain – check for seepage'));
   assert.ok(!row.reasons.includes('rock soaked'));
-  assert.equal(row.rockReadiness.status, 'drying');
+  assert.equal(row.rockReadiness.status, 'wet');
   assert.match(row.rockReadiness.advisory, /Do not climb sandstone that is damp/);
 });
 

@@ -526,8 +526,18 @@ function residualDryingFactor(crag) {
     ? Math.max(0, Math.min(1, crag.residualDryingPenaltyFactor)) : 1;
 }
 
-function residualRecoveryCap(crag, cap, elapsedDryHours) {
-  const factor = elapsedDryHours >= 1 ? residualDryingFactor(crag) : 1;
+// Full regional relief is earned as the simulated surface reaches the
+// existing "mostly dry" band (70/100), with productive drying having begun.
+// This uses the rain/evaporation state rather than a fixed 3h/6h timer:
+// light wetting can clear quickly; a large retained burden eases gradually.
+// No surface estimate means no early regional relief, not assumed dry rock.
+function residualRecoveryCap(crag, cap, productiveDryHours, surfaceDryness) {
+  const regionalFactor = residualDryingFactor(crag);
+  const productiveProgress = Math.max(0, Math.min(1, productiveDryHours));
+  const surfaceProgress = Number.isFinite(surfaceDryness)
+    ? Math.max(0, Math.min(1, surfaceDryness / 70)) : 0;
+  const reliefProgress = Math.min(productiveProgress, surfaceProgress);
+  const factor = 1 - (1 - regionalFactor) * reliefProgress;
   // Keep a nonzero deficit until recovery completes, so the rain warning remains.
   return 100 - Math.ceil((100 - cap) * factor);
 }
@@ -559,8 +569,10 @@ export function wetRockCondition(crag, hour) {
   }
 
   const recoveryHours = rainRecoveryHours(crag, rainEventMm);
-  if (recoveryProgressHours == null || recoveryHours === 0 ||
-      (rock === 'sandstone' ? recoveryProgressHours >= recoveryHours : recoveryProgressHours > recoveryHours)) {
+  const recoveryComplete = rock === 'sandstone'
+    ? recoveryProgressHours >= recoveryHours : recoveryProgressHours > recoveryHours;
+  const surfaceStillWet = Number.isFinite(hour?.dryness) && hour.dryness < 70;
+  if (recoveryProgressHours == null || recoveryHours === 0 || (recoveryComplete && !surfaceStillWet)) {
     return { cap: 100, label: null, detail: null, recoveryHours };
   }
 
@@ -579,7 +591,8 @@ export function wetRockCondition(crag, hour) {
   if (rock === 'sandstone') {
     const progress = Math.max(0, Math.min(1, recoveryProgressHours / recoveryHours));
     return {
-      cap: residualRecoveryCap(crag, recoveryScoreCap(25 + 65 * Math.pow(progress, 0.8), progress), elapsedDryHours),
+      cap: residualRecoveryCap(crag, recoveryScoreCap(25 + 65 * Math.pow(progress, 0.8), progress),
+        Math.min(elapsedDryHours, recoveryProgressHours), hour.dryness),
       label: recoveryLabel,
       detail,
       recoveryHours,
@@ -593,7 +606,7 @@ export function wetRockCondition(crag, hour) {
     : 0;
   const startCap = interpolate([[0, RECOVERY_START_CAP[rock] ?? 55], [1, 80]], lightRainRelief);
   const endCap = interpolate([[0, 79], [1, 97]], lightRainRelief);
-  const progress = recoveryProgressHours / recoveryHours;
+  const progress = Math.max(0, Math.min(1, recoveryProgressHours / recoveryHours));
   const standardCap = startCap + (endCap - startCap) * progress;
   // After a sustained dry spell, let modeled surface drying ease the ceiling.
   const surfaceCap = rainEventMm >= 2 && hoursSinceRain >= 6 &&
@@ -602,7 +615,7 @@ export function wetRockCondition(crag, hour) {
     : 0;
   const cap = Math.max(recoveryScoreCap(standardCap, progress), Math.round(surfaceCap));
   return {
-    cap: residualRecoveryCap(crag, cap, elapsedDryHours),
+    cap: residualRecoveryCap(crag, cap, Math.min(elapsedDryHours, recoveryProgressHours), hour.dryness),
     label: recoveryLabel,
     detail,
     recoveryHours,
@@ -1338,7 +1351,13 @@ function computeDrynessSeries(crag, hourly) {
       lastRainIndex = i;
       if (rock === 'sandstone') {
         if (!isBelowSandstoneThreshold(activeRainEventMm)) {
-          rainEventMm = activeRainEventMm;
+          // A later qualifying shower must not replace an unfinished deluge
+          // with its own smaller total. Retain the stronger recovery burden;
+          // physical wetness below still accumulates every new drop of rain.
+          const unfinished = recoveryProgressHours != null &&
+            (recoveryProgressHours < rainRecoveryHours(crag, rainEventMm) ||
+              Math.round(100 * Math.exp(-wetness)) < 70);
+          rainEventMm = unfinished ? Math.max(rainEventMm, activeRainEventMm) : activeRainEventMm;
           hoursSinceRain = 0;
           recoveryProgressHours = 0;
         }
@@ -1348,7 +1367,8 @@ function computeDrynessSeries(crag, hourly) {
         // A new shower cannot erase a heavier event that is still recovering.
         // Restart the clock, retaining the larger unfinished moisture burden.
         const unfinished = recoveryProgressHours != null &&
-          recoveryProgressHours <= rainRecoveryHours(crag, rainEventMm);
+          (recoveryProgressHours <= rainRecoveryHours(crag, rainEventMm) ||
+            Math.round(100 * Math.exp(-wetness)) < 70);
         rainEventMm = unfinished ? Math.max(rainEventMm, activeRainEventMm) : activeRainEventMm;
         hoursSinceRain = 0;
         recoveryProgressHours = 0;

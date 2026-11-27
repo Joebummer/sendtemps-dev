@@ -57,6 +57,24 @@ constraint is the stronger of the physical deduction and the recovery ceiling,
 not the sum of their deficits. Existing drying rates and local relief factors
 are unchanged. Active rain is described as wet rather than drying.
 
+Regional recovery relief is adaptive. It phases in continuously with the
+existing physical dryness estimate, reaching the configured local relief
+factor at the existing mostly-dry band (70/100), and requires productive drying
+to have begun. Humid elapsed hours alone earn no relief. A small wetting burden
+can clear quickly, while heavy/repeated rain retains a stronger ceiling; there
+is no universal three- or six-hour wait. Isolated sub-1 mm sandstone events keep
+their existing recovery exemption, although rainfall still affects the weather
+score and physical wetness. A later qualifying sandstone shower resets productive
+progress and retains the larger unfinished event rather than replacing it with
+the smaller new total. Completed historical events do not inflate new showers.
+The existing material drying rates and Grampians factor (0.24) are preserved.
+These are model estimates, not field-validated drying times or rock safety proof.
+When the nominal clock is complete but the known physical surface estimate is
+still below the mostly-dry band, retain a recovery warning and a bounded ceiling
+until that moisture clears; completion of a timer alone does not establish dry rock.
+The captured 28 November Taipan forecast is retained as an as-issued regression
+fixture; broader accuracy calibration still needs timestamped sector reports.
+
 Session candidates require daylight for the full hourly interval, based on the
 crag coordinates. Today's minimum length shrinks only with remaining daylight;
 future days still require five complete samples. `scoreWindow.usability` and

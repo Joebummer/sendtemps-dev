@@ -464,7 +464,7 @@ const SCORED_FALLBACK_TTL = 3600; // at most one hour old, same local date and s
 const SCORED_CACHE_TTL = 900; // 15 minutes – matches FORECAST_CACHE_TTL
 // Bump this when crag data or scoring output changes so a deploy cannot reuse
 // stale scored responses left in Cloudflare's Cache API by the previous build.
-const SCORED_CACHE_VERSION = '2026-11-27-native-contribution-detail-v21';
+const SCORED_CACHE_VERSION = '2026-11-28-adaptive-recovery-v22';
 const SCORED_REGIONS = new Set(['ALL', ...CRAGS.map(crag => crag.state)]);
 
 const SCORED_DEADLINE_MS = 12000;
@@ -561,7 +561,7 @@ const SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const SNAPSHOT_FRESH_AGE_MS = 30 * 60 * 1000;
 const SNAPSHOT_READ_MS = 2000;
 // Keep snapshots from earlier scoring models out of newly scored responses.
-const snapshotKey = region => `scored/v14/${region}.json`;
+const snapshotKey = region => `scored/v15/${region}.json`;
 
 function scoringDates(forecasts, dates) {
   return [...new Set([...dates, ...Object.values(forecasts).map(f => f.todayDate)])].sort();
